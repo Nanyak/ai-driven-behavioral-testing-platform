@@ -1,0 +1,15 @@
+{
+  "name": "ai-driven-behavioral-testing-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-driven behavioral testing platform for Medusa REST APIs.",
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "check:phase0": "node scripts/check-phase0.mjs",
+    "check:phase1": "node scripts/check-phase1.mjs",
+    "medusa:deps": "node scripts/start-medusa-dependencies.mjs",
+    "medusa:setup": "node scripts/setup-medusa-phase1.mjs",
+    "medusa:dev": "node scripts/run-medusa-cli.mjs develop",
+    "medusa:start": "node scripts/run-medusa-cli.mjs start"
+  }
+}
