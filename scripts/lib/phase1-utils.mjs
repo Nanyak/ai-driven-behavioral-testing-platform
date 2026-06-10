@@ -120,8 +120,14 @@ export async function waitForTcp(host, port, label, timeoutMs = 30000) {
 export async function queryPostgres(sql, parameters = []) {
   const { Client } = medusaRequire("pg");
   const env = loadPhase1Env();
+  const databaseUrl = new URL(env.DATABASE_URL);
+
+  if (databaseUrl.hostname === "postgres") {
+    databaseUrl.hostname = "localhost";
+  }
+
   const client = new Client({
-    connectionString: env.DATABASE_URL,
+    connectionString: databaseUrl.toString(),
   });
 
   await client.connect();

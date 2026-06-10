@@ -61,13 +61,13 @@ Phase 2.1 adds a Docker Compose development stack for running the current Medusa
 Start the stack from the repository root:
 
 ```bash
-docker compose -f infra/docker-compose.yml up --build
+docker compose up -d --build
 ```
 
 Stop the stack:
 
 ```bash
-docker compose -f infra/docker-compose.yml down
+docker compose down
 ```
 
 If the local Docker CLI does not expose the `docker compose` subcommand, use `docker-compose` with the same arguments. The root helper scripts use `docker-compose` for compatibility with this development environment.
@@ -78,7 +78,7 @@ The Medusa backend and admin app are available at:
 http://localhost:9000/app
 ```
 
-The `medusa` service bind mounts `apps/medusa` for development, keeps container dependencies in named Docker volumes, and writes structured Medusa logs to the host `logs/` directory through `LOG_OUTPUT_PATH=/workspace/logs/medusa-json.log`.
+The `medusa` service bind mounts `apps/medusa` for development, mounts the root `.env` over the container backend `.env` so service hostnames are used, keeps container dependencies in named Docker volumes, runs Medusa database setup and seed scripts before starting, and writes structured Medusa logs to the host `logs/` directory through `LOG_OUTPUT_PATH=/workspace/logs/medusa-json.log`.
 
 ## Acceptance Criteria
 

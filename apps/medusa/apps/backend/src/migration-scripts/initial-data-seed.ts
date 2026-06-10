@@ -1,4 +1,4 @@
-import { MedusaContainer } from "@medusajs/framework";
+﻿import { MedusaContainer } from "@medusajs/framework";
 import {
   ContainerRegistrationKeys,
   ModuleRegistrationName,

@@ -1,8 +1,9 @@
-import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
+import type { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 
-export async function GET(
-  req: MedusaRequest,
-  res: MedusaResponse
-) {
-  res.sendStatus(200);
+export async function GET(_req: MedusaRequest, res: MedusaResponse) {
+  res.status(200).json({
+    ok: true,
+    scope: "store",
+    service: "medusa"
+  })
 }

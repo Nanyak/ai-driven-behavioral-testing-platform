@@ -25,7 +25,7 @@ Start the Compose stack from the repository root:
 npm run compose:up
 ```
 
-The Compose stack exposes Medusa at `http://localhost:9000/app`, PostgreSQL at `localhost:5432`, and Redis at `localhost:6379`. Stop it with:
+The Compose stack uses the root `.env`, mounts it over the container backend `.env`, initializes the Medusa database before the app starts, then exposes Medusa at `http://localhost:9000/app`, PostgreSQL at `localhost:5432`, and Redis at `localhost:6379`. Stop it with:
 
 ```bash
 npm run compose:down
@@ -71,7 +71,6 @@ CLI-only services do not reserve inbound ports by default:
 apps/
   medusa/
 infra/
-  docker-compose.yml
   elasticsearch/
   logstash/
   kibana/

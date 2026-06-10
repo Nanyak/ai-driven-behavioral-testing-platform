@@ -29,38 +29,26 @@ services:
 
   medusa:
     build:
-      context: ../apps/medusa
+      context: ./apps/medusa
       dockerfile: Dockerfile.dev
+    env_file:
+      - .env
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     environment:
-      NODE_ENV: development
       MEDUSA_TELEMETRY_DISABLED: "true"
-      DATABASE_URL: postgres://medusa:medusa@postgres:5432/medusa
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: "5432"
-      POSTGRES_DB: medusa
-      POSTGRES_USER: medusa
-      POSTGRES_PASSWORD: medusa
-      REDIS_URL: redis://redis:6379
-      STORE_CORS: http://localhost:8000,http://localhost:9000,https://docs.medusajs.com
-      ADMIN_CORS: http://localhost:5173,http://localhost:9000,https://docs.medusajs.com
-      AUTH_CORS: http://localhost:5173,http://localhost:9000,https://docs.medusajs.com
-      JWT_SECRET: ${JWT_SECRET:-supersecret}
-      COOKIE_SECRET: ${COOKIE_SECRET:-supersecret}
-      LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_OUTPUT_PATH: /workspace/logs/medusa-json.log
       LOG_CAPTURE_BODIES: ${LOG_CAPTURE_BODIES:-false}
     ports:
       - "9000:9000"
     volumes:
-      - ../apps/medusa:/workspace
-      - ../logs:/workspace/logs
+      - ./apps/medusa:/workspace
+      - ./.env:/workspace/apps/backend/.env
+      - ./logs:/workspace/logs
       - medusa_node_modules:/workspace/node_modules
-      - medusa_backend_node_modules:/workspace/apps/backend/node_modules
     healthcheck:
       test:
         [
@@ -76,4 +64,3 @@ volumes:
   postgres_data:
   redis_data:
   medusa_node_modules:
-  medusa_backend_node_modules:

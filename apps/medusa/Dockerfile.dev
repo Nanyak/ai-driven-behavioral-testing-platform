@@ -6,4 +6,4 @@ ENV MEDUSA_TELEMETRY_DISABLED=true
 
 EXPOSE 9000
 
-CMD ["sh", "-c", "if [ ! -d node_modules/@medusajs ]; then npm ci; fi; npm --workspace @dtc/backend run dev"]
+CMD ["sh", "scripts/docker-dev-start.sh"]

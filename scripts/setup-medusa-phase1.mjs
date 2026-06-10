@@ -19,6 +19,22 @@ console.log("Starting Medusa PostgreSQL and Redis dependencies...");
 run(process.execPath, [join(root, "scripts", "start-medusa-dependencies.mjs")]);
 
 console.log("Syncing Medusa backend environment...");
+function localServiceUrl(value) {
+  if (!value) {
+    return value;
+  }
+
+  try {
+    const url = new URL(value);
+    if (url.hostname === "postgres" || url.hostname === "redis") {
+      url.hostname = "localhost";
+    }
+    return url.toString();
+  } catch {
+    return value;
+  }
+}
+
 for (const key of [
   "DATABASE_URL",
   "REDIS_URL",
@@ -29,7 +45,11 @@ for (const key of [
   "COOKIE_SECRET",
 ]) {
   if (env[key]) {
-    upsertEnvValue(backendEnvPath, key, env[key]);
+    upsertEnvValue(
+      backendEnvPath,
+      key,
+      key === "DATABASE_URL" || key === "REDIS_URL" ? localServiceUrl(env[key]) : env[key]
+    );
   }
 }
 
