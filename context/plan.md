@@ -299,21 +299,28 @@ The AI engine analyzes grouped logs and produces test candidates.
 
 ### 10.1 MVP Strategy
 
-- Use n-gram sequence mining to discover common API sequences.
+- Use n-gram sequence mining as the MVP baseline for short local endpoint transitions.
+- Use PrefixSpan to discover frequent variable-length behavior flows across sessions.
 - Count flow frequency by persona.
 - Use rule-based persona classification.
 - Use a simple Markov Chain to model transition probabilities between API calls.
 - Detect edge cases based on `4xx` and `5xx` responses.
-- Prioritize flows based on frequency and business importance.
+- Prioritize flows based on support, persona coverage, endpoint importance, error coverage, and business importance.
 
-### 10.2 Persona Classification Rules
+### 10.2 Mining Algorithm Tradeoffs
+
+- N-grams are simple, fast, and easy to explain in a demo, but they use fixed-length windows and can fragment longer user journeys.
+- PrefixSpan is better for discovering full behavior flows with optional intermediate steps, but it requires support thresholds and pruning to avoid too many patterns.
+- Markov Chains are useful for transition probabilities and anomaly hints, but they are supporting signals rather than the primary test generation algorithm.
+
+### 10.3 Persona Classification Rules
 
 - Requests involving `/admin/*` and user authentication -> `Admin Operator`.
 - Requests involving `/store/customers` or customer authentication -> `Registered Customer`.
 - Requests involving `/store/carts` without customer authentication -> `Guest Shopper`.
 - Sessions with many `4xx` or `5xx` responses -> `Edge Case User`.
 
-### 10.3 Expected Output
+### 10.4 Expected Output
 
 ```json
 {
@@ -603,9 +610,10 @@ Deliverable:
 Tasks:
 
 - Classify personas.
-- Discover frequent flows.
+- Run n-gram mining as a baseline for short endpoint sequences.
+- Run PrefixSpan for frequent variable-length behavior flows.
 - Identify important edge-case flows.
-- Assign priority.
+- Rank mined candidates by support, persona coverage, endpoint importance, error coverage, and business importance.
 - Produce test candidates.
 
 Deliverable:

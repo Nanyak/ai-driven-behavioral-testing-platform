@@ -7,6 +7,7 @@
   "scripts": {
     "check:phase0": "node scripts/check-phase0.mjs",
     "check:phase1": "node scripts/check-phase1.mjs",
+    "check:phase2": "node scripts/check-phase2.mjs",
     "medusa:deps": "node scripts/start-medusa-dependencies.mjs",
     "medusa:setup": "node scripts/setup-medusa-phase1.mjs",
     "medusa:dev": "node scripts/run-medusa-cli.mjs develop",

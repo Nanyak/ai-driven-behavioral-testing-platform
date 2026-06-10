@@ -25,23 +25,23 @@
 
 ## Phase 2: Structured Logging
 
-- [ ] Add request logging middleware to Medusa.
-- [ ] Capture request timestamp.
-- [ ] Capture HTTP method.
-- [ ] Capture raw endpoint.
-- [ ] Capture normalized endpoint.
-- [ ] Capture request payload.
-- [ ] Capture response code.
-- [ ] Capture reduced or normalized response body.
-- [ ] Capture request duration in milliseconds.
-- [ ] Generate `trace_id` if it is missing.
-- [ ] Read `session_id` from a header or cookie.
-- [ ] Read `persona` from a custom header.
-- [ ] Capture user role when available.
-- [ ] Capture user/customer/admin ID when available.
-- [ ] Mask passwords, tokens, secrets, and other sensitive values.
-- [ ] Emit logs as JSON lines.
-- [ ] Confirm logs are readable from stdout or a log file.
+- [x] Add request logging middleware to Medusa.
+- [x] Capture request timestamp.
+- [x] Capture HTTP method.
+- [x] Capture raw endpoint.
+- [x] Capture normalized endpoint.
+- [x] Capture request payload.
+- [x] Capture response code.
+- [x] Capture reduced or normalized response body.
+- [x] Capture request duration in milliseconds.
+- [x] Generate `trace_id` if it is missing.
+- [x] Read `session_id` from a header or cookie.
+- [x] Read `persona` from a custom header.
+- [x] Capture user role when available.
+- [x] Capture user/customer/admin ID when available.
+- [x] Mask passwords, tokens, secrets, and other sensitive values.
+- [x] Emit logs as JSON lines.
+- [x] Confirm logs are readable from stdout or a log file.
 
 ## Phase 3: Storefront And Platform Dashboard
 
@@ -128,11 +128,15 @@
 - [ ] Identify Edge Case User flows.
 - [ ] Count endpoint sequence frequency.
 - [ ] Implement simple n-gram sequence mining.
+- [ ] Implement PrefixSpan frequent sequential pattern mining.
+- [ ] Configure minimum support threshold for PrefixSpan.
+- [ ] Prune duplicate or subsumed flows.
+- [ ] Compare n-gram output against PrefixSpan output.
 - [ ] Identify the top frequent flows.
 - [ ] Identify important error flows based on `4xx` and `5xx` responses.
-- [ ] Assign priority to each candidate flow.
+- [ ] Rank candidates by support, persona, business importance, and error coverage.
 - [ ] Produce test candidate JSON.
-- [ ] Verify at least five test candidates are generated.
+- [ ] Verify at least five test candidates are generated from mined behavior flows.
 
 ## Phase 8: Golden Response Handling
 
@@ -243,7 +247,7 @@
 - [x] Admin API works.
 - [ ] Simple storefront works.
 - [ ] Platform dashboard works.
-- [ ] Structured logs are produced.
+- [x] Structured logs are produced.
 - [ ] Logs are stored in Elasticsearch.
 - [ ] Logs are visible in Kibana.
 - [ ] Guest, customer, and admin personas are simulated.
