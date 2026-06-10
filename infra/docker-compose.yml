@@ -1,0 +1,79 @@
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-medusa}
+      POSTGRES_USER: ${POSTGRES_USER:-medusa}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-medusa}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  medusa:
+    build:
+      context: ../apps/medusa
+      dockerfile: Dockerfile.dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      MEDUSA_TELEMETRY_DISABLED: "true"
+      DATABASE_URL: postgres://medusa:medusa@postgres:5432/medusa
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: medusa
+      POSTGRES_USER: medusa
+      POSTGRES_PASSWORD: medusa
+      REDIS_URL: redis://redis:6379
+      STORE_CORS: http://localhost:8000,http://localhost:9000,https://docs.medusajs.com
+      ADMIN_CORS: http://localhost:5173,http://localhost:9000,https://docs.medusajs.com
+      AUTH_CORS: http://localhost:5173,http://localhost:9000,https://docs.medusajs.com
+      JWT_SECRET: ${JWT_SECRET:-supersecret}
+      COOKIE_SECRET: ${COOKIE_SECRET:-supersecret}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_OUTPUT_PATH: /workspace/logs/medusa-json.log
+      LOG_CAPTURE_BODIES: ${LOG_CAPTURE_BODIES:-false}
+    ports:
+      - "9000:9000"
+    volumes:
+      - ../apps/medusa:/workspace
+      - ../logs:/workspace/logs
+      - medusa_node_modules:/workspace/node_modules
+      - medusa_backend_node_modules:/workspace/apps/backend/node_modules
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:9000/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+volumes:
+  postgres_data:
+  redis_data:
+  medusa_node_modules:
+  medusa_backend_node_modules:

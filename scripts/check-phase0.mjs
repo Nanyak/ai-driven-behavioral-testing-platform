@@ -22,7 +22,7 @@ const requiredPaths = [
   "context/checklist.md",
   ".env.example",
   "package.json",
-  "pnpm-workspace.yaml"
+  "apps/medusa/package-lock.json"
 ];
 
 const requiredEnvKeys = [

@@ -11,13 +11,25 @@ Install these tools before starting Phase 1:
 | Tool | Requirement | Purpose |
 | --- | --- | --- |
 | Node.js | 20 LTS or newer | Medusa, TypeScript services, Playwright tests |
-| pnpm | 9 or newer | Workspace package manager |
+| npm | 10 or newer | Node package manager |
 | Docker Desktop or Docker Engine | Current stable version | Local infrastructure containers |
 | Docker Compose | v2 or newer | Multi-service local environment |
 | PostgreSQL | 15 or newer | Medusa database |
 | Redis | 7 or newer | Optional Medusa caching/event support |
 
-PostgreSQL and Redis can be installed locally or run through Docker Compose once infrastructure is added.
+PostgreSQL, Redis, and the Medusa backend can be installed and run locally, or started together through Docker Compose for an easier development path.
+
+Start the Compose stack from the repository root:
+
+```bash
+npm run compose:up
+```
+
+The Compose stack exposes Medusa at `http://localhost:9000/app`, PostgreSQL at `localhost:5432`, and Redis at `localhost:6379`. Stop it with:
+
+```bash
+npm run compose:down
+```
 
 ## Implementation Language Decision
 
@@ -59,6 +71,7 @@ CLI-only services do not reserve inbound ports by default:
 apps/
   medusa/
 infra/
+  docker-compose.yml
   elasticsearch/
   logstash/
   kibana/
@@ -80,7 +93,7 @@ scripts/
 Run Phase 0 verification from the repository root:
 
 ```bash
-pnpm check:phase0
+npm run check:phase0
 ```
 
 The command checks that the expected scaffold, documentation, environment template, and workspace files exist.

@@ -43,6 +43,19 @@
 - [x] Emit logs as JSON lines.
 - [x] Confirm logs are readable from stdout or a log file.
 
+## Phase 2.1: Docker Compose App Development
+
+- [x] Create `infra/docker-compose.yml`.
+- [x] Add a Medusa app service for local development.
+- [x] Add PostgreSQL 15 and Redis 7 dependency services.
+- [x] Expose Medusa on port `9000`.
+- [x] Bind mount `apps/medusa` into the Medusa container.
+- [x] Keep container dependencies in named Docker volumes.
+- [x] Configure container `DATABASE_URL` and `REDIS_URL` to use Compose service names.
+- [x] Mount host logs so structured JSONL output remains readable from the workspace.
+- [x] Add root Compose helper scripts.
+- [x] Document Compose start, stop, and Medusa Admin URL.
+
 ## Phase 3: Storefront And Platform Dashboard
 
 - [ ] Create `apps/storefront`.

@@ -10,5 +10,5 @@ Phase 0 setup is documented in:
 Run the Phase 0 verification check:
 
 ```bash
-pnpm check:phase0
+npm run check:phase0
 ```
