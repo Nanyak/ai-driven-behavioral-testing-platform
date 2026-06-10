@@ -50,6 +50,8 @@ Python is reserved for optional future analysis work, such as advanced sequence 
 | Service | Port | Notes |
 | --- | --- | --- |
 | Medusa backend | 9000 | Store API, Admin API, and Medusa admin app when available |
+| Storefront | 8000 | Phase 3 customer storefront |
+| Platform dashboard | 5173 | Phase 3 platform status dashboard |
 | PostgreSQL | 5432 | Medusa database |
 | Redis | 6379 | Optional Medusa dependency |
 | Elasticsearch | 9200 | Local single-node Elasticsearch HTTP API |

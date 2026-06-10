@@ -7,6 +7,7 @@ The current verified baseline covers:
 - Phase 0: project setup
 - Phase 1: Medusa initialization, seed data, Store API, and Admin API
 - Phase 2: structured JSONL request logging
+- Phase 3: simple storefront and platform dashboard frontends
 
 ## Requirements
 
@@ -31,6 +32,13 @@ Install the Medusa workspace dependencies:
 
 ```bash
 npm install --prefix apps/medusa
+```
+
+Install the frontend app dependencies:
+
+```bash
+npm install --prefix apps/storefront
+npm install --prefix apps/platform-dashboard
 ```
 
 Create your environment file:
@@ -99,6 +107,8 @@ docker-compose restart medusa
 | `http://localhost:9000/app` | Medusa Admin UI frontend |
 | `http://localhost:9000/store/products` | Store API endpoint |
 | `http://localhost:9000/admin/products` | Admin API endpoint |
+| `http://localhost:8000` | Phase 3 storefront |
+| `http://localhost:5173` | Phase 3 platform dashboard |
 
 `/app` is the browser UI. Open it in your browser and log in with:
 
@@ -179,6 +189,24 @@ x-persona: guest_shopper
 
 Then group log events by `session_id`, sort by `timestamp`, and mine ordered `normalized_endpoint` sequences.
 
+## Frontend Apps
+
+Start the storefront:
+
+```bash
+npm run storefront:dev
+```
+
+Start the platform dashboard:
+
+```bash
+npm run dashboard:dev
+```
+
+Both apps use Vite dev-server proxies for `/medusa/*`, so browser requests are forwarded to `MEDUSA_BACKEND_URL` from the root `.env`.
+
+The storefront supports product browsing, customer register/login, cart checks, and a Medusa checkout flow using the local system payment provider.
+
 ## Verification
 
 Run all currently verified phases:
@@ -187,6 +215,7 @@ Run all currently verified phases:
 npm run check:phase0
 npm run check:phase1
 npm run check:phase2
+npm run check:phase3
 ```
 
 Expected result:
@@ -195,6 +224,7 @@ Expected result:
 Phase 0 verification passed.
 Phase 1 verification passed.
 Phase 2 verification passed.
+Phase 3 verification passed.
 ```
 
 You can also verify the TypeScript Medusa backend:
@@ -218,6 +248,8 @@ apps/
     apps/backend/
       src/api/
       src/migration-scripts/
+  platform-dashboard/
+  storefront/
 docs/
 generated-tests/
 golden-responses/

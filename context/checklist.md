@@ -60,23 +60,27 @@
 
 ## Phase 3: Storefront And Platform Dashboard
 
-- [ ] Create `apps/storefront`.
-- [ ] Configure Storefront Medusa base URL.
-- [ ] Configure Storefront publishable API key.
-- [ ] Display seeded products from `GET /store/products`.
-- [ ] Display a product detail view.
-- [ ] Create a cart from the storefront.
-- [ ] Add a selected variant to the cart.
-- [ ] Show basic cart item count and cart contents.
-- [ ] Create `apps/platform-dashboard`.
-- [ ] Show Medusa backend health/status.
-- [ ] Show Store API availability.
-- [ ] Show Admin API authentication availability.
-- [ ] Link to Medusa Admin at `http://localhost:9000/app`.
-- [ ] Link to the storefront.
-- [ ] Add dashboard placeholders for logs, traffic generation, behavior flows, generated tests, and reports.
-- [ ] Document expected frontend ports.
-- [ ] Verify both frontend apps can start locally.
+- [x] Create `apps/storefront`.
+- [x] Configure Storefront Medusa base URL.
+- [x] Configure Storefront publishable API key.
+- [x] Display seeded products from `GET /store/products`.
+- [x] Display a product detail view.
+- [x] Create a cart from the storefront.
+- [x] Add a selected variant to the cart.
+- [x] Show basic cart item count and cart contents.
+- [x] Add storefront customer registration and login.
+- [x] Add storefront customer profile check and logout.
+- [x] Add storefront cart readiness checks for shipping and payment.
+- [x] Add storefront checkout flow through cart completion.
+- [x] Create `apps/platform-dashboard`.
+- [x] Show Medusa backend health/status.
+- [x] Show Store API availability.
+- [x] Show Admin API authentication availability.
+- [x] Link to Medusa Admin at `http://localhost:9000/app`.
+- [x] Link to the storefront.
+- [x] Add dashboard placeholders for logs, traffic generation, behavior flows, generated tests, and reports.
+- [x] Document expected frontend ports.
+- [x] Verify both frontend apps can start locally.
 
 ## Phase 4: ELK Integration
 
@@ -260,8 +264,8 @@
 - [x] Medusa runs locally.
 - [x] Store API works.
 - [x] Admin API works.
-- [ ] Simple storefront works.
-- [ ] Platform dashboard works.
+- [x] Simple storefront works.
+- [x] Platform dashboard works.
 - [x] Structured logs are produced.
 - [ ] Logs are stored in Elasticsearch.
 - [ ] Logs are visible in Kibana.

@@ -1,4 +1,4 @@
-﻿import { MedusaContainer } from "@medusajs/framework";
+import { MedusaContainer } from "@medusajs/framework";
 import {
   ContainerRegistrationKeys,
   ModuleRegistrationName,
@@ -220,15 +220,15 @@ export default async function initial_data_seed({
         prices: [
           {
             currency_code: "usd",
-            amount: 10,
+            amount: 1000,
           },
           {
             currency_code: "eur",
-            amount: 10,
+            amount: 1000,
           },
           {
             region_id: region.id,
-            amount: 10,
+            amount: 1000,
           },
         ],
         rules: [
@@ -258,15 +258,15 @@ export default async function initial_data_seed({
         prices: [
           {
             currency_code: "usd",
-            amount: 10,
+            amount: 1000,
           },
           {
             currency_code: "eur",
-            amount: 10,
+            amount: 1000,
           },
           {
             region_id: region.id,
-            amount: 10,
+            amount: 1000,
           },
         ],
         rules: [
@@ -369,7 +369,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 10,
+                  amount: 1000,
                   currency_code: "eur",
                 },
                 {
@@ -387,7 +387,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 10,
+                  amount: 1000,
                   currency_code: "eur",
                 },
                 {
@@ -405,7 +405,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 10,
+                  amount: 1000,
                   currency_code: "eur",
                 },
                 {
@@ -423,7 +423,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 10,
+                  amount: 1000,
                   currency_code: "eur",
                 },
                 {
@@ -441,7 +441,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 10,
+                  amount: 1000,
                   currency_code: "eur",
                 },
                 {
@@ -459,7 +459,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 10,
+                  amount: 1000,
                   currency_code: "eur",
                 },
                 {
@@ -477,7 +477,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 10,
+                  amount: 1000,
                   currency_code: "eur",
                 },
                 {
@@ -495,7 +495,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 10,
+                  amount: 1000,
                   currency_code: "eur",
                 },
                 {
@@ -545,7 +545,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 10,
+                  amount: 1000,
                   currency_code: "eur",
                 },
                 {
@@ -562,7 +562,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 10,
+                  amount: 1000,
                   currency_code: "eur",
                 },
                 {
@@ -579,7 +579,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 10,
+                  amount: 1000,
                   currency_code: "eur",
                 },
                 {
@@ -596,7 +596,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 10,
+                  amount: 1000,
                   currency_code: "eur",
                 },
                 {
@@ -646,7 +646,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 10,
+                  amount: 1000,
                   currency_code: "eur",
                 },
                 {
@@ -663,7 +663,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 10,
+                  amount: 1000,
                   currency_code: "eur",
                 },
                 {
@@ -680,7 +680,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 10,
+                  amount: 1000,
                   currency_code: "eur",
                 },
                 {
@@ -697,7 +697,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 10,
+                  amount: 1000,
                   currency_code: "eur",
                 },
                 {
@@ -747,7 +747,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 10,
+                  amount: 1000,
                   currency_code: "eur",
                 },
                 {
@@ -764,7 +764,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 10,
+                  amount: 1000,
                   currency_code: "eur",
                 },
                 {
@@ -781,7 +781,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 10,
+                  amount: 1000,
                   currency_code: "eur",
                 },
                 {
@@ -798,7 +798,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 10,
+                  amount: 1000,
                   currency_code: "eur",
                 },
                 {
