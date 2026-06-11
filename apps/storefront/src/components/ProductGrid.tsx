@@ -1,26 +1,32 @@
-import { ArrowRight, PackageSearch, RefreshCw } from "lucide-react";
+import { ArrowRight, GitCompare, Heart, PackageSearch, RefreshCw, ShoppingCart } from "lucide-react";
 import { AppLink } from "./AppLink";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
-import { productPath } from "../routing";
+import { productPath, sellerPath } from "../routing";
 import type { Product } from "../types/storefront";
+import { getProductSeller } from "../utils/marketplace";
 import { formatMoney, getVariantPrice } from "../utils/money";
 
 type ProductGridProps = {
   products: Product[];
   isBusy: boolean;
+  isCompared: (productId: string) => boolean;
+  isWishlisted: (productId: string) => boolean;
+  onAddVariantToCart: (variantId: string) => void;
   onNavigate: (path: string) => void;
   onRefresh: () => void;
+  onToggleCompare: (productId: string) => void;
+  onToggleWishlist: (productId: string) => void;
 };
 
-export function ProductGrid({ products, isBusy, onNavigate, onRefresh }: ProductGridProps) {
+export function ProductGrid({ products, isBusy, isCompared, isWishlisted, onAddVariantToCart, onNavigate, onRefresh, onToggleCompare, onToggleWishlist }: ProductGridProps) {
   return (
-    <section className="rounded-lg border border-emerald-100 bg-white p-5 shadow-xl shadow-emerald-950/5" id="catalog" aria-labelledby="catalog-title">
+    <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-xl shadow-slate-900/5" id="catalog" aria-labelledby="catalog-title">
       <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs font-black uppercase tracking-normal text-emerald-700">Catalog</p>
-          <h2 id="catalog-title" className="mt-1 text-2xl font-black tracking-tight text-emerald-950">
+          <p className="text-xs font-black uppercase tracking-widest text-emerald-600">Catalog</p>
+          <h2 id="catalog-title" className="mt-1 text-2xl font-black tracking-tight text-slate-900">
             Featured products
           </h2>
         </div>
@@ -35,16 +41,17 @@ export function ProductGrid({ products, isBusy, onNavigate, onRefresh }: Product
           products.map((product) => {
             const firstVariant = product.variants?.[0];
             const price = getVariantPrice(firstVariant);
+            const tracksInventory = firstVariant?.manage_inventory !== false;
+            const remaining = firstVariant?.inventory_quantity ?? 0;
+            const isOutOfStock = tracksInventory && remaining <= 0;
+            const compared = isCompared(product.id);
+            const saved = isWishlisted(product.id);
+            const seller = getProductSeller(product);
 
             return (
-              <AppLink
-                key={product.id}
-                className="group block focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-400/40"
-                to={productPath(product.id)}
-                onNavigate={onNavigate}
-              >
-                <Card className="h-full gap-0 overflow-hidden rounded-lg border-emerald-100 py-0 transition-all group-hover:border-emerald-500 group-hover:shadow-xl group-hover:shadow-emerald-950/10">
-                  <div className="aspect-[4/3] overflow-hidden bg-gradient-to-br from-emerald-100 to-orange-100 text-emerald-600">
+              <Card key={product.id} className="group h-full gap-0 overflow-hidden rounded-2xl border-slate-100 py-0 transition-all duration-200 hover:border-emerald-400 hover:-translate-y-0.5 hover:shadow-2xl hover:shadow-slate-900/10">
+                <AppLink className="block cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-400/40" to={productPath(product.id)} onNavigate={onNavigate}>
+                  <div className="aspect-[4/3] overflow-hidden bg-gradient-to-br from-slate-100 to-emerald-50 text-emerald-500">
                     {product.thumbnail ? (
                       <img className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.035]" src={product.thumbnail} alt="" />
                     ) : (
@@ -53,26 +60,64 @@ export function ProductGrid({ products, isBusy, onNavigate, onRefresh }: Product
                       </div>
                     )}
                   </div>
-                  <CardContent className="grid gap-4 p-4">
-                    <div>
-                      <span className="block text-base font-black leading-snug text-emerald-950">{product.title}</span>
-                      <span className="mt-1 block text-sm font-bold text-emerald-700">{product.variants?.length ?? 0} variants available</span>
+                </AppLink>
+                <CardContent className="grid gap-4 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <AppLink className="grid min-w-0 gap-1 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-400/40" to={productPath(product.id)} onNavigate={onNavigate}>
+                      <span className="block text-base font-black leading-snug text-slate-900">{product.title}</span>
+                      <span className="block text-sm font-bold text-emerald-700">
+                        {product.variants?.length ?? 0} variants - {tracksInventory ? `${remaining} remaining` : "in stock"}
+                      </span>
+                    </AppLink>
+                    <div className="flex shrink-0 gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className={`size-9 border-emerald-200 p-0 hover:bg-emerald-50 ${compared ? "bg-sky-50 text-sky-700" : "text-emerald-800"}`}
+                        onClick={() => onToggleCompare(product.id)}
+                        aria-label={compared ? `Remove ${product.title} from comparison` : `Compare ${product.title}`}
+                      >
+                        <GitCompare className="size-4" aria-hidden="true" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className={`size-9 border-emerald-200 p-0 hover:bg-emerald-50 ${saved ? "bg-red-50 text-red-600" : "text-emerald-800"}`}
+                        onClick={() => onToggleWishlist(product.id)}
+                        aria-label={saved ? `Remove ${product.title} from wishlist` : `Save ${product.title} to wishlist`}
+                      >
+                        <Heart className={`size-4 ${saved ? "fill-current" : ""}`} aria-hidden="true" />
+                      </Button>
                     </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <strong className="text-lg font-black text-emerald-950">{formatMoney(price?.amount, price?.currency)}</strong>
-                      <Badge variant="outline" className="h-8 border-emerald-200 bg-emerald-50 font-black text-emerald-700">
+                  </div>
+                  <AppLink className="w-fit text-sm font-black text-sky-700 hover:text-sky-900" to={sellerPath(seller)} onNavigate={onNavigate}>
+                    Sold by {seller}
+                  </AppLink>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <strong className="text-lg font-black text-slate-900">{formatMoney(price?.amount, price?.currency)}</strong>
+                      <Badge variant="outline" className="mt-1 h-7 border-emerald-200 bg-emerald-50 font-black text-emerald-700">
                         Details
                         <ArrowRight className="size-3" aria-hidden="true" />
                       </Badge>
                     </div>
-                  </CardContent>
-                </Card>
-              </AppLink>
+                    <Button
+                      type="button"
+                      className="h-10 bg-orange-500 px-3 font-black text-white hover:bg-orange-600"
+                      disabled={isBusy || !firstVariant?.id || isOutOfStock}
+                      onClick={() => firstVariant?.id && onAddVariantToCart(firstVariant.id)}
+                    >
+                      <ShoppingCart className="size-4" aria-hidden="true" />
+                      <span>{isOutOfStock ? "Sold out" : "Add"}</span>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             );
           })
         ) : (
-          <div className="col-span-full flex min-h-40 items-center justify-center rounded-lg border border-dashed border-emerald-200 bg-emerald-50/50 font-bold text-emerald-700">
-            No products loaded.
+          <div className="col-span-full flex min-h-40 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/80 font-bold text-slate-500">
+            No products match your filters.
           </div>
         )}
       </div>

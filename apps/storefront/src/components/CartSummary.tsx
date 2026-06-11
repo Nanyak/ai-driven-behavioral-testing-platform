@@ -1,4 +1,4 @@
-import { CreditCard, RefreshCw, ShoppingCart } from "lucide-react";
+import { Minus, Plus, ShoppingCart, Trash2 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
@@ -12,8 +12,8 @@ type CartSummaryProps = {
   paymentProviderCount: number;
   checkoutResult: string;
   isBusy: boolean;
-  onRefreshCart: () => void;
-  onCheckout: () => void;
+  onRemoveItem: (lineItemId: string) => void;
+  onUpdateQuantity: (lineItemId: string, quantity: number) => void;
 };
 
 export function CartSummary({
@@ -22,8 +22,8 @@ export function CartSummary({
   paymentProviderCount,
   checkoutResult,
   isBusy,
-  onRefreshCart,
-  onCheckout,
+  onRemoveItem,
+  onUpdateQuantity,
 }: CartSummaryProps) {
   const currency = cart?.currency_code || "USD";
 
@@ -40,23 +40,26 @@ export function CartSummary({
           {cart?.id || "Cart will be created on first add."}
         </p>
 
-        <div className="grid gap-2 sm:grid-cols-2">
-          <Button type="button" variant="outline" className="h-10 border-emerald-200 font-black text-emerald-800 hover:bg-emerald-50" onClick={onRefreshCart} disabled={isBusy || !cart?.id}>
-            <RefreshCw className="size-4" aria-hidden="true" />
-            <span>Check</span>
-          </Button>
-          <Button type="button" className="h-10 bg-orange-500 font-black text-white hover:bg-orange-600" onClick={onCheckout} disabled={isBusy}>
-            <CreditCard className="size-4" aria-hidden="true" />
-            <span>Checkout</span>
-          </Button>
-        </div>
-
         <div className="grid min-h-32 gap-2 border-y border-emerald-100 py-4">
           {(cart?.items ?? []).length > 0 ? (
             cart?.items?.map((item) => (
-              <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-emerald-100 bg-emerald-50/50 px-3 py-2">
-                <span className="font-bold text-emerald-950">{item.title}</span>
-                <strong className="text-emerald-800">x{item.quantity}</strong>
+              <div key={item.id} className="grid gap-3 rounded-lg border border-emerald-100 bg-emerald-50/50 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                <div className="min-w-0">
+                  <span className="block truncate font-bold text-emerald-950">{item.title}</span>
+                  <span className="text-sm font-semibold text-emerald-700">{formatMoney(item.unit_price, currency)} each</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" className="size-9 border-emerald-200 p-0 text-emerald-800 hover:bg-emerald-50" disabled={isBusy || item.quantity <= 1} onClick={() => onUpdateQuantity(item.id, item.quantity - 1)} aria-label={`Decrease ${item.title} quantity`}>
+                    <Minus className="size-4" aria-hidden="true" />
+                  </Button>
+                  <strong className="flex h-9 min-w-10 items-center justify-center rounded-lg border border-emerald-200 bg-white px-2 text-emerald-900">{item.quantity}</strong>
+                  <Button type="button" variant="outline" className="size-9 border-emerald-200 p-0 text-emerald-800 hover:bg-emerald-50" disabled={isBusy} onClick={() => onUpdateQuantity(item.id, item.quantity + 1)} aria-label={`Increase ${item.title} quantity`}>
+                    <Plus className="size-4" aria-hidden="true" />
+                  </Button>
+                  <Button type="button" variant="outline" className="size-9 border-red-200 p-0 text-red-700 hover:bg-red-50" disabled={isBusy} onClick={() => onRemoveItem(item.id)} aria-label={`Remove ${item.title}`}>
+                    <Trash2 className="size-4" aria-hidden="true" />
+                  </Button>
+                </div>
               </div>
             ))
           ) : (
@@ -71,6 +74,10 @@ export function CartSummary({
           <div className="flex items-center justify-between gap-3">
             <span>Subtotal</span>
             <strong>{formatMoney(cart?.subtotal, currency)}</strong>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span>Discount</span>
+            <strong>{formatMoney(cart?.discount_total, currency)}</strong>
           </div>
           <div className="flex items-center justify-between gap-3">
             <span>Shipping</span>

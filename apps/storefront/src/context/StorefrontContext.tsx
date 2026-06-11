@@ -1,36 +1,75 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { clearCustomerToken, getCustomerToken, setCustomerToken } from "../services/authToken";
 import { medusaStore } from "../services/medusa";
-import type { Cart, Customer, PaymentProvider, Product, ShippingOption, Variant } from "../types/storefront";
+import type { Cart, CheckoutAddress, Customer, Order, OrderSupportRequest, PaymentProvider, Product, ProductQuestion, ProductReview, ShippingOption, StoreNotification, Variant } from "../types/storefront";
 
 type StorefrontContextValue = {
   authEmail: string;
   authPassword: string;
   cart: Cart | null;
+  compareProductIds: string[];
   checkoutResult: string;
   customer: Customer | null;
   isBusy: boolean;
   itemCount: number;
+  notifications: StoreNotification[];
+  unreadNotificationCount: number;
   paymentProviders: PaymentProvider[];
   products: Product[];
+  productQuestions: ProductQuestion[];
+  productReviews: ProductReview[];
+  orderSupportRequests: OrderSupportRequest[];
+  recentOrderIds: string[];
+  recentlyViewedProductIds: string[];
+  savedAddresses: CheckoutAddress[];
+  searchQuery: string;
   selectedVariantId: string;
   shippingOptions: ShippingOption[];
   status: string;
   addVariantToCart: (variantId: string) => Promise<void>;
+  applyPromoCode: (promoCode: string) => Promise<void>;
+  getProductReviews: (productId: string) => ProductReview[];
+  getProductQuestions: (productId: string) => ProductQuestion[];
+  getOrderSupportRequests: (orderId: string) => OrderSupportRequest[];
   getProduct: (productId: string) => Product | undefined;
   getSelectedVariant: (product?: Product) => Variant | undefined;
+  isCompared: (productId: string) => boolean;
+  isWishlisted: (productId: string) => boolean;
+  loadOrder: (orderId: string) => Promise<Order | null>;
+  loadOrders: () => Promise<Order[]>;
   loadProducts: () => Promise<void>;
   loginCustomer: () => Promise<boolean>;
   logoutCustomer: () => void;
-  refreshCartCheck: () => Promise<void>;
+  markAllNotificationsRead: () => void;
+  prepareCheckout: (address: CheckoutAddress) => Promise<boolean>;
+  removeCartItem: (lineItemId: string) => Promise<void>;
   registerCustomer: () => Promise<boolean>;
-  runCheckout: () => Promise<void>;
+  rememberViewedProduct: (productId: string) => void;
+  runCheckout: (shippingOptionId: string, paymentProviderId: string) => Promise<string | null>;
+  saveAddress: (address: CheckoutAddress) => void;
+  submitOrderSupportRequest: (request: Omit<OrderSupportRequest, "id" | "created_at" | "status">) => void;
+  submitProductQuestion: (question: Omit<ProductQuestion, "id" | "created_at" | "answer">) => void;
+  submitReview: (review: Omit<ProductReview, "id" | "created_at">) => void;
   setAuthEmail: (value: string) => void;
   setAuthPassword: (value: string) => void;
+  setSearchQuery: (value: string) => void;
   setSelectedVariantId: (value: string) => void;
+  toggleCompare: (productId: string) => void;
+  toggleWishlist: (productId: string) => void;
+  updateCartItemQuantity: (lineItemId: string, quantity: number) => Promise<void>;
+  wishlistProductIds: string[];
 };
 
 const StorefrontContext = createContext<StorefrontContextValue | null>(null);
+const wishlistStorageKey = "behavior-storefront-wishlist";
+const recentOrderStorageKey = "behavior-storefront-orders";
+const addressStorageKey = "behavior-storefront-addresses";
+const compareStorageKey = "behavior-storefront-compare";
+const reviewStorageKey = "behavior-storefront-reviews";
+const supportStorageKey = "behavior-storefront-support";
+const recentlyViewedStorageKey = "behavior-storefront-recently-viewed";
+const notificationStorageKey = "behavior-storefront-notifications";
+const questionStorageKey = "behavior-storefront-questions";
 
 type StorefrontProviderProps = {
   children: ReactNode;
@@ -38,6 +77,16 @@ type StorefrontProviderProps = {
 
 export function StorefrontProvider({ children }: StorefrontProviderProps) {
   const [products, setProducts] = useState<Product[]>([]);
+  const [wishlistProductIds, setWishlistProductIds] = useState<string[]>(() => readStoredList(wishlistStorageKey));
+  const [recentOrderIds, setRecentOrderIds] = useState<string[]>(() => readStoredList(recentOrderStorageKey));
+  const [compareProductIds, setCompareProductIds] = useState<string[]>(() => readStoredList(compareStorageKey));
+  const [recentlyViewedProductIds, setRecentlyViewedProductIds] = useState<string[]>(() => readStoredList(recentlyViewedStorageKey));
+  const [savedAddresses, setSavedAddresses] = useState<CheckoutAddress[]>(() => readStoredAddresses());
+  const [productReviews, setProductReviews] = useState<ProductReview[]>(() => readStoredReviews());
+  const [productQuestions, setProductQuestions] = useState<ProductQuestion[]>(() => readStoredQuestions());
+  const [orderSupportRequests, setOrderSupportRequests] = useState<OrderSupportRequest[]>(() => readStoredSupportRequests());
+  const [notifications, setNotifications] = useState<StoreNotification[]>(() => readStoredNotifications());
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedVariantId, setSelectedVariantId] = useState("");
   const [cart, setCart] = useState<Cart | null>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -53,6 +102,31 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
     () => cart?.items?.reduce((total, item) => total + item.quantity, 0) ?? 0,
     [cart]
   );
+  const unreadNotificationCount = useMemo(
+    () => notifications.filter((notification) => !notification.read).length,
+    [notifications]
+  );
+
+  function addNotification(notification: Omit<StoreNotification, "id" | "created_at" | "read">) {
+    setNotifications((current) => {
+      const next = [{
+        ...notification,
+        id: `note_${Date.now()}`,
+        read: false,
+        created_at: new Date().toISOString(),
+      }, ...current].slice(0, 50);
+      writeStoredNotifications(next);
+      return next;
+    });
+  }
+
+  function markAllNotificationsRead() {
+    setNotifications((current) => {
+      const next = current.map((notification) => ({ ...notification, read: true }));
+      writeStoredNotifications(next);
+      return next;
+    });
+  }
 
   function getProduct(productId: string) {
     return products.find((product) => product.id === productId);
@@ -60,6 +134,168 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
 
   function getSelectedVariant(product?: Product) {
     return product?.variants?.find((variant) => variant.id === selectedVariantId) ?? product?.variants?.[0];
+  }
+
+  function isWishlisted(productId: string) {
+    return wishlistProductIds.includes(productId);
+  }
+
+  function isCompared(productId: string) {
+    return compareProductIds.includes(productId);
+  }
+
+  function getProductReviews(productId: string) {
+    return productReviews.filter((review) => review.product_id === productId);
+  }
+
+  function getProductQuestions(productId: string) {
+    return productQuestions.filter((question) => question.product_id === productId);
+  }
+
+  function getOrderSupportRequests(orderId: string) {
+    return orderSupportRequests.filter((request) => request.order_id === orderId);
+  }
+
+  function toggleWishlist(productId: string) {
+    if (!productId) {
+      return;
+    }
+
+    setWishlistProductIds((current) => {
+      const next = current.includes(productId)
+        ? current.filter((currentProductId) => currentProductId !== productId)
+        : [productId, ...current];
+      writeStoredList(wishlistStorageKey, next);
+      setStatus(next.includes(productId) ? "Saved to wishlist" : "Removed from wishlist");
+      addNotification({
+        title: next.includes(productId) ? "Product saved" : "Product unsaved",
+        body: "Your saved product list was updated.",
+        type: "account",
+      });
+      return next;
+    });
+  }
+
+  function rememberOrder(orderId: string) {
+    setRecentOrderIds((current) => {
+      const next = [orderId, ...current.filter((currentOrderId) => currentOrderId !== orderId)].slice(0, 20);
+      writeStoredList(recentOrderStorageKey, next);
+      return next;
+    });
+  }
+
+  function rememberViewedProduct(productId: string) {
+    if (!productId) {
+      return;
+    }
+
+    setRecentlyViewedProductIds((current) => {
+      const next = [productId, ...current.filter((currentProductId) => currentProductId !== productId)].slice(0, 12);
+      writeStoredList(recentlyViewedStorageKey, next);
+      return next;
+    });
+  }
+
+  function toggleCompare(productId: string) {
+    if (!productId) {
+      return;
+    }
+
+    setCompareProductIds((current) => {
+      const next = current.includes(productId)
+        ? current.filter((currentProductId) => currentProductId !== productId)
+        : [productId, ...current].slice(0, 4);
+      writeStoredList(compareStorageKey, next);
+      setStatus(next.includes(productId) ? "Added to comparison" : "Removed from comparison");
+      addNotification({
+        title: "Comparison updated",
+        body: `${next.length} products are in your comparison list.`,
+        type: "account",
+      });
+      return next;
+    });
+  }
+
+  function saveAddress(address: CheckoutAddress) {
+    const addressId = address.id || `addr_${Date.now()}`;
+    setSavedAddresses((current) => {
+      const nextAddress = {
+        ...address,
+        id: addressId,
+        label: address.label || `${address.city}, ${address.country_code.toUpperCase()}`,
+      };
+      const next = [nextAddress, ...current.filter((currentAddress) => currentAddress.id !== addressId)].slice(0, 6);
+      writeStoredAddresses(next);
+      setStatus("Address saved");
+      addNotification({
+        title: "Address saved",
+        body: `${nextAddress.label} is ready for checkout.`,
+        type: "account",
+      });
+      return next;
+    });
+  }
+
+  function submitReview(review: Omit<ProductReview, "id" | "created_at">) {
+    const nextReview: ProductReview = {
+      ...review,
+      id: `review_${Date.now()}`,
+      created_at: new Date().toISOString(),
+      rating: Math.max(1, Math.min(5, review.rating)),
+    };
+
+    setProductReviews((current) => {
+      const next = [nextReview, ...current].slice(0, 100);
+      writeStoredReviews(next);
+      setStatus("Review submitted");
+      addNotification({
+        title: "Review submitted",
+        body: "Thanks for sharing product feedback.",
+        type: "account",
+      });
+      return next;
+    });
+  }
+
+  function submitProductQuestion(question: Omit<ProductQuestion, "id" | "created_at" | "answer">) {
+    const nextQuestion: ProductQuestion = {
+      ...question,
+      id: `question_${Date.now()}`,
+      created_at: new Date().toISOString(),
+    };
+
+    setProductQuestions((current) => {
+      const next = [nextQuestion, ...current].slice(0, 100);
+      writeStoredQuestions(next);
+      setStatus("Question submitted");
+      addNotification({
+        title: "Question submitted",
+        body: "Your product question was added to the Q&A.",
+        type: "account",
+      });
+      return next;
+    });
+  }
+
+  function submitOrderSupportRequest(request: Omit<OrderSupportRequest, "id" | "created_at" | "status">) {
+    const nextRequest: OrderSupportRequest = {
+      ...request,
+      id: `support_${Date.now()}`,
+      status: "requested",
+      created_at: new Date().toISOString(),
+    };
+
+    setOrderSupportRequests((current) => {
+      const next = [nextRequest, ...current].slice(0, 100);
+      writeStoredSupportRequests(next);
+      setStatus(`${request.type === "return" ? "Return" : request.type === "cancel" ? "Cancellation" : "Support"} request submitted`);
+      addNotification({
+        title: "Order request submitted",
+        body: `Your ${request.type} request is waiting for review.`,
+        type: "support",
+      });
+      return next;
+    });
   }
 
   async function loadProducts() {
@@ -152,7 +388,14 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
       const activeCart = await ensureCart();
       const updatedCart = await medusaStore.addLineItem(activeCart.id, variantId);
       setCart(updatedCart);
+      setShippingOptions([]);
+      setPaymentProviders([]);
       setStatus("Cart updated");
+      addNotification({
+        title: "Cart updated",
+        body: "A product was added to your cart.",
+        type: "cart",
+      });
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Could not update cart");
     } finally {
@@ -160,7 +403,33 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
     }
   }
 
-  async function refreshCartCheck() {
+  async function updateCartItemQuantity(lineItemId: string, quantity: number) {
+    if (!cart?.id) {
+      setStatus("Create a cart first");
+      return;
+    }
+
+    const nextQuantity = Math.max(1, quantity);
+    setIsBusy(true);
+    try {
+      const updatedCart = await medusaStore.updateLineItem(cart.id, lineItemId, nextQuantity);
+      setCart(updatedCart);
+      setShippingOptions([]);
+      setPaymentProviders([]);
+      setStatus("Cart quantity updated");
+      addNotification({
+        title: "Quantity changed",
+        body: "Your cart totals may have changed.",
+        type: "cart",
+      });
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not update quantity");
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function removeCartItem(lineItemId: string) {
     if (!cart?.id) {
       setStatus("Create a cart first");
       return;
@@ -168,59 +437,99 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
 
     setIsBusy(true);
     try {
-      const latestCart = await medusaStore.getCart(cart.id);
-      const [options, providers] = await Promise.all([
-        medusaStore.getShippingOptions(cart.id),
-        latestCart.region_id ? medusaStore.getPaymentProviders(latestCart.region_id) : Promise.resolve([]),
-      ]);
-      setCart(latestCart);
-      setShippingOptions(options);
-      setPaymentProviders(providers);
-      setStatus("Cart checked");
+      const updatedCart = await medusaStore.deleteLineItem(cart.id, lineItemId);
+      setCart(updatedCart);
+      setShippingOptions([]);
+      setPaymentProviders([]);
+      setStatus("Item removed from cart");
+      addNotification({
+        title: "Item removed",
+        body: "A product was removed from your cart.",
+        type: "cart",
+      });
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Could not check cart");
+      setStatus(error instanceof Error ? error.message : "Could not remove item");
     } finally {
       setIsBusy(false);
     }
   }
 
-  async function runCheckout() {
+  async function prepareCheckout(address: CheckoutAddress) {
+    if (!cart?.id) {
+      setStatus("Create a cart first");
+      return false;
+    }
+
     setIsBusy(true);
-    setCheckoutResult("Preparing checkout");
+    try {
+      const addressedCart = await medusaStore.updateCheckoutAddress(cart.id, address);
+      const [options, providers] = await Promise.all([
+        medusaStore.getShippingOptions(addressedCart.id),
+        addressedCart.region_id ? medusaStore.getPaymentProviders(addressedCart.region_id) : Promise.resolve([]),
+      ]);
+      setCart(addressedCart);
+      setShippingOptions(options);
+      setPaymentProviders(providers);
+      setStatus("Checkout options ready");
+      addNotification({
+        title: "Checkout ready",
+        body: "Shipping and payment options are available.",
+        type: "order",
+      });
+      return true;
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not prepare checkout");
+      return false;
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function applyPromoCode(promoCode: string) {
+    if (!cart?.id) {
+      setStatus("Create a cart first");
+      return;
+    }
+
+    setIsBusy(true);
+    try {
+      const updatedCart = await medusaStore.applyPromoCode(cart.id, promoCode.trim());
+      setCart(updatedCart);
+      setShippingOptions([]);
+      setPaymentProviders([]);
+      setStatus(promoCode.trim() ? "Promo code applied" : "Promo code cleared");
+      addNotification({
+        title: promoCode.trim() ? "Promo applied" : "Promo cleared",
+        body: "Cart discounts were recalculated.",
+        type: "promo",
+      });
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not apply promo code");
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function runCheckout(shippingOptionId: string, paymentProviderId: string) {
+    setIsBusy(true);
+    setCheckoutResult("Placing order");
     try {
       let activeCart = await ensureCart();
 
       if ((activeCart.items ?? []).length === 0) {
-        const fallbackVariantId = selectedVariantId || products[0]?.variants?.[0]?.id;
-        if (fallbackVariantId) {
-          activeCart = await medusaStore.addLineItem(activeCart.id, fallbackVariantId);
-        }
+        throw new Error("Add at least one item before checkout.");
       }
 
-      activeCart = await medusaStore.updateCheckoutAddress(
-        activeCart.id,
-        customer?.email || authEmail,
-        customer?.first_name || "Behavior",
-        customer?.last_name || "Shopper"
-      );
-
-      const options = await medusaStore.getShippingOptions(activeCart.id);
-      setShippingOptions(options);
-      const option = options[0];
-      if (!option?.id) {
-        throw new Error("No shipping option is available for this cart.");
+      if (!shippingOptionId) {
+        throw new Error("Choose a shipping option before placing the order.");
       }
 
-      activeCart = await medusaStore.addShippingMethod(activeCart.id, option.id);
-
-      const providers = await medusaStore.getPaymentProviders(activeCart.region_id ?? "");
-      setPaymentProviders(providers);
-      const provider = providers[0];
-      if (!provider?.id) {
-        throw new Error("No payment provider is available for this cart region.");
+      if (!paymentProviderId) {
+        throw new Error("Choose a payment type before placing the order.");
       }
 
-      const paymentCollection = await medusaStore.createPaymentCollection(activeCart.id);
+      activeCart = await medusaStore.addShippingMethod(activeCart.id, shippingOptionId);
+      const paymentCollection = activeCart.payment_collection ?? await medusaStore.createPaymentCollection(activeCart.id);
       activeCart = {
         ...activeCart,
         payment_collection: paymentCollection,
@@ -231,7 +540,7 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
         throw new Error("Cart does not have a payment collection yet.");
       }
 
-      const payment = await medusaStore.createPaymentSession(collectionId, provider.id);
+      const payment = await medusaStore.createPaymentSession(collectionId, paymentProviderId);
       activeCart = {
         ...activeCart,
         payment_collection: payment,
@@ -242,15 +551,70 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
       if (completed.type === "order" && completed.order?.id) {
         setCheckoutResult(`Checkout complete: ${completed.order.id}`);
         setStatus("Checkout completed");
+        rememberOrder(completed.order.id);
+        addNotification({
+          title: "Order placed",
+          body: `Order ${completed.order.id} is confirmed.`,
+          type: "order",
+        });
+        setCart(null);
+        setShippingOptions([]);
+        setPaymentProviders([]);
+        return completed.order.id;
       } else {
         setCheckoutResult(completed.error?.message || "Checkout returned the cart for more action.");
         if (completed.cart) {
           setCart(completed.cart);
         }
+        return null;
       }
     } catch (error) {
       setCheckoutResult(error instanceof Error ? error.message : "Checkout failed");
       setStatus(error instanceof Error ? error.message : "Checkout failed");
+      return null;
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function loadOrder(orderId: string) {
+    setIsBusy(true);
+    setStatus("Loading order");
+    try {
+      const order = await medusaStore.getOrder(orderId);
+      setStatus(`Order ${order.display_id ? `#${order.display_id}` : order.id} loaded`);
+      return order;
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not load order");
+      return null;
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function loadOrders() {
+    setIsBusy(true);
+    setStatus("Loading orders");
+    try {
+      const authenticatedOrders = getCustomerToken() ? await medusaStore.listOrders() : [];
+      const knownOrderIds = new Set(authenticatedOrders.map((order) => order.id));
+      const guestOrders = await Promise.all(
+        recentOrderIds
+          .filter((orderId) => !knownOrderIds.has(orderId))
+          .map(async (orderId) => {
+            try {
+              return await medusaStore.getOrder(orderId);
+            } catch {
+              return null;
+            }
+          })
+      );
+      const orders = [...authenticatedOrders, ...guestOrders.filter((order): order is Order => Boolean(order))];
+      setStatus(`${orders.length} orders loaded`);
+      return orders;
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not load orders");
+      return [];
     } finally {
       setIsBusy(false);
     }
@@ -266,45 +630,256 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
       authEmail,
       authPassword,
       cart,
+      compareProductIds,
       checkoutResult,
       customer,
       isBusy,
       itemCount,
+      notifications,
+      unreadNotificationCount,
       paymentProviders,
       products,
+      productQuestions,
+      orderSupportRequests,
+      productReviews,
+      recentOrderIds,
+      recentlyViewedProductIds,
+      savedAddresses,
+      searchQuery,
       selectedVariantId,
       shippingOptions,
       status,
       addVariantToCart,
+      applyPromoCode,
+      getProductReviews,
+      getProductQuestions,
+      getOrderSupportRequests,
       getProduct,
       getSelectedVariant,
+      isCompared,
+      isWishlisted,
+      loadOrder,
+      loadOrders,
       loadProducts,
       loginCustomer,
       logoutCustomer,
-      refreshCartCheck,
+      markAllNotificationsRead,
+      prepareCheckout,
+      removeCartItem,
       registerCustomer,
+      rememberViewedProduct,
       runCheckout,
+      saveAddress,
       setAuthEmail,
       setAuthPassword,
+      setSearchQuery,
       setSelectedVariantId,
+      submitOrderSupportRequest,
+      submitProductQuestion,
+      submitReview,
+      toggleCompare,
+      toggleWishlist,
+      updateCartItemQuantity,
+      wishlistProductIds,
     }),
     [
       authEmail,
       authPassword,
       cart,
+      compareProductIds,
       checkoutResult,
       customer,
       isBusy,
       itemCount,
+      notifications,
       paymentProviders,
       products,
+      productQuestions,
+      orderSupportRequests,
+      productReviews,
+      recentOrderIds,
+      recentlyViewedProductIds,
+      savedAddresses,
+      searchQuery,
       selectedVariantId,
       shippingOptions,
       status,
+      wishlistProductIds,
     ]
   );
 
   return <StorefrontContext.Provider value={value}>{children}</StorefrontContext.Provider>;
+}
+
+function readStoredSupportRequests() {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(supportStorageKey) || "[]");
+    return Array.isArray(parsed) ? parsed.filter(isOrderSupportRequest) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredSupportRequests(requests: OrderSupportRequest[]) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(supportStorageKey, JSON.stringify(requests));
+}
+
+function isOrderSupportRequest(value: unknown): value is OrderSupportRequest {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<OrderSupportRequest>;
+  return Boolean(candidate.id && candidate.order_id && candidate.type && candidate.message && candidate.status && candidate.created_at);
+}
+
+function readStoredNotifications() {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(notificationStorageKey) || "[]");
+    return Array.isArray(parsed) ? parsed.filter(isStoreNotification) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredNotifications(notifications: StoreNotification[]) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(notificationStorageKey, JSON.stringify(notifications));
+}
+
+function isStoreNotification(value: unknown): value is StoreNotification {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<StoreNotification>;
+  return Boolean(candidate.id && candidate.title && candidate.body && candidate.type && candidate.created_at && typeof candidate.read === "boolean");
+}
+
+function readStoredList(key: string) {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(key) || "[]");
+    return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredList(key: string, values: string[]) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(key, JSON.stringify(values));
+}
+
+function readStoredAddresses() {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(addressStorageKey) || "[]");
+    return Array.isArray(parsed) ? parsed.filter(isCheckoutAddress) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredAddresses(addresses: CheckoutAddress[]) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(addressStorageKey, JSON.stringify(addresses));
+}
+
+function isCheckoutAddress(value: unknown): value is CheckoutAddress {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<CheckoutAddress>;
+  return Boolean(candidate.email && candidate.first_name && candidate.last_name && candidate.address_1 && candidate.city && candidate.postal_code && candidate.country_code && candidate.phone);
+}
+
+function readStoredReviews() {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(reviewStorageKey) || "[]");
+    return Array.isArray(parsed) ? parsed.filter(isProductReview) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredReviews(reviews: ProductReview[]) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(reviewStorageKey, JSON.stringify(reviews));
+}
+
+function isProductReview(value: unknown): value is ProductReview {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<ProductReview>;
+  return Boolean(candidate.id && candidate.product_id && candidate.author && candidate.title && candidate.body && candidate.created_at && typeof candidate.rating === "number");
+}
+
+function readStoredQuestions() {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(questionStorageKey) || "[]");
+    return Array.isArray(parsed) ? parsed.filter(isProductQuestion) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredQuestions(questions: ProductQuestion[]) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(questionStorageKey, JSON.stringify(questions));
+}
+
+function isProductQuestion(value: unknown): value is ProductQuestion {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<ProductQuestion>;
+  return Boolean(candidate.id && candidate.product_id && candidate.author && candidate.question && candidate.created_at);
 }
 
 export function useStorefront() {

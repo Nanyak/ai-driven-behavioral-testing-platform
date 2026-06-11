@@ -1,4 +1,4 @@
-import { LogOut, ShoppingBag, UserRound } from "lucide-react";
+import { Heart, LogOut, PackageCheck, ShoppingBag, UserRound } from "lucide-react";
 import { AppLink } from "../components/AppLink";
 import { Button, buttonVariants } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
@@ -9,7 +9,7 @@ type ProfilePageProps = {
 };
 
 export function ProfilePage({ onNavigate }: ProfilePageProps) {
-  const { customer, logoutCustomer, status } = useStorefront();
+  const { customer, logoutCustomer, savedAddresses, status } = useStorefront();
 
   if (!customer) {
     return (
@@ -51,10 +51,40 @@ export function ProfilePage({ onNavigate }: ProfilePageProps) {
               <strong className="break-all text-emerald-950">{customer.id}</strong>
             </div>
           </div>
+          <section className="grid gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-normal text-emerald-700">Address book</p>
+              <h2 className="mt-1 text-2xl font-black text-emerald-950">{savedAddresses.length} saved addresses</h2>
+            </div>
+            {savedAddresses.length > 0 ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                {savedAddresses.map((address) => (
+                  <div key={address.id || address.address_1} className="grid gap-1 rounded-lg border border-emerald-100 bg-emerald-50/70 p-4">
+                    <strong className="text-emerald-950">{address.label || "Saved address"}</strong>
+                    <span className="font-semibold text-emerald-800/75">{address.address_1}</span>
+                    <span className="font-semibold text-emerald-800/75">{address.city}, {address.postal_code}</span>
+                    <span className="font-semibold uppercase text-emerald-800/75">{address.country_code}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-lg border border-dashed border-emerald-200 bg-emerald-50/50 p-4 font-bold text-emerald-700">
+                Save an address during checkout to reuse it here.
+              </p>
+            )}
+          </section>
           <div className="flex flex-col gap-3 sm:flex-row">
             <AppLink className={buttonVariants({ variant: "outline", className: "h-10 border-emerald-200 font-black text-emerald-800 hover:bg-emerald-50" })} to="/cart" onNavigate={onNavigate}>
               <ShoppingBag className="size-4" aria-hidden="true" />
               <span>View cart</span>
+            </AppLink>
+            <AppLink className={buttonVariants({ variant: "outline", className: "h-10 border-emerald-200 font-black text-emerald-800 hover:bg-emerald-50" })} to="/orders" onNavigate={onNavigate}>
+              <PackageCheck className="size-4" aria-hidden="true" />
+              <span>Orders</span>
+            </AppLink>
+            <AppLink className={buttonVariants({ variant: "outline", className: "h-10 border-emerald-200 font-black text-emerald-800 hover:bg-emerald-50" })} to="/wishlist" onNavigate={onNavigate}>
+              <Heart className="size-4" aria-hidden="true" />
+              <span>Saved</span>
             </AppLink>
             <Button type="button" className="h-10 bg-orange-500 font-black text-white hover:bg-orange-600" onClick={logoutCustomer}>
               <LogOut className="size-4" aria-hidden="true" />

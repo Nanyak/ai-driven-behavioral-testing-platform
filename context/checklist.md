@@ -72,6 +72,7 @@
 - [x] Add storefront customer profile check and logout.
 - [x] Add storefront cart readiness checks for shipping and payment.
 - [x] Add storefront checkout flow through cart completion.
+- [x] Redesign storefront UI: clean neutral palette, new CSS-gradient hero (no external image), rounded-2xl cards, slate-900 headings, improved hover transitions.
 - [x] Create `apps/platform-dashboard`.
 - [x] Show Medusa backend health/status.
 - [x] Show Store API availability.

@@ -60,7 +60,45 @@ services:
       retries: 30
       start_period: 30s
 
+  storefront:
+    image: node:22-alpine
+    working_dir: /workspace/apps/storefront
+    env_file:
+      - .env
+    depends_on:
+      medusa:
+        condition: service_healthy
+    environment:
+      MEDUSA_BACKEND_URL: http://medusa:9000
+    command: sh -c "test -d node_modules/.bin || npm ci && npm run dev"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./apps/storefront:/workspace/apps/storefront
+      - ./.env:/workspace/.env
+      - storefront_node_modules:/workspace/apps/storefront/node_modules
+
+  platform-dashboard:
+    image: node:22-alpine
+    working_dir: /workspace/apps/platform-dashboard
+    env_file:
+      - .env
+    depends_on:
+      medusa:
+        condition: service_healthy
+    environment:
+      MEDUSA_BACKEND_URL: http://medusa:9000
+    command: sh -c "test -d node_modules/.bin || npm ci && npm run dev"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./apps/platform-dashboard:/workspace/apps/platform-dashboard
+      - ./.env:/workspace/.env
+      - platform_dashboard_node_modules:/workspace/apps/platform-dashboard/node_modules
+
 volumes:
   postgres_data:
   redis_data:
   medusa_node_modules:
+  storefront_node_modules:
+  platform_dashboard_node_modules:

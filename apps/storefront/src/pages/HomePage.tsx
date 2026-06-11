@@ -1,46 +1,85 @@
-import { PackageCheck, ShieldCheck, Sparkles, Truck } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ArrowDownAZ } from "lucide-react";
 import { ProductGrid } from "../components/ProductGrid";
 import { StoreHero } from "../components/StoreHero";
+import { AppLink } from "../components/AppLink";
 import { Badge } from "../components/ui/badge";
-import { Card, CardContent } from "../components/ui/card";
+import { Button } from "../components/ui/button";
 import { useStorefront } from "../context/StorefrontContext";
+import { collectionPath, productPath } from "../routing";
+import type { Product } from "../types/storefront";
+import { getProductCategory } from "../utils/marketplace";
+import { formatMoney, getVariantPrice } from "../utils/money";
 
 type HomePageProps = {
   onNavigate: (path: string) => void;
 };
 
-const categories = ["New Arrivals", "Best Sellers", "Everyday Gear", "Accessories", "Checkout Picks", "Test Catalog"];
-
-const promos = [
-  {
-    title: "Browse by intent",
-    text: "Jump from seeded arrivals into product detail pages without exposing checkout too early.",
-    icon: Sparkles,
-  },
-  {
-    title: "Variants first",
-    text: "Every card keeps variant depth visible so test shoppers know what can be added.",
-    icon: PackageCheck,
-  },
-  {
-    title: "Checkout later",
-    text: "Cart and checkout stay in the dedicated cart route, matching familiar ecommerce flow.",
-    icon: Truck,
-  },
-];
-
 export function HomePage({ onNavigate }: HomePageProps) {
-  const { isBusy, loadProducts, paymentProviders, products, shippingOptions } = useStorefront();
+  const { addVariantToCart, isBusy, isCompared, isWishlisted, loadProducts, products, recentlyViewedProductIds, searchQuery, toggleCompare, toggleWishlist } = useStorefront();
+  const [activeCategory, setActiveCategory] = useState("All");
+  const [sortMode, setSortMode] = useState<"featured" | "price-asc" | "price-desc" | "name">("featured");
+
+  const categories = useMemo(() => {
+    const nextCategories = new Set(products.map(getProductCategory).filter(Boolean));
+    return ["All", ...Array.from(nextCategories).slice(0, 8)];
+  }, [products]);
+
+  const visibleProducts = useMemo(() => {
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+    const filteredProducts = products.filter((product) => {
+      const searchable = [
+        product.title,
+        product.subtitle,
+        product.description,
+        product.handle,
+        product.collection?.title,
+        ...(product.tags ?? []).map((tag) => tag.value),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      const matchesSearch = !normalizedSearch || searchable.includes(normalizedSearch);
+      const matchesCategory = activeCategory === "All" || getProductCategory(product) === activeCategory;
+      return matchesSearch && matchesCategory;
+    });
+
+    return [...filteredProducts].sort((left, right) => {
+      if (sortMode === "name") {
+        return left.title.localeCompare(right.title);
+      }
+
+      const leftPrice = getVariantPrice(left.variants?.[0])?.amount ?? 0;
+      const rightPrice = getVariantPrice(right.variants?.[0])?.amount ?? 0;
+
+      if (sortMode === "price-asc") {
+        return leftPrice - rightPrice;
+      }
+
+      if (sortMode === "price-desc") {
+        return rightPrice - leftPrice;
+      }
+
+      return 0;
+    });
+  }, [activeCategory, products, searchQuery, sortMode]);
+  const recentlyViewedProducts = useMemo(
+    () => recentlyViewedProductIds
+      .map((productId) => products.find((product) => product.id === productId))
+      .filter((product): product is Product => Boolean(product))
+      .slice(0, 4),
+    [products, recentlyViewedProductIds]
+  );
 
   return (
     <>
       <StoreHero onNavigate={onNavigate} />
       <main className="mx-auto grid max-w-7xl gap-6 px-4 md:px-6" aria-label="Storefront shopping flow">
-        <section className="grid gap-3 rounded-lg border border-emerald-100 bg-white p-4 shadow-xl shadow-emerald-950/5">
+        <section className="grid gap-3 rounded-2xl border border-slate-100 bg-white p-5 shadow-xl shadow-slate-900/5">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-xs font-black uppercase tracking-normal text-emerald-700">Shop by category</p>
-              <h2 className="mt-1 text-xl font-black tracking-tight text-emerald-950">Quick discovery</h2>
+              <p className="text-xs font-black uppercase tracking-widest text-emerald-600">Shop by category</p>
+              <h2 className="mt-1 text-xl font-black tracking-tight text-slate-900">Quick discovery</h2>
             </div>
             <Badge variant="outline" className="hidden h-8 border-orange-200 bg-orange-50 font-black text-orange-700 sm:inline-flex">
               {products.length} products available
@@ -48,67 +87,87 @@ export function HomePage({ onNavigate }: HomePageProps) {
           </div>
           <div className="flex gap-2 overflow-x-auto pb-1">
             {categories.map((category) => (
-              <a
+              <button
                 key={category}
-                className="min-w-max rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-800 transition-colors hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-400/35"
-                href="#catalog"
+                className={`min-w-max rounded-full border px-4 py-2 text-sm font-black transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-400/35 ${
+                  activeCategory === category
+                    ? "border-emerald-700 bg-emerald-700 text-white shadow-sm"
+                    : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                }`}
+                type="button"
+                onClick={() => {
+                  setActiveCategory(category);
+                  if (category !== "All") {
+                    onNavigate(collectionPath(category));
+                  }
+                }}
               >
                 {category}
-              </a>
+              </button>
             ))}
           </div>
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-[1.35fr_1fr_1fr]">
-          <Card className="rounded-lg border-emerald-100 bg-emerald-950 py-0 text-white shadow-xl shadow-emerald-950/10">
-            <CardContent className="grid min-h-52 content-end gap-3 p-6">
-              <Badge className="w-fit bg-orange-500 font-black text-white hover:bg-orange-500">Storefront flow</Badge>
-              <h2 className="text-3xl font-black leading-none tracking-tight">Find the product first. Checkout when ready.</h2>
-              <p className="max-w-xl font-semibold leading-7 text-white/75">
-                Nike-style editorial discovery meets Shopee-style quick browsing: clear categories, promo context,
-                and dense product access before cart decisions.
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="rounded-lg border-emerald-100 bg-white py-0 shadow-xl shadow-emerald-950/5">
-            <CardContent className="grid min-h-52 content-between p-6">
-              <ShieldCheck className="size-8 text-emerald-600" aria-hidden="true" />
-              <div>
-                <p className="text-sm font-black uppercase text-emerald-700">Readiness</p>
-                <strong className="mt-1 block text-2xl font-black text-emerald-950">{paymentProviders.length} payment providers</strong>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="rounded-lg border-emerald-100 bg-white py-0 shadow-xl shadow-emerald-950/5">
-            <CardContent className="grid min-h-52 content-between p-6">
-              <Truck className="size-8 text-orange-500" aria-hidden="true" />
-              <div>
-                <p className="text-sm font-black uppercase text-emerald-700">Delivery path</p>
-                <strong className="mt-1 block text-2xl font-black text-emerald-950">{shippingOptions.length} shipping options</strong>
-              </div>
-            </CardContent>
-          </Card>
+        {recentlyViewedProducts.length > 0 ? (
+          <section className="grid gap-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-xl shadow-slate-900/5" aria-labelledby="recently-viewed-title">
+            <div>
+              <p className="text-xs font-black uppercase tracking-widest text-emerald-600">History</p>
+              <h2 id="recently-viewed-title" className="mt-1 text-xl font-black tracking-tight text-slate-900">Recently viewed</h2>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {recentlyViewedProducts.map((product) => {
+                const price = getVariantPrice(product.variants?.[0]);
+
+                return (
+                  <AppLink key={product.id} className="grid gap-2 rounded-xl border border-slate-100 bg-slate-50/70 p-3 transition-colors hover:bg-slate-50 hover:border-slate-200" to={productPath(product.id)} onNavigate={onNavigate}>
+                    <span className="font-black leading-snug text-slate-900">{product.title}</span>
+                    <span className="text-sm font-bold text-emerald-700">{formatMoney(price?.amount, price?.currency)}</span>
+                  </AppLink>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+
+        <section className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-5 shadow-xl shadow-slate-900/5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-widest text-emerald-600">Results</p>
+            <h2 className="mt-1 text-xl font-black tracking-tight text-slate-900">
+              {visibleProducts.length} of {products.length} products
+            </h2>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {[
+              ["featured", "Featured"],
+              ["price-asc", "Price low"],
+              ["price-desc", "Price high"],
+              ["name", "A-Z"],
+            ].map(([value, label]) => (
+              <Button
+                key={value}
+                type="button"
+                variant={sortMode === value ? "default" : "outline"}
+                className={sortMode === value ? "h-10 bg-emerald-700 font-black text-white hover:bg-emerald-800" : "h-10 border-emerald-200 font-black text-emerald-800 hover:bg-emerald-50"}
+                onClick={() => setSortMode(value as typeof sortMode)}
+              >
+                <ArrowDownAZ className="size-4" aria-hidden="true" />
+                <span>{label}</span>
+              </Button>
+            ))}
+          </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-3">
-          {promos.map((promo) => {
-            const Icon = promo.icon;
-
-            return (
-              <Card key={promo.title} className="rounded-lg border-emerald-100 bg-white py-0 shadow-xl shadow-emerald-950/5">
-                <CardContent className="grid gap-4 p-5">
-                  <Icon className="size-7 text-emerald-600" aria-hidden="true" />
-                  <div>
-                    <h3 className="text-lg font-black text-emerald-950">{promo.title}</h3>
-                    <p className="mt-2 text-sm font-semibold leading-6 text-emerald-800/75">{promo.text}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </section>
-
-        <ProductGrid products={products} isBusy={isBusy} onRefresh={loadProducts} onNavigate={onNavigate} />
+        <ProductGrid
+          products={visibleProducts}
+          isBusy={isBusy}
+          isCompared={isCompared}
+          isWishlisted={isWishlisted}
+          onAddVariantToCart={addVariantToCart}
+          onRefresh={loadProducts}
+          onNavigate={onNavigate}
+          onToggleCompare={toggleCompare}
+          onToggleWishlist={toggleWishlist}
+        />
       </main>
     </>
   );
