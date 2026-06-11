@@ -466,7 +466,6 @@ async function structuredRequestLogger(
       timestamp,
       trace_id: traceId,
       session_id: getSessionId(req) ?? null,
-      persona: getHeader(req, "x-persona") || getHeader(req, "x-behavior-persona") || null,
       user_role: auth.user_role ?? null,
       user_id: auth.user_id ?? null,
       method: req.method,

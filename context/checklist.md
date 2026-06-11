@@ -36,7 +36,7 @@
 - [x] Capture request duration in milliseconds.
 - [x] Generate `trace_id` if it is missing.
 - [x] Read `session_id` from a header or cookie.
-- [x] Read `persona` from a custom header.
+- [x] Log `user_role` from JWT `actor_type` (`null` for unauthenticated guests).
 - [x] Capture user role when available.
 - [x] Capture user/customer/admin ID when available.
 - [x] Mask passwords, tokens, secrets, and other sensitive values.
@@ -108,17 +108,42 @@
 - [ ] Add admin credentials configuration.
 - [ ] Implement helper for generating `session_id`.
 - [ ] Implement helper for generating `trace_id`.
-- [ ] Implement helper for attaching persona headers.
-- [ ] Implement Guest Shopper flow.
-- [ ] Implement Registered Customer flow.
-- [ ] Implement Admin Operator flow.
-- [ ] Implement Edge Case User flow.
-- [ ] Generate at least 20 guest sessions.
-- [ ] Generate at least 20 customer sessions.
-- [ ] Generate at least 20 admin sessions.
+- [ ] Attach `session_id` and `trace_id` headers to all outgoing requests (no persona header).
+
+Scripted flows (~70% of sessions):
+
+- [ ] Implement Guest Shopper scripted flow.
+- [ ] Implement Admin Operator scripted flow.
+- [ ] Generate at least 35 guest sessions (scripted).
+- [ ] Generate at least 20 admin sessions (scripted).
+
+LLM-varied flows (~20% of sessions — holdout):
+
+- [ ] Implement LLM prompt to generate realistic session narratives using Claude API.
+- [ ] Translate LLM-generated narratives into API call sequences.
+- [ ] Implement Registered Customer flow from LLM-varied output only (no scripted equivalent).
+- [ ] Generate at least 20 LLM-varied sessions across all personas.
+- [ ] Confirm the Registered Customer full checkout sequence is present only in LLM-varied sessions.
+
+Noise injection (~10% of sessions):
+
+- [ ] Implement abandoned flow: cut sessions short at a random step for 40% of scripted sessions.
+- [ ] Implement retry noise: repeat a failing call with corrected or incorrect input after a 4xx response.
+- [ ] Implement persona contamination: occasionally include out-of-persona endpoint calls within a session.
+- [ ] Implement random step shuffling for browsing sequences (product list / product detail ordering).
+- [ ] Generate at least 10 noise-injected sessions.
+
+Edge-case flow (injected):
+
+- [ ] Implement Edge Case User flow (unauthenticated admin call, invalid cart ID, invalid payload).
 - [ ] Generate at least 20 edge-case sessions.
+
+Validation:
+
 - [ ] Confirm generated traffic appears in Medusa logs.
 - [ ] Confirm generated traffic appears in Elasticsearch.
+- [ ] Confirm session mix (scripted / LLM-varied / noise) is reflected in log `persona` and `session_id` fields.
+- [ ] Validate that at least one Registered Customer checkout sequence is present in logs without a corresponding scripted flow.
 
 ## Phase 6: Data Ingestion Service
 
@@ -141,7 +166,8 @@
 
 - [ ] Create `services/behavior-engine`.
 - [ ] Load session flows from ingestion output.
-- [ ] Implement persona classification rules.
+- [ ] Implement persona classifier: map `user_role` → persona via hashmap (`null` → `guest_shopper`, `customer` → `registered_customer`, `user` → `admin_operator`).
+- [ ] Add `persona_source: "jwt_role"` field to session flow output.
 - [ ] Identify Guest Shopper flows.
 - [ ] Identify Registered Customer flows.
 - [ ] Identify Admin Operator flows.
@@ -151,30 +177,40 @@
 - [ ] Implement PrefixSpan frequent sequential pattern mining.
 - [ ] Configure minimum support threshold for PrefixSpan.
 - [ ] Prune duplicate or subsumed flows.
+- [ ] Deduplicate flows with identical normalized step sequences (keep highest-support).
+- [ ] Cluster flows sharing a common prefix of three or more steps (keep longest representative).
+- [ ] Cap output at ten canonical flows per persona.
 - [ ] Compare n-gram output against PrefixSpan output.
 - [ ] Identify the top frequent flows.
 - [ ] Identify important error flows based on `4xx` and `5xx` responses.
 - [ ] Rank candidates by support, persona, business importance, and error coverage.
 - [ ] Produce test candidate JSON.
 - [ ] Verify at least five test candidates are generated from mined behavior flows.
+- [ ] Verify the Registered Customer checkout flow is discovered despite not being present in scripted sessions (holdout validation).
 
 ## Phase 8: Golden Response Handling
 
-- [ ] Define a golden response format.
-- [ ] Define ignored dynamic fields.
-- [ ] Normalize response bodies before comparison.
-- [ ] Convert full response bodies into schema snapshots where needed.
+- [ ] Define the golden response JSON format (endpoint, expected_status, expected_schema, ignore_fields, captured_at, source_sessions).
+- [ ] Define the global ignore-fields list (id, created_at, updated_at, deleted_at, metadata, token, cart_id, order_id, trace_id, session_id).
+- [ ] Implement schema extraction: walk response JSON tree and classify leaf types.
+- [ ] Implement merge logic for optional fields across multiple sessions of the same endpoint.
+- [ ] Normalize response bodies before comparison (strip ignored fields).
 - [ ] Add schema comparison utility.
 - [ ] Add golden response comparison utility.
+- [ ] Implement versioning: store golden responses with a `captured_at` timestamp; require explicit refresh to update baseline.
 - [ ] Test comparison with a matching response.
 - [ ] Test comparison with a changed response code.
-- [ ] Test comparison with a changed response schema.
+- [ ] Test comparison with a changed response schema (new field added, field removed, type changed).
 - [ ] Confirm dynamic fields do not cause false failures.
+- [ ] Confirm an intentional schema change is detected as a regression.
 
 ## Phase 9: Script Generator
 
 - [ ] Create `services/script-generator`.
 - [ ] Read test candidates from the behavior engine.
+- [ ] Deduplicate candidates: remove identical step sequences, keep highest-support representative.
+- [ ] Cluster candidates by common prefix (three or more steps); keep longest representative per cluster.
+- [ ] Cap at ten canonical tests per persona.
 - [ ] Generate Playwright `.spec.ts` files.
 - [ ] Generate one test per selected behavior flow.
 - [ ] Add Playwright project configuration.
