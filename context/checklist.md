@@ -85,19 +85,19 @@
 
 ## Phase 4: ELK Integration
 
-- [ ] Create `infra/docker-compose.yml`.
-- [ ] Add Elasticsearch service.
-- [ ] Add Kibana service.
-- [ ] Add Logstash or Filebeat service.
-- [ ] Configure Elasticsearch as a single-node local instance.
-- [ ] Configure memory limits for local development.
-- [ ] Configure Logstash/Filebeat to ingest Medusa JSON logs.
-- [ ] Create an index pattern such as `behavior-logs-*`.
-- [ ] Verify logs are indexed in Elasticsearch.
-- [ ] Verify logs are visible and searchable in Kibana.
-- [ ] Test filtering logs by `session_id`.
-- [ ] Test filtering logs by `persona`.
-- [ ] Test filtering logs by `response_code`.
+- [x] Create `infra/docker-compose.yml`.
+- [x] Add Elasticsearch service.
+- [x] Add Kibana service.
+- [x] Add Logstash or Filebeat service.
+- [x] Configure Elasticsearch as a single-node local instance.
+- [x] Configure memory limits for local development.
+- [x] Configure Logstash/Filebeat to ingest Medusa JSON logs.
+- [x] Create an index pattern such as `behavior-logs-*`.
+- [x] Verify logs are indexed in Elasticsearch.
+- [x] Verify logs are visible and searchable in Kibana.
+- [x] Test filtering logs by `session_id`.
+- [x] Test filtering logs by `persona`.
+- [x] Test filtering logs by `response_code`.
 
 ## Phase 5: Synthetic Traffic Generator
 
@@ -268,8 +268,8 @@
 - [x] Simple storefront works.
 - [x] Platform dashboard works.
 - [x] Structured logs are produced.
-- [ ] Logs are stored in Elasticsearch.
-- [ ] Logs are visible in Kibana.
+- [x] Logs are stored in Elasticsearch.
+- [x] Logs are visible in Kibana.
 - [ ] Guest, customer, and admin personas are simulated.
 - [ ] Logs are grouped by session.
 - [ ] Behavioral flows are discovered.
