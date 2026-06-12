@@ -13,11 +13,9 @@ export function WishlistPage({ onNavigate }: WishlistPageProps) {
   const {
     addVariantToCart,
     isBusy,
-    isCompared,
     isWishlisted,
     loadProducts,
     products,
-    toggleCompare,
     toggleWishlist,
     wishlistProductIds,
   } = useStorefront();
@@ -37,13 +35,12 @@ export function WishlistPage({ onNavigate }: WishlistPageProps) {
         <ProductGrid
           products={wishlistProducts}
           isBusy={isBusy}
-          isCompared={isCompared}
           isWishlisted={isWishlisted}
           onAddVariantToCart={addVariantToCart}
           onNavigate={onNavigate}
           onRefresh={loadProducts}
-          onToggleCompare={toggleCompare}
           onToggleWishlist={toggleWishlist}
+          showDeal
         />
       ) : (
         <Card className="rounded-lg border-emerald-100 bg-white shadow-xl shadow-emerald-950/5">

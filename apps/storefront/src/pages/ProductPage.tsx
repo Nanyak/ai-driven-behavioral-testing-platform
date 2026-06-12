@@ -15,11 +15,11 @@ type ProductPageProps = {
 export function ProductPage({ productId, onNavigate }: ProductPageProps) {
   const {
     addVariantToCart,
+    customer,
     getProduct,
-    getProductQuestions,
     getProductReviews,
     getSelectedVariant,
-    isCompared,
+    hasPurchasedProduct,
     isWishlisted,
     isBusy,
     loadProducts,
@@ -27,9 +27,7 @@ export function ProductPage({ productId, onNavigate }: ProductPageProps) {
     rememberViewedProduct,
     selectedVariantId,
     setSelectedVariantId,
-    submitProductQuestion,
     submitReview,
-    toggleCompare,
     toggleWishlist,
   } = useStorefront();
   const product = getProduct(productId);
@@ -49,13 +47,14 @@ export function ProductPage({ productId, onNavigate }: ProductPageProps) {
           selectedVariantId={selectedVariant?.id || selectedVariantId}
           isBusy={isBusy}
           isWishlisted={isWishlisted(product.id)}
-          questions={getProductQuestions(product.id)}
+          customer={customer}
+          hasPurchased={hasPurchasedProduct(product.id)}
           reviews={getProductReviews(product.id)}
           onSelectVariant={setSelectedVariantId}
           onAddToCart={() => selectedVariant?.id && addVariantToCart(selectedVariant.id)}
-          onSubmitQuestion={(question) => submitProductQuestion({ ...question, product_id: product.id })}
           onSubmitReview={(review) => submitReview({ ...review, product_id: product.id })}
           onToggleWishlist={() => toggleWishlist(product.id)}
+          onNavigate={onNavigate}
         />
       ) : (
         <Card className="rounded-lg border-emerald-100 bg-white shadow-xl shadow-emerald-950/5">
@@ -74,13 +73,12 @@ export function ProductPage({ productId, onNavigate }: ProductPageProps) {
         <ProductGrid
           products={recommendedProducts}
           isBusy={isBusy}
-          isCompared={isCompared}
           isWishlisted={isWishlisted}
           onAddVariantToCart={addVariantToCart}
           onRefresh={loadProducts}
           onNavigate={onNavigate}
-          onToggleCompare={toggleCompare}
           onToggleWishlist={toggleWishlist}
+          showDeal
         />
       ) : null}
     </main>

@@ -16,7 +16,7 @@ type HomePageProps = {
 };
 
 export function HomePage({ onNavigate }: HomePageProps) {
-  const { addVariantToCart, isBusy, isCompared, isWishlisted, loadProducts, products, recentlyViewedProductIds, searchQuery, toggleCompare, toggleWishlist } = useStorefront();
+  const { addVariantToCart, isBusy, isWishlisted, loadProducts, products, recentlyViewedProductIds, searchQuery, toggleWishlist } = useStorefront();
   const [activeCategory, setActiveCategory] = useState("All");
   const [sortMode, setSortMode] = useState<"featured" | "price-asc" | "price-desc" | "name">("featured");
 
@@ -160,13 +160,12 @@ export function HomePage({ onNavigate }: HomePageProps) {
         <ProductGrid
           products={visibleProducts}
           isBusy={isBusy}
-          isCompared={isCompared}
           isWishlisted={isWishlisted}
           onAddVariantToCart={addVariantToCart}
           onRefresh={loadProducts}
           onNavigate={onNavigate}
-          onToggleCompare={toggleCompare}
           onToggleWishlist={toggleWishlist}
+          showDeal
         />
       </main>
     </>

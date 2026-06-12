@@ -1,4 +1,4 @@
-import { Bell, GitCompare, Heart, LayoutGrid, Menu, Search, ShoppingBag, UserRound } from "lucide-react";
+import { Bell, Heart, LayoutGrid, Menu, Search, ShoppingBag, UserRound } from "lucide-react";
 import { AppLink } from "./AppLink";
 import { Input } from "./ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "./ui/sheet";
@@ -6,7 +6,6 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "./ui
 type StoreHeaderProps = {
   itemCount: number;
   customerEmail?: string;
-  compareCount: number;
   onNavigate: (path: string) => void;
   onSearchChange: (value: string) => void;
   searchQuery: string;
@@ -15,7 +14,7 @@ type StoreHeaderProps = {
   wishlistCount: number;
 };
 
-export function StoreHeader({ itemCount, customerEmail, compareCount, onNavigate, onSearchChange, searchQuery, unreadNotificationCount, wishlistCount }: StoreHeaderProps) {
+export function StoreHeader({ itemCount, customerEmail, onNavigate, onSearchChange, searchQuery, unreadNotificationCount, wishlistCount }: StoreHeaderProps) {
   return (
     <header className="sticky top-3 z-20 mx-auto w-[calc(100%-1.5rem)] max-w-7xl rounded-2xl border border-slate-200/80 bg-white/95 shadow-xl shadow-slate-900/8 backdrop-blur">
       <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-2.5 md:grid-cols-[auto_auto_1fr_auto]">
@@ -118,19 +117,6 @@ export function StoreHeader({ itemCount, customerEmail, compareCount, onNavigate
                   </AppLink>
                   <AppLink
                     className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900"
-                    to="/compare"
-                    onNavigate={onNavigate}
-                  >
-                    <GitCompare className="size-4 text-slate-400" aria-hidden="true" />
-                    Compare
-                    {compareCount > 0 && (
-                      <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-sky-600 px-1 text-[10px] font-black text-white">
-                        {compareCount}
-                      </span>
-                    )}
-                  </AppLink>
-                  <AppLink
-                    className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900"
                     to="/profile"
                     onNavigate={onNavigate}
                   >
@@ -193,21 +179,6 @@ export function StoreHeader({ itemCount, customerEmail, compareCount, onNavigate
             {wishlistCount > 0 && (
               <span className="absolute -right-1.5 -top-1.5 flex size-[18px] items-center justify-center rounded-full bg-slate-900 text-[10px] font-black leading-none text-white">
                 {wishlistCount}
-              </span>
-            )}
-          </AppLink>
-
-          {/* Compare — icon + floating badge, lg+ */}
-          <AppLink
-            className="relative hidden h-9 w-9 cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 lg:flex"
-            to="/compare"
-            onNavigate={onNavigate}
-            aria-label={`Compare, ${compareCount} products`}
-          >
-            <GitCompare className="size-4" aria-hidden="true" />
-            {compareCount > 0 && (
-              <span className="absolute -right-1.5 -top-1.5 flex size-[18px] items-center justify-center rounded-full bg-sky-600 text-[10px] font-black leading-none text-white">
-                {compareCount}
               </span>
             )}
           </AppLink>

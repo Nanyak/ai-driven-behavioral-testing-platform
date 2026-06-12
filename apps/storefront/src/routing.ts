@@ -10,7 +10,6 @@ export type Route =
   | { name: "wishlist"; path: "/wishlist" }
   | { name: "orders"; path: "/orders" }
   | { name: "notifications"; path: "/notifications" }
-  | { name: "compare"; path: "/compare" }
   | { name: "order"; path: string; orderId: string }
   | { name: "cart"; path: "/cart" };
 
@@ -66,10 +65,6 @@ export function parseRoute(pathname: string): Route {
 
   if (pathname === "/notifications") {
     return { name: "notifications", path: "/notifications" };
-  }
-
-  if (pathname === "/compare") {
-    return { name: "compare", path: "/compare" };
   }
 
   if (pathname === "/cart") {

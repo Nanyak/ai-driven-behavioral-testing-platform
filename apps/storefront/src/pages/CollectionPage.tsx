@@ -16,11 +16,9 @@ export function CollectionPage({ collectionName, onNavigate }: CollectionPagePro
   const {
     addVariantToCart,
     isBusy,
-    isCompared,
     isWishlisted,
     loadProducts,
     products,
-    toggleCompare,
     toggleWishlist,
   } = useStorefront();
   const normalizedCollectionName = collectionName.toLowerCase();
@@ -40,13 +38,12 @@ export function CollectionPage({ collectionName, onNavigate }: CollectionPagePro
         <ProductGrid
           products={collectionProducts}
           isBusy={isBusy}
-          isCompared={isCompared}
           isWishlisted={isWishlisted}
           onAddVariantToCart={addVariantToCart}
           onNavigate={onNavigate}
           onRefresh={loadProducts}
-          onToggleCompare={toggleCompare}
           onToggleWishlist={toggleWishlist}
+          showDeal
         />
       ) : (
         <Card className="rounded-lg border-emerald-100 bg-white shadow-xl shadow-emerald-950/5">

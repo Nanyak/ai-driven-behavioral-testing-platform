@@ -12,11 +12,9 @@ export function DealsPage({ onNavigate }: DealsPageProps) {
   const {
     addVariantToCart,
     isBusy,
-    isCompared,
     isWishlisted,
     loadProducts,
     products,
-    toggleCompare,
     toggleWishlist,
   } = useStorefront();
   const dealProducts = [...products]
@@ -61,13 +59,12 @@ export function DealsPage({ onNavigate }: DealsPageProps) {
       <ProductGrid
         products={dealProducts}
         isBusy={isBusy}
-        isCompared={isCompared}
         isWishlisted={isWishlisted}
         onAddVariantToCart={addVariantToCart}
         onNavigate={onNavigate}
         onRefresh={loadProducts}
-        onToggleCompare={toggleCompare}
         onToggleWishlist={toggleWishlist}
+        showDeal
       />
     </main>
   );

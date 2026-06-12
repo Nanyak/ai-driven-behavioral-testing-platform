@@ -3,7 +3,6 @@ import { StorefrontProvider, useStorefront } from "./context/StorefrontContext";
 import { useRoute } from "./hooks/useRoute";
 import { CartPage } from "./pages/CartPage";
 import { CollectionPage } from "./pages/CollectionPage";
-import { ComparePage } from "./pages/ComparePage";
 import { DealsPage } from "./pages/DealsPage";
 import { HomePage } from "./pages/HomePage";
 import { NotificationsPage } from "./pages/NotificationsPage";
@@ -18,14 +17,13 @@ import { WishlistPage } from "./pages/WishlistPage";
 
 function StorefrontRoutes() {
   const { route, navigate } = useRoute();
-  const { compareProductIds, customer, itemCount, searchQuery, setSearchQuery, status, unreadNotificationCount, wishlistProductIds } = useStorefront();
+  const { customer, itemCount, searchQuery, setSearchQuery, status, unreadNotificationCount, wishlistProductIds } = useStorefront();
 
   return (
     <div className="min-h-screen bg-slate-50 pb-14 text-slate-900">
       <StoreHeader
         itemCount={itemCount}
         customerEmail={customer?.email}
-        compareCount={compareProductIds.length}
         searchQuery={searchQuery}
         status={status}
         unreadNotificationCount={unreadNotificationCount}
@@ -44,7 +42,6 @@ function StorefrontRoutes() {
       {route.name === "wishlist" ? <WishlistPage onNavigate={navigate} /> : null}
       {route.name === "orders" ? <OrdersPage onNavigate={navigate} /> : null}
       {route.name === "notifications" ? <NotificationsPage /> : null}
-      {route.name === "compare" ? <ComparePage onNavigate={navigate} /> : null}
       {route.name === "cart" ? <CartPage onNavigate={navigate} /> : null}
       {route.name === "order" ? <OrderPage orderId={route.orderId} onNavigate={navigate} /> : null}
     </div>

@@ -7,7 +7,6 @@ type StorefrontContextValue = {
   authEmail: string;
   authPassword: string;
   cart: Cart | null;
-  compareProductIds: string[];
   checkoutResult: string;
   customer: Customer | null;
   isBusy: boolean;
@@ -33,7 +32,7 @@ type StorefrontContextValue = {
   getOrderSupportRequests: (orderId: string) => OrderSupportRequest[];
   getProduct: (productId: string) => Product | undefined;
   getSelectedVariant: (product?: Product) => Variant | undefined;
-  isCompared: (productId: string) => boolean;
+  hasPurchasedProduct: (productId: string) => boolean;
   isWishlisted: (productId: string) => boolean;
   loadOrder: (orderId: string) => Promise<Order | null>;
   loadOrders: () => Promise<Order[]>;
@@ -54,7 +53,6 @@ type StorefrontContextValue = {
   setAuthPassword: (value: string) => void;
   setSearchQuery: (value: string) => void;
   setSelectedVariantId: (value: string) => void;
-  toggleCompare: (productId: string) => void;
   toggleWishlist: (productId: string) => void;
   updateCartItemQuantity: (lineItemId: string, quantity: number) => Promise<void>;
   wishlistProductIds: string[];
@@ -64,12 +62,12 @@ const StorefrontContext = createContext<StorefrontContextValue | null>(null);
 const wishlistStorageKey = "behavior-storefront-wishlist";
 const recentOrderStorageKey = "behavior-storefront-orders";
 const addressStorageKey = "behavior-storefront-addresses";
-const compareStorageKey = "behavior-storefront-compare";
 const reviewStorageKey = "behavior-storefront-reviews";
 const supportStorageKey = "behavior-storefront-support";
 const recentlyViewedStorageKey = "behavior-storefront-recently-viewed";
 const notificationStorageKey = "behavior-storefront-notifications";
 const questionStorageKey = "behavior-storefront-questions";
+const purchasedVariantsStorageKey = "behavior-storefront-purchased-variants";
 
 type StorefrontProviderProps = {
   children: ReactNode;
@@ -79,7 +77,7 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [wishlistProductIds, setWishlistProductIds] = useState<string[]>(() => readStoredList(wishlistStorageKey));
   const [recentOrderIds, setRecentOrderIds] = useState<string[]>(() => readStoredList(recentOrderStorageKey));
-  const [compareProductIds, setCompareProductIds] = useState<string[]>(() => readStoredList(compareStorageKey));
+  const [purchasedVariantIds, setPurchasedVariantIds] = useState<string[]>(() => readStoredList(purchasedVariantsStorageKey));
   const [recentlyViewedProductIds, setRecentlyViewedProductIds] = useState<string[]>(() => readStoredList(recentlyViewedStorageKey));
   const [savedAddresses, setSavedAddresses] = useState<CheckoutAddress[]>(() => readStoredAddresses());
   const [productReviews, setProductReviews] = useState<ProductReview[]>(() => readStoredReviews());
@@ -140,8 +138,9 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
     return wishlistProductIds.includes(productId);
   }
 
-  function isCompared(productId: string) {
-    return compareProductIds.includes(productId);
+  function hasPurchasedProduct(productId: string) {
+    const product = products.find((p) => p.id === productId);
+    return (product?.variants ?? []).some((v) => purchasedVariantIds.includes(v.id));
   }
 
   function getProductReviews(productId: string) {
@@ -192,26 +191,6 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
     setRecentlyViewedProductIds((current) => {
       const next = [productId, ...current.filter((currentProductId) => currentProductId !== productId)].slice(0, 12);
       writeStoredList(recentlyViewedStorageKey, next);
-      return next;
-    });
-  }
-
-  function toggleCompare(productId: string) {
-    if (!productId) {
-      return;
-    }
-
-    setCompareProductIds((current) => {
-      const next = current.includes(productId)
-        ? current.filter((currentProductId) => currentProductId !== productId)
-        : [productId, ...current].slice(0, 4);
-      writeStoredList(compareStorageKey, next);
-      setStatus(next.includes(productId) ? "Added to comparison" : "Removed from comparison");
-      addNotification({
-        title: "Comparison updated",
-        body: `${next.length} products are in your comparison list.`,
-        type: "account",
-      });
       return next;
     });
   }
@@ -557,6 +536,18 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
           body: `Order ${completed.order.id} is confirmed.`,
           type: "order",
         });
+
+        const boughtIds = (activeCart.items ?? [])
+          .map((item) => item.variant_id)
+          .filter((id): id is string => Boolean(id));
+        if (boughtIds.length > 0) {
+          setPurchasedVariantIds((prev) => {
+            const next = Array.from(new Set([...prev, ...boughtIds]));
+            writeStoredList(purchasedVariantsStorageKey, next);
+            return next;
+          });
+        }
+
         setCart(null);
         setShippingOptions([]);
         setPaymentProviders([]);
@@ -630,7 +621,6 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
       authEmail,
       authPassword,
       cart,
-      compareProductIds,
       checkoutResult,
       customer,
       isBusy,
@@ -656,7 +646,7 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
       getOrderSupportRequests,
       getProduct,
       getSelectedVariant,
-      isCompared,
+      hasPurchasedProduct,
       isWishlisted,
       loadOrder,
       loadOrders,
@@ -677,7 +667,6 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
       submitOrderSupportRequest,
       submitProductQuestion,
       submitReview,
-      toggleCompare,
       toggleWishlist,
       updateCartItemQuantity,
       wishlistProductIds,
@@ -686,7 +675,6 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
       authEmail,
       authPassword,
       cart,
-      compareProductIds,
       checkoutResult,
       customer,
       isBusy,
@@ -697,6 +685,7 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
       productQuestions,
       orderSupportRequests,
       productReviews,
+      purchasedVariantIds,
       recentOrderIds,
       recentlyViewedProductIds,
       savedAddresses,
