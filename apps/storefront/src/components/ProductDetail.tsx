@@ -131,21 +131,38 @@ export function ProductDetail({
           <span className="font-bold text-emerald-700">{reviews.length} shopper reviews</span>
         </div>
         <div className="grid gap-2">
-          <Label htmlFor="variant-select" className="font-black text-emerald-950">
+          <Label className="font-black text-emerald-950">
             Variant
+            {selectedVariant && (
+              <span className="ml-2 font-semibold text-emerald-600">— {selectedVariant.title}</span>
+            )}
           </Label>
-          <select
-            id="variant-select"
-            className="h-11 rounded-lg border border-emerald-200 bg-white px-3 font-bold text-emerald-950 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/15"
-            value={selectedVariantId}
-            onChange={(event) => onSelectVariant(event.target.value)}
-          >
-            {(product.variants ?? []).map((variant) => (
-              <option key={variant.id} value={variant.id}>
-                {variant.title}
-              </option>
-            ))}
-          </select>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Select variant">
+            {(product.variants ?? []).map((variant) => {
+              const isSelected = selectedVariantId === variant.id || (!selectedVariantId && product.variants?.[0]?.id === variant.id);
+              const variantPrice = getVariantPrice(variant);
+              return (
+                <button
+                  key={variant.id}
+                  type="button"
+                  aria-pressed={isSelected}
+                  onClick={() => onSelectVariant(variant.id)}
+                  className={`rounded-xl border px-4 py-2 text-sm font-bold transition-all duration-150 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-500/25 ${
+                    isSelected
+                      ? "border-emerald-600 bg-emerald-600 text-white shadow-sm shadow-emerald-700/20"
+                      : "border-emerald-200 bg-white text-emerald-900 hover:border-emerald-400 hover:bg-emerald-50"
+                  }`}
+                >
+                  {variant.title}
+                  {variantPrice && (
+                    <span className={`ml-1.5 text-xs ${isSelected ? "text-emerald-100" : "text-emerald-600"}`}>
+                      {formatMoney(variantPrice.amount, variantPrice.currency)}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="grid gap-1">

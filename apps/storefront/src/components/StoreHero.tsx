@@ -1,4 +1,4 @@
-import { ArrowRight, CheckCircle2, PackageCheck, Sparkles, Truck } from "lucide-react";
+import { ArrowRight, CheckCircle2, ChevronDown, PackageCheck, Sparkles, Truck } from "lucide-react";
 import { AppLink } from "./AppLink";
 import { Badge } from "./ui/badge";
 
@@ -27,22 +27,41 @@ export function StoreHero({ onNavigate }: StoreHeroProps) {
         <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
       </div>
 
+      {/* Scroll cue */}
+      <div className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 hidden flex-col items-center gap-1.5 lg:flex" aria-hidden="true">
+        <span className="text-[11px] font-bold uppercase tracking-widest text-white/40">Scroll</span>
+        <ChevronDown className="size-4 text-white/40" style={{ animation: "var(--animate-bounce-subtle)" }} />
+      </div>
+
       {/* Left: hero copy */}
       <div className="relative self-end">
-        <Badge className="mb-5 border border-white/25 bg-white/10 text-white backdrop-blur hover:bg-white/15">
+        <Badge
+          className="mb-5 border border-white/25 bg-white/10 text-white backdrop-blur hover:bg-white/15"
+          style={{ animation: "var(--animate-fade-in-up)", animationDelay: "0ms" }}
+        >
           <Sparkles className="size-3" aria-hidden="true" />
           New season test catalog
         </Badge>
-        <h1 id="hero-title" className="max-w-3xl text-5xl font-black leading-[0.93] tracking-tight sm:text-6xl lg:text-7xl xl:text-8xl">
+        <h1
+          id="hero-title"
+          className="max-w-3xl text-5xl font-black leading-[0.93] tracking-tight sm:text-6xl lg:text-7xl xl:text-8xl"
+          style={{ animation: "var(--animate-fade-in-up)", animationDelay: "80ms" }}
+        >
           Everyday gear,<br />checkout ready.
         </h1>
-        <p className="mt-6 max-w-xl text-base font-medium leading-8 text-white/85 sm:text-lg">
+        <p
+          className="mt-6 max-w-xl text-base font-medium leading-8 text-white/85 sm:text-lg"
+          style={{ animation: "var(--animate-fade-in-up)", animationDelay: "160ms" }}
+        >
           Browse seeded Medusa products, sign in as a shopper, add variants, and complete a full checkout —
           all from a storefront built for fast product discovery.
         </p>
-        <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+        <div
+          className="mt-9 flex flex-col gap-3 sm:flex-row"
+          style={{ animation: "var(--animate-fade-in-up)", animationDelay: "240ms" }}
+        >
           <AppLink
-            className="inline-flex h-12 cursor-pointer items-center gap-2 rounded-lg bg-orange-500 px-6 text-base font-black text-white shadow-lg shadow-orange-500/30 transition-colors hover:bg-orange-600 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-400/50"
+            className="inline-flex h-12 cursor-pointer items-center gap-2 rounded-lg bg-orange-500 px-6 text-base font-black text-white shadow-lg shadow-orange-500/30 transition-all duration-200 hover:bg-orange-600 hover:shadow-orange-500/50 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-400/50"
             to="/"
             onNavigate={onNavigate}
           >
@@ -50,7 +69,7 @@ export function StoreHero({ onNavigate }: StoreHeroProps) {
             <ArrowRight className="size-4" aria-hidden="true" />
           </AppLink>
           <AppLink
-            className="inline-flex h-12 cursor-pointer items-center gap-2 rounded-lg border border-white/30 bg-white/10 px-6 text-base font-black text-white backdrop-blur transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/30"
+            className="inline-flex h-12 cursor-pointer items-center gap-2 rounded-lg border border-white/30 bg-white/10 px-6 text-base font-black text-white backdrop-blur transition-all duration-200 hover:bg-white/20 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/30"
             to="/cart"
             onNavigate={onNavigate}
           >

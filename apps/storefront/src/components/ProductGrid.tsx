@@ -37,7 +37,33 @@ export function ProductGrid({ products, isBusy, isCompared, isWishlisted, onAddV
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {products.length > 0 ? (
+        {products.length === 0 && isBusy ? (
+          Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="animate-pulse overflow-hidden rounded-2xl border border-slate-100 bg-white">
+              <div className="aspect-[4/3] bg-slate-100" />
+              <div className="grid gap-4 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="grid flex-1 gap-2">
+                    <div className="h-5 w-4/5 rounded-lg bg-slate-100" />
+                    <div className="h-4 w-2/3 rounded-lg bg-slate-100" />
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="size-9 rounded-lg bg-slate-100" />
+                    <div className="size-9 rounded-lg bg-slate-100" />
+                  </div>
+                </div>
+                <div className="h-4 w-1/3 rounded-lg bg-slate-100" />
+                <div className="flex items-center justify-between gap-3">
+                  <div className="grid gap-2">
+                    <div className="h-7 w-24 rounded-lg bg-slate-100" />
+                    <div className="h-6 w-16 rounded-lg bg-slate-100" />
+                  </div>
+                  <div className="h-10 w-24 rounded-lg bg-slate-100" />
+                </div>
+              </div>
+            </div>
+          ))
+        ) : products.length > 0 ? (
           products.map((product) => {
             const firstVariant = product.variants?.[0];
             const price = getVariantPrice(firstVariant);
@@ -116,8 +142,9 @@ export function ProductGrid({ products, isBusy, isCompared, isWishlisted, onAddV
             );
           })
         ) : (
-          <div className="col-span-full flex min-h-40 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/80 font-bold text-slate-500">
-            No products match your filters.
+          <div className="col-span-full flex min-h-40 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/80 text-slate-500">
+            <PackageSearch className="size-10 text-slate-300" aria-hidden="true" />
+            <p className="font-bold">No products match your filters.</p>
           </div>
         )}
       </div>

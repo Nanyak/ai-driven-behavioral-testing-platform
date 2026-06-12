@@ -1,6 +1,7 @@
-import { Bell, GitCompare, Heart, Search, ShoppingBag, UserRound } from "lucide-react";
+import { Bell, GitCompare, Heart, LayoutGrid, Menu, Search, ShoppingBag, UserRound } from "lucide-react";
 import { AppLink } from "./AppLink";
 import { Input } from "./ui/input";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "./ui/sheet";
 
 type StoreHeaderProps = {
   itemCount: number;
@@ -59,6 +60,97 @@ export function StoreHeader({ itemCount, customerEmail, compareCount, onNavigate
             </AppLink>
           )}
         </nav>
+
+        {/* Mobile hamburger menu */}
+        <Sheet>
+          <SheetTrigger
+            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50 md:hidden"
+            aria-label="Open menu"
+          >
+            <Menu className="size-4" aria-hidden="true" />
+          </SheetTrigger>
+          <SheetContent side="left" className="w-72 p-0">
+            <SheetHeader className="border-b border-slate-100 px-5 py-4">
+              <SheetTitle className="flex items-center gap-2.5 text-left">
+                <span className="flex size-8 items-center justify-center rounded-xl bg-emerald-600 text-xs font-black text-white">B</span>
+                <span className="font-black tracking-tight text-slate-900">Behavior Storefront</span>
+              </SheetTitle>
+            </SheetHeader>
+            <nav className="flex flex-col gap-1 p-3" aria-label="Mobile navigation">
+              <AppLink
+                className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                to="/"
+                onNavigate={onNavigate}
+              >
+                <LayoutGrid className="size-4 text-slate-400" aria-hidden="true" />
+                Shop all products
+              </AppLink>
+              <AppLink
+                className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-orange-600 transition-colors hover:bg-orange-50"
+                to="/deals"
+                onNavigate={onNavigate}
+              >
+                <ShoppingBag className="size-4 text-orange-400" aria-hidden="true" />
+                Deals
+              </AppLink>
+              {customerEmail ? (
+                <>
+                  <AppLink
+                    className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                    to="/orders"
+                    onNavigate={onNavigate}
+                  >
+                    <UserRound className="size-4 text-slate-400" aria-hidden="true" />
+                    My orders
+                  </AppLink>
+                  <AppLink
+                    className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                    to="/wishlist"
+                    onNavigate={onNavigate}
+                  >
+                    <Heart className="size-4 text-slate-400" aria-hidden="true" />
+                    Wishlist
+                    {wishlistCount > 0 && (
+                      <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-900 px-1 text-[10px] font-black text-white">
+                        {wishlistCount}
+                      </span>
+                    )}
+                  </AppLink>
+                  <AppLink
+                    className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                    to="/compare"
+                    onNavigate={onNavigate}
+                  >
+                    <GitCompare className="size-4 text-slate-400" aria-hidden="true" />
+                    Compare
+                    {compareCount > 0 && (
+                      <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-sky-600 px-1 text-[10px] font-black text-white">
+                        {compareCount}
+                      </span>
+                    )}
+                  </AppLink>
+                  <AppLink
+                    className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                    to="/profile"
+                    onNavigate={onNavigate}
+                  >
+                    <UserRound className="size-4 text-slate-400" aria-hidden="true" />
+                    Profile
+                  </AppLink>
+                </>
+              ) : (
+                <AppLink
+                  className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                  to="/signin"
+                  onNavigate={onNavigate}
+                >
+                  <UserRound className="size-4 text-slate-400" aria-hidden="true" />
+                  Sign in
+                </AppLink>
+              )}
+            </nav>
+          </SheetContent>
+        </Sheet>
 
         {/* Search */}
         <label
