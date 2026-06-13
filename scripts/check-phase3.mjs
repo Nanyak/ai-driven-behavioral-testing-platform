@@ -48,21 +48,26 @@ requireSnippet(
   "Storefront publishable API key config"
 );
 requireSnippet("apps/storefront/vite.config.ts", "proxy", "Storefront Medusa proxy");
-requireSnippet("apps/storefront/src/main.tsx", "/store/products", "Storefront product listing");
-requireSnippet("apps/storefront/src/main.tsx", "/store/regions", "Storefront region lookup");
-requireSnippet("apps/storefront/src/main.tsx", "/store/carts", "Storefront cart creation");
-requireSnippet("apps/storefront/src/main.tsx", "/line-items", "Storefront cart line item add");
-requireSnippet("apps/storefront/src/main.tsx", "Cart", "Storefront cart display");
-requireSnippet("apps/storefront/src/main.tsx", "selectedProduct", "Storefront detail view");
-requireSnippet("apps/storefront/src/main.tsx", "/auth/customer/emailpass/register", "Storefront customer registration");
-requireSnippet("apps/storefront/src/main.tsx", "/auth/customer/emailpass", "Storefront customer login");
-requireSnippet("apps/storefront/src/main.tsx", "/store/customers/me", "Storefront customer profile check");
-requireSnippet("apps/storefront/src/main.tsx", "/store/shipping-options", "Storefront shipping option check");
-requireSnippet("apps/storefront/src/main.tsx", "/store/payment-providers", "Storefront payment provider check");
-requireSnippet("apps/storefront/src/main.tsx", "/store/payment-collections", "Storefront payment collection setup");
-requireSnippet("apps/storefront/src/main.tsx", "/payment-sessions", "Storefront payment session setup");
-requireSnippet("apps/storefront/src/main.tsx", "/complete", "Storefront checkout completion");
-requireSnippet("apps/storefront/src/main.tsx", "Checkout", "Storefront checkout UI");
+// The storefront checkout flow was refactored out of main.tsx into a Medusa
+// service layer (services/medusa.ts), a shared context, and per-page UI under
+// pages/ and components/. Point each capability check at the file that now
+// owns it.
+const storefrontApi = "apps/storefront/src/services/medusa.ts";
+requireSnippet(storefrontApi, "/store/products", "Storefront product listing");
+requireSnippet(storefrontApi, "/store/regions", "Storefront region lookup");
+requireSnippet(storefrontApi, "/store/carts", "Storefront cart creation");
+requireSnippet(storefrontApi, "/line-items", "Storefront cart line item add");
+requireSnippet("apps/storefront/src/components/CartSummary.tsx", "Cart", "Storefront cart display");
+requireSnippet("apps/storefront/src/components/ProductDetail.tsx", "ProductDetail", "Storefront detail view");
+requireSnippet(storefrontApi, "/auth/customer/emailpass/register", "Storefront customer registration");
+requireSnippet(storefrontApi, "/auth/customer/emailpass", "Storefront customer login");
+requireSnippet(storefrontApi, "/store/customers/me", "Storefront customer profile check");
+requireSnippet(storefrontApi, "/store/shipping-options", "Storefront shipping option check");
+requireSnippet(storefrontApi, "/store/payment-providers", "Storefront payment provider check");
+requireSnippet(storefrontApi, "/store/payment-collections", "Storefront payment collection setup");
+requireSnippet(storefrontApi, "/payment-sessions", "Storefront payment session setup");
+requireSnippet(storefrontApi, "/complete", "Storefront checkout completion");
+requireSnippet("apps/storefront/src/pages/CartPage.tsx", "Checkout", "Storefront checkout UI");
 
 requireSnippet("apps/platform-dashboard/vite.config.ts", "MEDUSA_BACKEND_URL", "Dashboard Medusa base URL config");
 requireSnippet("apps/platform-dashboard/src/main.tsx", "/health", "Dashboard health status");

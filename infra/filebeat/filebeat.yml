@@ -1,0 +1,17 @@
+filebeat.inputs:
+  - type: container
+    paths:
+      - /var/lib/docker/containers/*/*.log
+
+# Keep Filebeat minimal: it only ships the raw stdout line in `message`.
+# Logstash decodes the JSON (separation of concerns). We do NOT decode JSON here.
+# Disabling event-original injection avoids any collision with our semantic
+# top-level `event` string field once the line reaches Logstash.
+output.logstash:
+  hosts: ["logstash:5044"]
+
+# Persist the registry in a named volume so Filebeat does not re-ship lines
+# after a restart.
+filebeat.registry.path: /usr/share/filebeat/data/registry
+
+logging.level: info

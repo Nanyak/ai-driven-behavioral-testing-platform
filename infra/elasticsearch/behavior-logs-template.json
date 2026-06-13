@@ -1,0 +1,17 @@
+{
+  "index_patterns": ["behavior-logs-*"],
+  "priority": 200,
+  "template": {
+    "settings": {
+      "number_of_replicas": 0
+    },
+    "mappings": {
+      "properties": {
+        "response_body": { "type": "flattened" },
+        "request_payload": { "type": "flattened" },
+        "query_params": { "type": "flattened" },
+        "request_headers": { "type": "flattened" }
+      }
+    }
+  }
+}

@@ -32,10 +32,10 @@ golden-responses/        # candidate goldens (refined in Phase 8)
    - `/store/products/prod_...` → `/store/products/{id}`
    - `/store/carts/{id}/line-items/li_...` → `/store/carts/{id}/line-items/{lineItemId}`
    - `/admin/products/prod_...` → `/admin/products/{id}`
-   - Prefer the `normalized_endpoint` already produced by the Phase 2 middleware; this step is a safety re-normalization for anything missed.
+   - The Phase 2 middleware already emits a pre-normalized `endpoint` (dynamic segments collapsed to `{id}`), so this step is mostly a safety re-normalization for anything missed. Sequences can also be keyed on the semantic `event` field (e.g. `cart_item_added`) instead of / alongside `endpoint`.
 4. **Denoise.** Drop endpoints irrelevant to behavior (health checks, static assets, favicon, publishable-key probes) via an explicit allow/deny list. Keep the list in one place so it is auditable.
 5. **Build session-flow records.** Emit the contract below. Keep `role_observed` (the raw JWT roles seen) **only** for Phase 7 validation — it must be clearly marked as ground-truth-not-input.
-6. **Extract candidate golden responses.** For each unique `(normalized_endpoint, response_code)`, collect response bodies and hand them to the Phase 8 algorithm. Per ADR 0001 the **authoritative schema source is the OpenAPI spec**; Phase 6 supplies the **observed half** that tightens it (and the only source when the spec lacks an operation). With bodies off, this step contributes nothing and Phase 8 falls back to spec-only goldens — that is expected, not an error. Store candidates under `golden-responses/`. (Format/merge/versioning logic lives in Phase 8; Phase 6 just feeds the observed input.)
+6. **Extract candidate golden responses.** For each unique `(endpoint, status)`, collect response bodies and hand them to the Phase 8 algorithm. Per ADR 0001 the **authoritative schema source is the OpenAPI spec**; Phase 6 supplies the **observed half** that tightens it (and the only source when the spec lacks an operation). With bodies off, this step contributes nothing and Phase 8 falls back to spec-only goldens — that is expected, not an error. Store candidates under `golden-responses/`. (Format/merge/versioning logic lives in Phase 8; Phase 6 just feeds the observed input.)
 7. **CLI.** `npm run ingest -- --from ... --to ...` writes `data/sessions/session-flows-<runId>.json` and the golden candidates, printing a summary.
 
 ## Data contract: session-flow record
@@ -49,8 +49,9 @@ golden-responses/        # candidate goldens (refined in Phase 8)
   "steps": [
     {
       "method": "GET",
-      "normalized_endpoint": "/store/products",
-      "response_code": 200,
+      "endpoint": "/store/products",
+      "event": "products_listed",
+      "status": 200,
       "trace_id": "trace-...",
       "timestamp": "2026-06-13T10:00:00Z",
       "request_payload": {},

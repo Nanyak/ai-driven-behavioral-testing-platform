@@ -168,25 +168,31 @@ Add structured logging to Medusa so that every relevant request can be analyzed 
 
 Each request log should contain:
 
+Logs are **production-shaped hybrid** events (decision: simulate production, not dev access logs): a logical `service` derived from the route, a semantic `event`, and the route (`method` + normalized `endpoint`). Bodies are **off by default** (`LOG_CAPTURE_BODIES=false`, `LOG_ENVIRONMENT=production`).
+
 ```json
 {
   "timestamp": "2026-06-09T10:00:00Z",
+  "level": "INFO",
+  "service": "cart-service",
+  "environment": "production",
+  "request_id": "req-456",
   "trace_id": "trace-123",
   "session_id": "session-abc",
-  "user_role": "customer",
   "user_id": "cus_123",
+  "user_role": "customer",
+  "event": "cart_created",
   "method": "POST",
   "endpoint": "/store/carts",
-  "normalized_endpoint": "/store/carts",
-  "request_payload": {},
-  "response_code": 200,
-  "response_body": {},
+  "status": 200,
   "duration_ms": 85,
   "source": "medusa"
 }
 ```
 
-Response-body reduction rule: to keep Elasticsearch light, response bodies are not logged unbounded. Each logged `response_body` is truncated to a maximum of 8 KB; for large arrays, only the first element plus an array-length count is logged; for endpoints known to return large catalogs (for example `GET /store/products`), a schema snapshot is stored instead of full content. The same reduction is applied to `request_payload`. This makes the §18 risk ("response bodies are too large for logs") concrete rather than aspirational.
+`request_payload` and `response_body` are added only when `LOG_CAPTURE_BODIES=true` (an opt-in dev enrichment). Field renames vs. the original draft: `response_code` → `status`, `normalized_endpoint` → `endpoint`; the semantic `event` and logical `service` are new and carry the behavioral signal alongside the route.
+
+Response-body reduction rule (applies when bodies-on): to keep Elasticsearch light, response bodies are not logged unbounded. Each logged `response_body` is truncated to a maximum of 8 KB; for large arrays, only the first element plus an array-length count is logged; for endpoints known to return large catalogs (for example `GET /store/products`), a schema snapshot is stored instead of full content. The same reduction is applied to `request_payload`. This makes the §18 risk ("response bodies are too large for logs") concrete rather than aspirational.
 
 ### 7.2 Integration Approach
 
@@ -196,14 +202,14 @@ MVP approach:
 - Generate a `trace_id` for each request if it does not already exist.
 - Attach `session_id` from a cookie or custom header.
 - Extract `user_role` from the JWT `actor_type` in the auth context (`null` for unauthenticated guests).
-- Log structured JSON lines to stdout or a log file.
-- Use Filebeat or Logstash to send logs to Elasticsearch.
+- Log structured JSON lines to stdout (and a log file for local inspection).
+- Collect the container's stdout with **Filebeat** and ship to **Logstash**, which parses the JSON, drops non-Medusa noise, and forwards to Elasticsearch. (Reading stdout, not the bind-mounted file, is robust on Docker Desktop for Windows and is closer to production collection.)
 - Use Kibana to inspect and search logs by `user_role`, session, trace, endpoint, and response code (no persona field is logged — persona is emergent, §10.3).
 
 Pipeline:
 
 ```text
-Medusa JSON Logs -> Filebeat/Logstash -> Elasticsearch -> Kibana
+Medusa stdout (JSON) -> Filebeat -> Logstash -> Elasticsearch -> Kibana
 ```
 
 ### 7.3 Elasticsearch Index
@@ -217,16 +223,19 @@ behavior-logs-*
 Suggested mapping priorities:
 
 - `timestamp`: date
+- `service`: keyword
+- `environment`: keyword
+- `request_id`: keyword
 - `trace_id`: keyword
 - `session_id`: keyword
 - `user_role`: keyword
+- `event`: keyword
 - `method`: keyword
 - `endpoint`: keyword
-- `normalized_endpoint`: keyword
-- `response_code`: integer
-- `duration_ms`: integer
-- `request_payload`: object
-- `response_body`: object
+- `status`: integer
+- `duration_ms`: float
+- `request_payload`: flattened (bodies-on only)
+- `response_body`: flattened (bodies-on only)
 
 ## 8. Synthetic Traffic Generator
 

@@ -140,6 +140,18 @@ services:
       elasticsearch:
         condition: service_healthy
 
+  filebeat:
+    profiles: ["elk"]
+    image: docker.elastic.co/beats/filebeat:8.13.4
+    user: root
+    command: filebeat -e --strict.perms=false
+    volumes:
+      - ./infra/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - filebeat_registry:/usr/share/filebeat/data
+    depends_on:
+      - logstash
+
 volumes:
   postgres_data:
   redis_data:
@@ -147,3 +159,4 @@ volumes:
   storefront_node_modules:
   platform_dashboard_node_modules:
   elasticsearch_data:
+  filebeat_registry:

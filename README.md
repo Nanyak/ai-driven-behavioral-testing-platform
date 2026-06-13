@@ -165,20 +165,22 @@ logs/medusa-json.log
 
 Each line is JSON. These logs are the input for later sequence mining phases.
 
-Useful fields include:
+Logs are **production-shaped hybrid** events (bodies-off by default). Useful fields include:
 
 - `timestamp`
+- `level`
+- `service` (logical domain derived from route, e.g. `cart-service`)
+- `environment`
+- `request_id`
 - `trace_id`
 - `session_id`
 - `user_role`
+- `event` (semantic, e.g. `cart_item_added`)
 - `method`
-- `raw_endpoint`
-- `normalized_endpoint`
-- `query_params`
-- `response_code`
+- `endpoint` (normalized, e.g. `/store/carts/{id}/line-items`)
+- `status`
 - `duration_ms`
-- `request_payload`
-- `response_body`
+- `request_payload` / `response_body` (only with `LOG_CAPTURE_BODIES=true`)
 
 For sequence mining, send traffic with a session header like:
 
@@ -186,7 +188,7 @@ For sequence mining, send traffic with a session header like:
 x-session-id: guest-session-001
 ```
 
-Clients do **not** send a persona header. `user_role` is derived from the JWT by the logging middleware (`null` for unauthenticated guests), and persona is derived later as an emergent flow attribute in Phase 7 (see `context/plan.md` §10.3). Then group log events by `session_id`, sort by `timestamp`, and mine ordered `normalized_endpoint` sequences.
+Clients do **not** send a persona header. `user_role` is derived from the JWT by the logging middleware (`null` for unauthenticated guests), and persona is derived later as an emergent flow attribute in Phase 7 (see `context/plan.md` §10.3). Then group log events by `session_id`, sort by `timestamp`, and mine ordered `event` / `endpoint` sequences.
 
 ## Frontend Apps
 

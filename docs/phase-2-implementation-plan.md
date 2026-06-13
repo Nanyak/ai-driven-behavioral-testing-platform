@@ -19,7 +19,7 @@ Add structured Medusa request logging so API traffic can be mined later for pers
    - Match all API routes so Store, Admin, Auth, and custom endpoints are logged.
 
 2. Capture request context.
-   - Capture ISO request timestamp, log level, event type, HTTP method, raw endpoint, normalized endpoint, query parameters, selected headers, remote IP, user agent, content length, and request payload status.
+   - Emit a **production-shaped hybrid log** (see note below): ISO `timestamp`, log `level`, logical `service`, `environment`, `request_id`, semantic `event`, HTTP `method`, normalized `endpoint`, `status`, and `duration_ms`. No raw bodies, headers, query params, or IPs are logged by default — production logs are lean and PII-free.
    - Read or generate `trace_id`.
    - Parse W3C `traceparent` when present instead of storing the whole header as the trace ID.
    - Read `session_id` from headers or cookies.
@@ -33,7 +33,7 @@ Add structured Medusa request logging so API traffic can be mined later for pers
    - Capture response size when available.
    - Disable request and response body logging by default in production-style logs.
    - Allow body logging only when `LOG_CAPTURE_BODIES=true`, still with redaction and reduction.
-   - **Body capture is enrichment, not a hard requirement (ADR 0001).** The golden **assertion oracle is the OpenAPI spec** (Phase 8), which is PII-free and needs no logged bodies — so production can run **bodies-off** and still produce a valid oracle. Bodies remain useful for two things: realistic **sample request payloads** in generated tests (Phase 9 reuses `request_payload`) and **tightening** under-specified spec schemas against real responses (the observed half of Phase 8's intersection). For the MVP we therefore run `LOG_CAPTURE_BODIES=true` in dev for richer payloads and tighter schemas; this is safe because traffic runs against synthetic data with a mock payment provider (no real PII/PCI). The masking + reduction below is what keeps body capture production-safe when it is enabled.
+   - **Body capture is enrichment, not a hard requirement (ADR 0001).** The golden **assertion oracle is the OpenAPI spec** (Phase 8), which is PII-free and needs no logged bodies — so production can run **bodies-off** and still produce a valid oracle. Bodies remain useful for two things: realistic **sample request payloads** in generated tests (Phase 9 reuses `request_payload`) and **tightening** under-specified spec schemas against real responses (the observed half of Phase 8's intersection). To keep the pipeline's source realistic, we run **bodies-off** by default (`LOG_CAPTURE_BODIES=false`, `LOG_ENVIRONMENT=production`) — this is what real production logging looks like. Bodies remain an **opt-in dev enrichment** (`LOG_CAPTURE_BODIES=true`) when richer payloads or tighter schemas are wanted, and are safe to enable because traffic runs against synthetic data with a mock payment provider (no real PII/PCI). The masking + reduction below is what keeps body capture production-safe when it is enabled.
 
 4. Protect sensitive values.
    - Recursively mask passwords, tokens, secrets, cookies, authorization values, API keys, sessions, phone numbers, emails, addresses, PAN/card/payment fields, account IDs, and similar fields.
@@ -49,6 +49,41 @@ Add structured Medusa request logging so API traffic can be mined later for pers
 6. Make verification repeatable.
    - Add `npm run check:phase2`.
    - Verify the middleware file, required fields, masking rules, JSONL output behavior, and log path configuration.
+
+## Production log shape (hybrid)
+
+The middleware simulates **production logs** rather than dev access logs: a logical
+`service` (a bounded context derived from the route — the app is a monolith, but
+logs read like a service estate), a semantic `event` (`cart_item_added`,
+`checkout_completed`, …) derived from `method` + normalized `endpoint`, and the
+route itself so downstream sequence mining keeps working. Bodies are off.
+
+```json
+{
+  "timestamp": "2026-06-13T08:43:02.881Z",
+  "level": "INFO",
+  "service": "cart-service",
+  "environment": "production",
+  "request_id": "f1e2d3c4-...",
+  "trace_id": "a1b2c3d4-...",
+  "session_id": "sess-guest-...",
+  "user_id": null,
+  "user_role": null,
+  "event": "cart_item_added",
+  "method": "POST",
+  "endpoint": "/store/carts/{id}/line-items",
+  "status": 200,
+  "duration_ms": 45,
+  "source": "medusa"
+}
+```
+
+`user_role` is still the JWT-derived ground truth (`customer` / `admin` / `null`);
+`event` + `endpoint` carry the behavioral signal Phase 6/7 mine. Field renames vs.
+the original draft: `response_code` → `status`, `normalized_endpoint` → `endpoint`;
+removed `raw_endpoint`, `query_params`, `request_headers`, `remote_ip`, `user_agent`,
+`event_type`. `request_payload` / `response_body` appear only with
+`LOG_CAPTURE_BODIES=true`.
 
 ## Commands
 

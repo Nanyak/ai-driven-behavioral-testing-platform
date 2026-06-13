@@ -66,7 +66,7 @@ golden-responses/        # stored goldens, one file per endpoint+status
 ### Source from OAS (`oas-source.ts`)
 
 1. Load the Store + Admin OpenAPI spec from `openapi/`.
-2. For a `(method, normalized_endpoint, status)`, locate the operation and its response schema; resolve `$ref`s into a flat typed shape (`string | number | boolean | array | object | null`). Capture the operation's `operationId`, the resolved response `$ref`, and the spec `info.version` (or a content hash) for provenance stamping.
+2. For a `(method, endpoint, status)`, locate the operation and its response schema; resolve `$ref`s into a flat typed shape (`string | number | boolean | array | object | null`). Capture the operation's `operationId`, the resolved response `$ref`, and the spec `info.version` (or a content hash) for provenance stamping.
 3. This typed shape is the **authoritative skeleton** and `expected_status` source for success steps. If the spec has no entry for the operation/status, mark `schema_source: "observed"` and rely on extraction below.
 
 ### Extraction from observed bodies (`schema-extract.ts`)

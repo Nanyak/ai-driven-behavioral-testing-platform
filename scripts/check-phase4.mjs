@@ -158,7 +158,7 @@ async function checkFilters() {
   console.log("\n[5] Field filters");
   await checkFilter("session_id", "session_id");
   await checkFilter("user_role", "user_role");
-  await checkFilter("response_code", "response_code");
+  await checkFilter("status", "status (response code)");
 }
 
 async function main() {

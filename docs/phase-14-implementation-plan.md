@@ -11,7 +11,7 @@ Execute in order, from a fresh environment (volumes reset), capturing output at 
 1. **Medusa from clean** — reset volumes, `npm run compose:up` with `LOG_CAPTURE_BODIES=true` (enrichment for the MVP; the golden oracle is the OAS and works bodies-off — ADR 0001), confirm seed + admin user + publishable key, verify `GET /store/products` and admin auth.
 2. **ELK from clean** — `npm run elk:up`, create the `behavior-logs-*` data view, confirm green/yellow cluster.
 3. **Generate traffic** — `npm run traffic:generate`; confirm the source mix and ≥5 completed customer checkouts (holdout).
-4. **Verify in Kibana** — filter by `session_id`, `user_role`, `response_code`; confirm spread.
+4. **Verify in Kibana** — filter by `session_id`, `user_role`, `status` (and `event`/`service`); confirm spread.
 5. **Ingest** — `npm run ingest`; confirm ≥50 session-flow records and golden candidates.
 6. **Behavioral modeling** — `npm run behavior:run`; confirm candidates + the classification/holdout/control validation report.
 7. **Generate tests** — `npm run scripts:generate`; confirm ≥5 valid `.spec.ts`.

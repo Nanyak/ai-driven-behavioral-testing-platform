@@ -41,52 +41,58 @@ requireSnippet(rootPackage, "\"check:phase2\"", "root check:phase2 script");
 
 if (existsSync(middlewarePath)) {
   const middleware = readFileSync(middlewarePath, "utf8");
+
+  // Production-shaped hybrid log contract (bodies-off by default). See the
+  // production-logs decision: every request emits a semantic `event`, a logical
+  // `service`, and the route (method + normalized `endpoint`), with NO bodies
+  // unless LOG_CAPTURE_BODIES=true.
   const requiredFields = [
-    "event_type",
-    "level",
     "timestamp",
+    "level",
+    "service",
+    "environment",
+    "request_id",
     "trace_id",
     "session_id",
-    "user_role",
     "user_id",
+    "user_role",
+    "event",
     "method",
-    "raw_endpoint",
-    "normalized_endpoint",
-    "query_params",
-    "request_headers",
-    "remote_ip",
-    "user_agent",
-    "request_content_length",
-    "request_body_capture",
-    "request_payload",
-    "response_code",
-    "response_content_length",
-    "response_body_capture",
-    "response_body",
+    "endpoint",
+    "status",
     "duration_ms",
+    "source",
   ];
 
   requireSnippet(middleware, "defineMiddlewares", "Medusa middleware registration");
   requireSnippet(middleware, "structuredRequestLogger", "request logging middleware");
-  requireSnippet(middleware, "randomUUID()", "trace_id generation");
+  requireSnippet(middleware, "randomUUID()", "trace_id / request_id generation");
   requireSnippet(middleware, "traceparent", "W3C traceparent parsing");
   requireSnippet(middleware, "getSessionId(req)", "session_id header or cookie lookup");
+
+  // Production log shaping.
+  requireSnippet(middleware, "normalizeEndpoint", "endpoint normalization");
+  requireSnippet(middleware, "endpointTemplate", "endpoint {id} templating");
+  requireSnippet(middleware, "deriveService", "logical service derivation");
+  requireSnippet(middleware, "deriveEvent", "semantic event derivation");
+  requireSnippet(middleware, "deriveLevel", "log level derivation from status");
+  requireSnippet(middleware, "EVENT_MAP", "route -> semantic event map");
+  requireSnippet(middleware, "getEnvironment", "environment tag");
+
+  // Security: bodies-off by default means nothing sensitive is logged; when
+  // bodies are enabled, masking + reduction still apply.
   requireSnippet(middleware, "SENSITIVE_KEY_PATTERN", "sensitive value masking");
-  requireSnippet(middleware, "SAFE_HEADER_NAMES", "safe header allowlist");
   requireSnippet(middleware, "LOG_CAPTURE_BODIES", "body capture feature flag");
-  requireSnippet(middleware, "BODY_CAPTURE_DISABLED", "disabled body logging marker");
-  requireSnippet(middleware, "http_request_completed", "request completion event type");
+  requireSnippet(middleware, "reduceValue", "payload reduction for bodies-on capture");
+
+  // Emission + durability.
   requireSnippet(middleware, "console.log(line)", "stdout JSONL emission");
   requireSnippet(middleware, "appendFile", "async log file JSONL emission");
   requireSnippet(middleware, "ensuredLogDirectories", "cached log directory setup");
   requireSnippet(middleware, "LOG_OUTPUT_PATH", "configurable log output path");
   requireSnippet(middleware, "log_write_failed", "log write failure isolation");
-  requireSnippet(middleware, "getSafeHeaders(req)", "safe request header capture");
-  requireSnippet(middleware, "getQueryParams(req, rawEndpoint)", "query parameter capture");
-  requireSnippet(middleware, "getRemoteIp(req)", "remote IP capture");
-  requireSnippet(middleware, "response_content_length", "response size capture");
-  requirePattern(middleware, /response\.json\s*=\s*\(/, "response JSON capture");
-  requirePattern(middleware, /response\.send\s*=\s*\(/, "response body capture");
+  requirePattern(middleware, /response\.json\s*=\s*\(/, "response JSON capture (bodies-on)");
+  requirePattern(middleware, /response\.send\s*=\s*\(/, "response body capture (bodies-on)");
   requirePattern(middleware, /res\.once\("finish"/, "finish listener for status and duration");
   requirePattern(middleware, /matcher:\s*"\/\*"/, "global route matcher");
 

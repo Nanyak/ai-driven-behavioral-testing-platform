@@ -97,54 +97,74 @@
 - [x] Verify logs are visible and searchable in Kibana.
 - [x] Test filtering logs by `session_id`.
 - [x] Test filtering logs by `user_role` (logs carry no persona field; persona is emergent — see Phase 7 and plan §10.3).
-- [x] Test filtering logs by `response_code`.
+- [x] Test filtering logs by `status` (response code).
 
 ## Phase 5: Synthetic Traffic Generator
 
-- [ ] Create `services/traffic-generator`.
-- [ ] Add shared HTTP client configuration.
-- [ ] Add Medusa base URL configuration.
-- [ ] Add publishable API key configuration.
-- [ ] Add admin credentials configuration.
-- [ ] Implement helper for generating `session_id`.
-- [ ] Implement helper for generating `trace_id`.
-- [ ] Attach `session_id` and `trace_id` headers to all outgoing requests (no persona header).
+- [x] Create `services/traffic-generator`.
+- [x] Add shared HTTP client configuration.
+- [x] Add Medusa base URL configuration.
+- [x] Add publishable API key configuration.
+- [x] Add admin credentials configuration.
+- [x] Implement helper for generating `session_id`.
+- [x] Implement helper for generating `trace_id`.
+- [x] Attach `session_id` and `trace_id` headers to all outgoing requests (no persona header).
 
-Scripted flows (~70% of sessions):
+> Note: the items below were originally written against the first-cut **flat
+> mix** (fixed 35-guest / 20-admin / 20-llm / 10-noise / 20-edge budgets). The
+> generator has since been rebuilt onto the **staged situation taxonomy** (see
+> the subsection after Validation). Fixed-count budgets are superseded by the
+> profile weights (§4) + floors (§7); live-stack validation is re-pending under
+> the staged build because the flows were materially rewritten.
 
-- [ ] Implement Guest Shopper scripted flow.
-- [ ] Implement Admin Operator scripted flow.
-- [ ] Generate at least 35 guest sessions (scripted).
-- [ ] Generate at least 20 admin sessions (scripted).
+Scripted flows:
 
-LLM-varied flows (~20% of sessions — holdout):
+- [x] Implement Guest Shopper scripted flow (now intent-driven: bounce / browse / cart-abandon / checkout-abandon / buy).
+- [x] Implement Admin Operator scripted flow (catalog; + fulfill / refund / support added in Stage 2).
+- [x] Guest & admin session counts are now profile-weighted over the §4 taxonomy with §7 floors (replaces the fixed 35 / 20 budgets).
 
-- [ ] Implement LLM prompt to generate realistic session narratives using the Claude API (Haiku 4.5, `claude-haiku-4-5-20251001`, for bulk generation).
-- [ ] Translate LLM-generated narratives into API call sequences.
-- [ ] Implement Registered Customer flow from LLM-varied output only (no scripted equivalent).
-- [ ] Generate at least 20 LLM-varied sessions across all personas.
-- [ ] Confirm the Registered Customer full checkout sequence is present only in LLM-varied sessions.
-- [ ] Ensure at least 5 completed Registered Customer checkouts appear in logs so the holdout flow clears the PrefixSpan support threshold.
+LLM-varied flows (holdout):
 
-Noise injection (~10% of sessions):
+- [x] Implement LLM prompt to generate realistic session narratives using the Claude API (Haiku 4.5, `claude-haiku-4-5-20251001`).
+- [x] Translate LLM-generated narratives into API call sequences.
+- [x] Implement Registered Customer (register→login→checkout) flow from LLM-varied output only (no scripted equivalent).
+- [x] Confirm **in code** the Registered Customer full checkout sequence lives only in `personas/`, never in `flows/`.
+- [x] Floor top-up enforces ≥6 completed holdout checkouts (config `MIN_HOLDOUT`); observed count confirmed by the end-to-end run item below.
 
-- [ ] Implement abandoned flow: cut sessions short at a random step for 40% of scripted sessions.
-- [ ] Implement retry noise: repeat a failing call with corrected or incorrect input after a 4xx response.
-- [ ] Implement persona contamination: occasionally include out-of-persona endpoint calls within a session.
-- [ ] Implement random step shuffling for browsing sequences (product list / product detail ordering).
-- [ ] Generate at least 10 noise-injected sessions.
+Noise injection (now woven into flows, not a fixed budget):
 
-Edge-case flow (injected):
+- [x] Implement abandoned flow: cut sessions short at a realistic step (per §4.1 abandonment shape).
+- [x] Implement retry noise: repeat a failing call with corrected or incorrect input after a 4xx response.
+- [x] Implement persona contamination: occasionally include out-of-persona endpoint calls within a session.
+- [x] Implement random step shuffling for browsing sequences (product list / product detail ordering).
 
-- [ ] Implement Edge Case User flow (unauthenticated admin call, invalid cart ID, invalid payload).
-- [ ] Generate at least 20 edge-case sessions.
+Edge-case flow:
 
-Validation:
+- [x] Implement Edge Case User flow (unauthenticated admin call, invalid cart ID, invalid payload).
+- [x] Edge sessions are the §4 G leaf (profile-weighted, ~2%), replacing the fixed 20-session budget.
+
+Validation (require the live stack — re-pending under the staged build; the ES → Logstash plumbing is unchanged from when the flat-mix build last confirmed these):
 
 - [ ] Confirm generated traffic appears in Medusa logs.
-- [ ] Confirm generated traffic appears in Elasticsearch.
-- [ ] Confirm session mix (scripted / LLM-varied / noise) is reflected in the spread of log `user_role` and `session_id` fields (no persona field is logged).
-- [ ] Validate that at least one Registered Customer checkout sequence is present in logs without a corresponding scripted flow.
+- [ ] Confirm generated traffic appears in Elasticsearch (including the new return / refund / fulfillment / profile / search events).
+- [ ] Confirm the realized session mix is reflected in the spread of log `user_role` and `session_id` fields (no persona field is logged).
+- [x] Registered Customer checkout sequence exists only in `personas/customer-llm.ts` with no corresponding scripted flow (verified in code).
+
+Staged situation taxonomy (plan §4–§7 — supersedes the flat mix above):
+
+- [x] Implement `state.ts` (`RunState`: account / order / return pools, valid promo).
+- [x] Implement `sampling.ts` (weighted allocation, identity split, stage map).
+- [x] Add `MIX_PROFILE` (realistic / signal-rich / smoke), `TRAFFIC_TOTAL_SESSIONS`, `ACCOUNT_POOL_SIZE`, promo-code config.
+- [x] Decouple sign-in from sign-up: `loginExisting` (login-only) + Stage-0 signup-only sessions (register without checkout).
+- [x] Implement returning-customer flow (`flows/returning.ts`, login-only, not the holdout).
+- [x] Implement order-status + profile/address management (`flows/account.ts`, D1/D2).
+- [x] Implement customer return flow (`flows/returns.ts`, E) referencing a real pooled order.
+- [x] Implement admin fulfill / refund / support flows (F2/F3/F4).
+- [x] Implement Stage 0 (seed promo + account pool) → Stage 1 (browse & buy) → Stage 2 (post-purchase) orchestrator with floor top-up.
+- [x] Stage 2 hard-fails loudly on an empty order pool.
+- [x] Print observed-vs-target distribution + acceptance-gate report (holdout, checkouts, returns, linked refunds, promo, decoupling).
+- [ ] **VERIFY against live Medusa 2.15.5:** `POST /store/returns`, admin return-receive + refund, fulfillment, and `POST /admin/promotions` body shapes (currently best-effort, degrade to logged 4xx).
+- [ ] Run end-to-end against the running stack and confirm the acceptance gates clear (≥6 holdout, ≥5 linked refunds, floors met).
 
 ## Phase 6: Data Ingestion Service
 
@@ -337,7 +357,7 @@ Optional (time-permitting):
 - [x] Structured logs are produced.
 - [x] Logs are stored in Elasticsearch.
 - [x] Logs are visible in Kibana.
-- [ ] Guest, customer, and admin personas are simulated.
+- [x] Guest, customer, and admin personas are simulated.
 - [ ] Logs are grouped by session.
 - [ ] Behavioral flows are discovered.
 - [ ] Playwright API tests are generated.

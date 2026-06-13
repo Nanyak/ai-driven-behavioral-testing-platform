@@ -10,28 +10,10 @@ import {
 
 const SENSITIVE_KEY_PATTERN =
   /password|passwd|pwd|token|secret|authorization|cookie|api[-_]?key|session|csrf|jwt|credential|phone|email|address|pan|card|payment|account|paper|document|ssn|tin/i
-const SAFE_HEADER_NAMES = new Set([
-  "accept",
-  "accept-encoding",
-  "accept-language",
-  "cache-control",
-  "content-length",
-  "content-type",
-  "host",
-  "origin",
-  "referer",
-  "user-agent",
-  "x-forwarded-for",
-  "x-real-ip",
-  "x-request-id",
-  "x-session-id",
-  "x-trace-id"
-])
 const MAX_STRING_LENGTH = 500
 const MAX_ARRAY_ITEMS = 10
 const MAX_OBJECT_KEYS = 30
 const MAX_DEPTH = 4
-const BODY_CAPTURE_DISABLED = "[body_capture_disabled]"
 const MASKED_VALUE = "[masked]"
 const ensuredLogDirectories = new Set<string>()
 
@@ -52,29 +34,6 @@ function getHeader(req: MedusaRequest, name: string): string | undefined {
 
 function getBodyCaptureEnabled(): boolean {
   return process.env.LOG_CAPTURE_BODIES === "true"
-}
-
-function getLogLevel(): string {
-  return process.env.LOG_LEVEL || "info"
-}
-
-function getContentLength(value: string | undefined): number | null {
-  if (!value) {
-    return null
-  }
-
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : null
-}
-
-function getRemoteIp(req: MedusaRequest): string | null {
-  return (
-    getHeader(req, "x-real-ip") ||
-    firstHeaderValue(getHeader(req, "x-forwarded-for")?.split(",").map((ip) => ip.trim())) ||
-    req.ip ||
-    req.socket?.remoteAddress ||
-    null
-  )
 }
 
 function getTraceId(req: MedusaRequest): string {
@@ -251,57 +210,6 @@ function reduceValue(value: unknown, depth = 0): unknown {
   return String(value)
 }
 
-function getSafeHeaders(req: MedusaRequest): Record<string, unknown> {
-  return Object.entries(req.headers).reduce<Record<string, unknown>>(
-    (headers, [rawName, rawValue]) => {
-      const name = rawName.toLowerCase()
-
-      if (SENSITIVE_KEY_PATTERN.test(name)) {
-        headers[name] = rawValue ? MASKED_VALUE : rawValue
-        return headers
-      }
-
-      if (!SAFE_HEADER_NAMES.has(name)) {
-        return headers
-      }
-
-      headers[name] = reduceValue(rawValue)
-      return headers
-    },
-    {}
-  )
-}
-
-function getQueryParams(req: MedusaRequest, rawEndpoint: string): Record<string, unknown> {
-  const query = (req as MedusaRequest & { query?: Record<string, unknown> }).query
-  if (query && Object.keys(query).length > 0) {
-    return reduceValue(query) as Record<string, unknown>
-  }
-
-  const questionMarkIndex = rawEndpoint.indexOf("?")
-  if (questionMarkIndex === -1) {
-    return {}
-  }
-
-  const params = new URLSearchParams(rawEndpoint.slice(questionMarkIndex + 1))
-  const parsed: Record<string, string | string[]> = {}
-
-  for (const [key, value] of params.entries()) {
-    const maskedValue = maskValueByKey(key, value)
-    const safeValue = String(maskedValue ?? value)
-
-    if (parsed[key]) {
-      parsed[key] = Array.isArray(parsed[key])
-        ? [...parsed[key], safeValue]
-        : [parsed[key], safeValue]
-    } else {
-      parsed[key] = safeValue
-    }
-  }
-
-  return reduceValue(parsed) as Record<string, unknown>
-}
-
 function tryParseResponseBody(body: unknown): unknown {
   if (typeof body !== "string") {
     return body
@@ -418,6 +326,111 @@ function getAuthContext(req: MedusaRequest): {
   }
 }
 
+// --- Production log shaping (hybrid: semantic event + route, bodies-off) ---
+//
+// Real production systems emit business-event logs with a logical service tag
+// and no request/response bodies (cost + PII). We simulate that here so the
+// pipeline's source looks like production rather than dev access logs. The
+// route (method + normalized endpoint) is retained alongside the derived
+// `event` so downstream sequence mining keeps working.
+
+const VERB_BY_METHOD: Record<string, string> = {
+  GET: "viewed",
+  POST: "created",
+  PUT: "updated",
+  PATCH: "updated",
+  DELETE: "deleted"
+}
+
+const EVENT_MAP: Record<string, string> = {
+  "GET /store/regions": "regions_listed",
+  "GET /store/products": "products_listed",
+  "GET /store/products/{id}": "product_viewed",
+  "POST /store/carts": "cart_created",
+  "GET /store/carts/{id}": "cart_viewed",
+  "POST /store/carts/{id}": "cart_updated",
+  "POST /store/carts/{id}/line-items": "cart_item_added",
+  "POST /store/carts/{id}/line-items/{id}": "cart_item_updated",
+  "DELETE /store/carts/{id}/line-items/{id}": "cart_item_removed",
+  "GET /store/shipping-options": "shipping_options_listed",
+  "POST /store/carts/{id}/shipping-methods": "shipping_method_selected",
+  "GET /store/payment-providers": "payment_providers_listed",
+  "POST /store/payment-collections": "payment_collection_created",
+  "POST /store/payment-collections/{id}/payment-sessions": "payment_session_created",
+  "POST /store/carts/{id}/complete": "checkout_completed",
+  "GET /store/orders": "orders_listed",
+  "GET /store/orders/{id}": "order_viewed",
+  "POST /store/customers": "customer_created",
+  "GET /store/customers/me": "customer_profile_viewed",
+  "POST /auth/customer/emailpass/register": "customer_registered",
+  "POST /auth/customer/emailpass": "customer_logged_in",
+  "POST /auth/user/emailpass": "admin_logged_in",
+  "GET /admin/products": "admin_products_listed",
+  "GET /admin/products/{id}": "admin_product_viewed",
+  "POST /admin/products": "admin_product_created",
+  "POST /admin/products/{id}": "admin_product_updated",
+  "GET /admin/orders": "admin_orders_listed",
+  "GET /admin/customers": "admin_customers_listed",
+  "GET /health": "health_checked"
+}
+
+/** Collapse normalizer placeholders (e.g. `:cart_id`) to a uniform `{id}`. */
+function endpointTemplate(normalized: string): string {
+  return normalized.replace(/\/:[^/]+/g, "/{id}")
+}
+
+function deriveLevel(status: number): string {
+  if (status >= 500) return "ERROR"
+  if (status >= 400) return "WARN"
+  return "INFO"
+}
+
+function getEnvironment(): string {
+  return process.env.LOG_ENVIRONMENT || "production"
+}
+
+/** Logical bounded-context name for a monolith route (looks like a service estate). */
+function deriveService(template: string): string {
+  if (template.startsWith("/admin")) return "admin-service"
+  if (template.startsWith("/auth")) return "auth-service"
+  if (template.startsWith("/store/customers")) return "customer-service"
+  if (
+    template.startsWith("/store/products") ||
+    template.startsWith("/store/regions") ||
+    template.startsWith("/store/collections") ||
+    template.startsWith("/store/product-categories")
+  ) {
+    return "product-catalog"
+  }
+  if (template.startsWith("/store/carts")) return "cart-service"
+  if (template.startsWith("/store/shipping-options") || template.startsWith("/store/payment")) {
+    return "checkout-service"
+  }
+  if (template.startsWith("/store/orders")) return "order-service"
+  if (template.startsWith("/health")) return "platform-health"
+  if (template.startsWith("/store")) return "store-gateway"
+  return "medusa"
+}
+
+/** Semantic business-event name for a route; falls back to `<resource>_<verb>`. */
+function deriveEvent(method: string, template: string): string {
+  const mapped = EVENT_MAP[`${method} ${template}`]
+  if (mapped) {
+    return mapped
+  }
+
+  const parts = template.split("/").filter(Boolean)
+  let resource = "request"
+  for (let i = parts.length - 1; i >= 0; i--) {
+    if (parts[i] !== "{id}") {
+      resource = parts[i]
+      break
+    }
+  }
+  resource = resource.replace(/[^a-zA-Z0-9]+/g, "_")
+  return `${resource}_${VERB_BY_METHOD[method] || "called"}`
+}
+
 async function structuredRequestLogger(
   req: MedusaRequest,
   res: MedusaResponse,
@@ -428,7 +441,6 @@ async function structuredRequestLogger(
   const rawEndpoint = req.originalUrl || req.url || "/"
   const traceId = getTraceId(req)
   let responseBody: unknown
-  let responseSizeBytes: number | null = null
 
   res.setHeader("x-trace-id", traceId)
 
@@ -441,15 +453,11 @@ async function structuredRequestLogger(
 
   response.json = (...args: unknown[]) => {
     responseBody = args[0]
-    responseSizeBytes = Buffer.byteLength(JSON.stringify(args[0] ?? ""), "utf8")
     return originalJson(...args)
   }
 
   response.send = (...args: unknown[]) => {
     responseBody = args[0]
-    responseSizeBytes = Buffer.isBuffer(args[0])
-      ? args[0].length
-      : Buffer.byteLength(String(args[0] ?? ""), "utf8")
     return originalSend(...args)
   }
 
@@ -458,34 +466,32 @@ async function structuredRequestLogger(
     const auth = getAuthContext(req)
     const captureBodies = getBodyCaptureEnabled()
     const requestBody = (req as MedusaRequest & { body?: unknown }).body
+    const template = endpointTemplate(normalizeEndpoint(rawEndpoint))
 
     writeJsonLine({
-      event_type: "http_request_completed",
-      source: "medusa",
-      level: getLogLevel(),
       timestamp,
+      level: deriveLevel(res.statusCode),
+      service: deriveService(template),
+      environment: getEnvironment(),
+      request_id: randomUUID(),
       trace_id: traceId,
       session_id: getSessionId(req) ?? null,
-      user_role: auth.user_role ?? null,
       user_id: auth.user_id ?? null,
+      user_role: auth.user_role ?? null,
+      event: deriveEvent(req.method, template),
       method: req.method,
-      raw_endpoint: rawEndpoint,
-      normalized_endpoint: normalizeEndpoint(rawEndpoint),
-      query_params: getQueryParams(req, rawEndpoint),
-      request_headers: getSafeHeaders(req),
-      remote_ip: getRemoteIp(req),
-      user_agent: getHeader(req, "user-agent") || null,
-      request_content_length: getContentLength(getHeader(req, "content-length")),
-      request_body_capture: captureBodies ? "captured" : "disabled",
-      request_payload: captureBodies ? reduceValue(requestBody) ?? null : BODY_CAPTURE_DISABLED,
-      response_code: res.statusCode,
-      response_content_length:
-        getContentLength(String(res.getHeader("content-length") ?? "")) ?? responseSizeBytes,
-      response_body_capture: captureBodies ? "captured" : "disabled",
-      response_body: captureBodies
-        ? reduceValue(tryParseResponseBody(responseBody)) ?? null
-        : BODY_CAPTURE_DISABLED,
-      duration_ms: Math.round(durationMs * 100) / 100
+      endpoint: template,
+      status: res.statusCode,
+      duration_ms: Math.round(durationMs * 100) / 100,
+      source: "medusa",
+      // Production runs bodies-off (cost + PII); the OpenAPI spec is the golden
+      // oracle (ADR 0001). Bodies are an optional dev enrichment only.
+      ...(captureBodies
+        ? {
+            request_payload: reduceValue(requestBody) ?? null,
+            response_body: reduceValue(tryParseResponseBody(responseBody)) ?? null
+          }
+        : {})
     })
   })
 

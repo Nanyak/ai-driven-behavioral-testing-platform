@@ -1,0 +1,19 @@
+{
+  "name": "@platform/traffic-generator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Phase 5 synthetic traffic generator for the AI-Driven Behavioral Testing Platform.",
+  "scripts": {
+    "generate": "tsx src/run.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
