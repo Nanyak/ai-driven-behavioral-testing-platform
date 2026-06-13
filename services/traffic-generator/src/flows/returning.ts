@@ -5,16 +5,25 @@ import { chance } from "../noise.js";
 import type { ShopIntent } from "./guest.js";
 
 /**
+ * Checkout abandonment cut weighted toward the payment step (Baymard Institute
+ * data: ~60% abandon at payment, ~25% at address, ~15% at shipping).
+ */
+function baymarkCut(stepsLength: number): number {
+  const r = Math.random();
+  if (r < 0.25) return 1;                                     // abandon at address
+  if (r < 0.40) return 2;                                     // abandon at shipping
+  return 2 + Math.ceil(Math.random() * (stepsLength - 2));   // abandon at payment
+}
+
+/**
  * Returning-customer flow (plan §3, §4 B/C2). Logs into a PRE-EXISTING pooled
- * account with `loginExisting` — **login only, never register**. This is the
- * sequence that decouples sign-in from sign-up in the data (plan §1.4): it emits
- * `login` with no `register`, the mirror image of the Stage-0 signup-only
- * sessions, which is what lets Phase 7 separate the two behaviors. It is safe to
- * script because it is NOT the holdout (the holdout is register→login→checkout,
- * LLM-only, in personas/customer-llm.ts).
+ * account — login only, never register — preserving the sign-in/sign-up
+ * decoupling from plan §1.4.
  *
- * The pooled account's token is refreshed on each login so later stages (order
- * status, returns) can reuse it.
+ * Token reuse: ~55% of returning sessions skip re-authentication because the
+ * customer's JWT is still live (they just open the app). These sessions emit
+ * no `login` step — their log starts directly with `browse_products` or
+ * `view_product`, which is a distinct behavioral signal from fresh logins.
  */
 export async function runReturningFlow(
   client: MedusaClient,
@@ -24,9 +33,13 @@ export async function runReturningFlow(
 ): Promise<StoreSession> {
   const session = new StoreSession(client);
   await session.loadRegions();
-  await session.loginExisting(account.email, account.password);
-  if (session.token) {
-    account.token = session.token;
+
+  // ~55% of sessions reuse a live JWT and skip the auth endpoint entirely.
+  if (account.token && chance(0.55)) {
+    session.useExistingToken(account.email, account.token);
+  } else {
+    await session.loginExisting(account.email, account.password);
+    if (session.token) account.token = session.token;
   }
 
   await session.browseProducts();
@@ -54,10 +67,8 @@ export async function runReturningFlow(
       () => session.createPaymentCollection(),
       () => session.createPaymentSession(),
     ];
-    const cut = 1 + Math.floor(Math.random() * steps.length);
-    for (const step of steps.slice(0, cut)) {
-      await step();
-    }
+    const cut = baymarkCut(steps.length);
+    for (const step of steps.slice(0, cut)) await step();
     return session;
   }
 

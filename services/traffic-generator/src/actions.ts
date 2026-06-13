@@ -388,6 +388,47 @@ export class StoreSession {
     return this.record("login", "POST", "/auth/customer/emailpass", res);
   }
 
+  /**
+   * Resume a pre-authenticated session using a cached JWT — no auth endpoint is
+   * hit. The session log starts with a browse/product call instead of a login
+   * event, which is the distinguishing signal for JWT-reuse vs. fresh sign-in.
+   */
+  useExistingToken(email: string, token: string): void {
+    this.email = email;
+    this.token = token;
+    this.steps.push({ action: "resume_session", method: "GET", path: "/auth/session", status: 200, ok: true });
+  }
+
+  /** Populate the product list without emitting a browse_products log step.
+   * Used by direct-landing flows that start on a product detail page. */
+  async prefetchProductIds(): Promise<void> {
+    if (this.products.length > 0) return;
+    await this.ensureRegion();
+    const params = new URLSearchParams({ limit: "20", fields: PRODUCT_FIELDS });
+    if (this.regionId) params.set("region_id", this.regionId);
+    const res = await this.client.request("GET", `/store/products?${params.toString()}`);
+    if (res.ok && Array.isArray(res.body?.products)) {
+      this.products = res.body.products.map((p: any) => ({
+        id: p.id,
+        variantId: p?.variants?.[0]?.id,
+      }));
+    }
+  }
+
+  async viewCart(): Promise<ApiResponse> {
+    if (!this.cartId) {
+      return this.record("view_cart", "GET", "/store/carts/{id}", { status: 0, ok: false, body: null });
+    }
+    const res = await this.client.request("GET", `/store/carts/${this.cartId}`, { token: this.token });
+    return this.record("view_cart", "GET", "/store/carts/{id}", res);
+  }
+
+  async viewMultipleProducts(n: number): Promise<void> {
+    for (let i = 0; i < n; i++) {
+      await this.viewProduct();
+    }
+  }
+
   async searchProducts(query: string): Promise<ApiResponse> {
     await this.ensureRegion();
     const params = new URLSearchParams({ limit: "20", q: query, fields: PRODUCT_FIELDS });

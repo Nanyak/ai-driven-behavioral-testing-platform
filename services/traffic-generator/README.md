@@ -2,11 +2,15 @@
 
 Produces a realistic, intentionally messy stream of Medusa API traffic so the
 downstream behavior engine has genuine data to mine. Traffic is sampled from a
-**15-leaf situation taxonomy** (plan §4) across three axes — **identity**
+**19-leaf situation taxonomy** (plan §4) across three axes — **identity**
 (guest / returning / new), **intent** (browse / buy / manage / status / return),
 and **outcome** (complete / abandon / error) — and keeps the registered-customer
 `register → login → checkout` sequence as a **holdout** that exists only in
 LLM-varied sessions (`personas/customer-llm.ts`), never in `flows/`.
+
+The situation mix is modelled on real Shopee / Lazada traffic patterns: search-first
+entry, share-link product landings, multi-item bulk carts, comparison-shopping
+sessions, JWT-reuse without re-login, and post-purchase tracking-anxiety loops.
 
 ## What it does NOT do
 
@@ -19,28 +23,34 @@ LLM-varied sessions (`personas/customer-llm.ts`), never in `flows/`.
   scripted — it is a *different* sequence and emits `login` without `register`,
   which (mirrored against the Stage-0 signup-only sessions that emit `register`
   without checkout) is what lets Phase 7 decouple sign-in from sign-up.
+- It never hardcodes product or order IDs. Every runtime ID (region, product,
+  variant, cart, order, return) is resolved against the live backend so the run
+  is reproducible against any seeded Medusa instance.
 
 ## Layout
 
 ```
 src/
-  config.ts            env loading; mix profile, weights, event probs, floors
-  ids.ts               session_id / trace_id / customer-email helpers
-  client.ts            HTTP wrapper, header injection (no persona header)
-  state.ts             RunState: account / order / return pools, valid promo
-  sampling.ts          weighted allocation + identity-split + stage map
-  actions.ts           StoreSession / AdminSession — runtime ID resolution
-  noise.ts             abandonment, retry, contamination, shuffling
-  flows/guest.ts       guest shopper (bounce/browse/cart/checkout-abandon/buy)
-  flows/returning.ts   returning customer (login-only, no register)
-  flows/account.ts     order-status (D1) + profile/address management (D2)
-  flows/returns.ts     customer return request against a real order (E)
-  flows/admin.ts       admin catalog (F1) + fulfill (F2) + refund (F3) + support (F4)
-  flows/edge.ts        edge-case 4xx/5xx flows (G)
-  llm/narrative.ts     Haiku 4.5 narrative (+ offline stochastic fallback)
-  llm/translate.ts     narrative -> concrete API calls
-  personas/customer-llm.ts  HOLDOUT: registered-customer full checkout (C3)
-  run.ts               staged orchestrator: seed -> browse&buy -> post-purchase
+  config.ts                  env loading; mix profile, weights, event probs, floors
+  ids.ts                     session_id / trace_id / customer-email helpers
+  client.ts                  HTTP wrapper, header injection (no persona header)
+  state.ts                   RunState: account / order / return pools, valid promo
+  sampling.ts                weighted allocation + identity-split + stage map
+  actions.ts                 StoreSession / AdminSession — runtime ID resolution
+  noise.ts                   abandonment, retry, contamination, shuffling
+  flows/guest.ts             guest shopper (bounce/browse/cart/checkout-abandon/buy)
+  flows/returning.ts         returning customer (login-only or JWT-reuse, no register)
+  flows/direct-landing.ts    share-link / ad product landing (view_product first)
+  flows/comparison-browse.ts researcher: 4–8 product views, search-first, no purchase
+  flows/multi-item.ts        Lazada bulk-add: 3–5 browse→add cycles then checkout
+  flows/account.ts           order-status (D1) + repeat-check (D1b) + profile/address (D2)
+  flows/returns.ts           customer return request against a real order (E)
+  flows/admin.ts             admin catalog (F1) + fulfill (F2) + refund (F3) + support (F4)
+  flows/edge.ts              edge-case 4xx/5xx flows (G)
+  llm/narrative.ts           Haiku 4.5 narrative (+ offline stochastic fallback)
+  llm/translate.ts           narrative -> concrete API calls
+  personas/customer-llm.ts   HOLDOUT: registered-customer full checkout (C3)
+  run.ts                     staged orchestrator: seed -> browse&buy -> post-purchase
 ```
 
 ## Staged pipeline (plan §5)
@@ -52,12 +62,14 @@ state, so the run is split into ordered stages over a shared `RunState`:
   deal-seeker conversions can succeed), then `ACCOUNT_POOL_SIZE` **signup-only**
   sessions populate the returning-customer account pool.
 - **Stage 1 — browse & buy.** The bulk (A/B/C/D2/F1/G). Completed checkouts push
-  real orders into the order pool. Returning identities draw a pooled account and
-  **log in only**.
+  real orders into the order pool. Returning identities draw a pooled account;
+  ~55% of those sessions skip re-authentication because the customer's JWT is
+  still live (`resume_session` step, no `login` event).
 - **Stage 2 — post-purchase.** Draws from the order pool: order-status (D1),
-  returns (E), admin fulfillment (F2), and admin refund (F3) — F3 settles the
-  **same `order_id`** the customer returned in E, the cross-role linkage Phase 7
-  discovers. Stage 2 hard-fails loudly if the order pool is empty.
+  repeat order checks (D1b), returns (E), admin fulfillment (F2), and admin
+  refund (F3) — F3 settles the **same `order_id`** the customer returned in E,
+  the cross-role linkage Phase 7 discovers. Stage 2 hard-fails loudly if the
+  order pool is empty.
 
 > **Stage-2 endpoint shapes need live verification.** `POST /store/returns`, the
 > admin return-receive + refund sequence, fulfillment, and `POST /admin/promotions`
@@ -99,19 +111,66 @@ then topped up to the floors (plan §7). Example counts shown for `N=300`.
 
 | Profile       | Total | Shape                                                    |
 | ------------- | ----- | -------------------------------------------------------- |
-| `realistic`   | 300   | benchmark-anchored (≈70% abandonment, guest ≈ half)     |
+| `realistic`   | 300   | Shopee/Lazada-anchored (≈70% abandonment, guest ≈ half) |
 | `signal-rich` | 300   | same shape, purchase/return/refund leaves boosted        |
 | `smoke`       | 40    | tiny structural check                                    |
 
-| Group | Leaves                                          | ~Weight |
-| ----- | ----------------------------------------------- | ------- |
-| A     | bounce, deeper browse (no cart)                 | 38%     |
-| B     | cart abandon, checkout abandon                  | 22%     |
-| C     | guest / returning / **new-holdout** checkout    | 16%     |
-| D     | order status, profile management                | 12%     |
-| E     | returns                                         | 4%      |
-| F     | admin catalog / fulfill / refund / support      | 6%      |
-| G     | edge / error                                    | 2%      |
+| Group | Leaves                                                        | ~Weight |
+| ----- | ------------------------------------------------------------- | ------- |
+| A     | bounce, deeper browse, comparison-browse (no cart)            | 30%     |
+| B     | cart abandon, checkout abandon                                | 17%     |
+| C     | direct landing, guest / returning / multi-item / new checkout | 27%     |
+| D     | order status, repeat order check, profile management          | 10%     |
+| E     | returns                                                       | 3%      |
+| F     | admin catalog / fulfill / refund / support                    | 6%      |
+| G     | edge / error                                                  | 2%      |
+
+### Session types
+
+| Type               | Stage | Identity          | Distinguishing log signal                                    |
+| ------------------ | ----- | ----------------- | ------------------------------------------------------------ |
+| `bounce`           | 1     | 90% guest         | view 1–2 products, exit                                      |
+| `browse`           | 1     | 90% guest         | search/filter + 1–2 product views, no cart                  |
+| `comparisonBrowse` | 1     | 80% guest         | **4–8 `view_product` calls**, search-first 60%              |
+| `cartAbandon`      | 1     | 75% guest         | cart created, items added, no checkout                       |
+| `checkoutAbandon`  | 1     | 75% guest         | checkout started, Baymard-weighted cut (60% at payment)      |
+| `directLanding`    | 1     | 70% guest         | **first step is `view_product`**, no leading `browse_products` |
+| `guestCheckout`    | 1     | guest             | complete purchase with no auth                               |
+| `returningCheckout`| 1     | returning         | `login` (or `resume_session`) → cart → complete             |
+| `multiItemCheckout`| 1     | 60% guest         | **3–5 browse→add cycles**, cart has 3+ line items           |
+| `newCheckout`      | 1     | new               | HOLDOUT — LLM-varied `register → login → checkout`          |
+| `profileMgmt`      | 1     | returning         | login → view/update profile → maybe add address             |
+| `adminCatalog`     | 1     | admin             | list/view/update products                                    |
+| `edge`             | 1     | —                 | intentional 4xx/5xx edge cases                              |
+| `orderStatus`      | 2     | returning         | login → view orders → view specific order → maybe reorder   |
+| `repeatOrderCheck` | 2     | returning         | login → **view same order 3–5×** (tracking anxiety)        |
+| `returns`          | 2     | returning         | login → request return against a real completed order        |
+| `adminFulfill`     | 2     | admin             | fulfill a real order from the order pool                     |
+| `adminRefund`      | 2     | admin             | refund the **same `order_id`** a customer returned (linkage) |
+| `adminSupport`     | 2     | admin             | search customers by email                                    |
+
+### Identity and JWT-reuse
+
+Returning-identity sessions draw a pooled account seeded in Stage 0. Roughly
+55% of those sessions skip the auth endpoint entirely because the JWT is still
+live — these sessions emit a synthetic `resume_session` step instead of `login`.
+The remaining 45% call `POST /auth/customer/emailpass` normally (token expired).
+This produces three distinct log patterns for Phase 7 to distinguish:
+
+1. `register` only (Stage-0 signup-only sessions)
+2. `login` only (returning customer, fresh token)
+3. `resume_session` (returning customer, JWT reuse — no auth endpoint hit)
+
+### Checkout abandonment weighting
+
+`checkoutAbandon` and the abort paths in `returningCheckout` cut the checkout
+sequence at a Baymard Institute–weighted point rather than uniformly:
+
+| Step abandoned at | Probability |
+| ----------------- | ----------- |
+| Address entry     | 25%         |
+| Shipping selection| 15%         |
+| Payment           | 60%         |
 
 Override the profile defaults with `MIX_PROFILE`, `TRAFFIC_TOTAL_SESSIONS`,
 `ACCOUNT_POOL_SIZE`, and the `TRAFFIC_VALID_PROMO` / `TRAFFIC_INVALID_PROMO`

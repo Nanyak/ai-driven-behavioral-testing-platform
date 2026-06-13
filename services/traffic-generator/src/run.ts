@@ -14,8 +14,11 @@ import {
 } from "./sampling.js";
 import { runGuestShop } from "./flows/guest.js";
 import { runReturningFlow } from "./flows/returning.js";
-import { runOrderStatusFlow, runProfileMgmtFlow } from "./flows/account.js";
+import { runOrderStatusFlow, runRepeatOrderStatusFlow, runProfileMgmtFlow } from "./flows/account.js";
 import { runReturnFlow } from "./flows/returns.js";
+import { runDirectLandingFlow, type DirectIntent } from "./flows/direct-landing.js";
+import { runComparisonBrowseFlow } from "./flows/comparison-browse.js";
+import { runMultiItemFlow } from "./flows/multi-item.js";
 import {
   runAdminFlow,
   runAdminFulfillFlow,
@@ -44,6 +47,9 @@ const IDENTITY_SPLIT: Partial<Record<SessionType, Partial<Record<Identity, numbe
   browse: { guest: 90, returning: 10 },
   cartAbandon: { guest: 75, returning: 25 },
   checkoutAbandon: { guest: 75, returning: 25 },
+  directLanding: { guest: 70, returning: 30 },
+  comparisonBrowse: { guest: 80, returning: 20 },
+  multiItemCheckout: { guest: 60, returning: 40 },
 };
 
 function identityFor(type: SessionType): Identity {
@@ -54,6 +60,7 @@ function identityFor(type: SessionType): Identity {
       return "guest";
     case "returningCheckout":
     case "orderStatus":
+    case "repeatOrderCheck":
     case "profileMgmt":
     case "returns":
       return "returning";
@@ -152,6 +159,29 @@ async function dispatch(
       return session.steps;
     }
 
+    case "directLanding": {
+      const acct = returning ? drawOrSynth(state) : null;
+      // Weighted toward bounce/browse since most share-link clicks don't convert.
+      const landingIntents: DirectIntent[] = ["bounce", "bounce", "browse", "browse", "cartAbandon", "buy"];
+      const landingIntent = landingIntents[Math.floor(Math.random() * landingIntents.length)];
+      const s = await runDirectLandingFlow(client, acct, landingIntent, promo);
+      if (landingIntent === "buy" && s.email) poolOrder(state, s, s.email, s.token);
+      return s.steps;
+    }
+
+    case "comparisonBrowse": {
+      const acct = returning ? drawOrSynth(state) : null;
+      return (await runComparisonBrowseFlow(client, acct)).steps;
+    }
+
+    case "multiItemCheckout": {
+      const acct = returning ? drawOrSynth(state) : null;
+      const multiIntent = chance(0.35) ? "cartAbandon" : "buy";
+      const s = await runMultiItemFlow(client, acct, multiIntent, promo);
+      if (multiIntent === "buy" && s.email) poolOrder(state, s, s.email, s.token);
+      return s.steps;
+    }
+
     case "profileMgmt":
       return (await runProfileMgmtFlow(client, drawOrSynth(state))).steps;
 
@@ -168,6 +198,13 @@ async function dispatch(
       return (
         await runOrderStatusFlow(client, acct, order, cfg.eventProbs.reorderDuringStatus)
       ).steps;
+    }
+
+    case "repeatOrderCheck": {
+      const order = drawReturningOrder(state, false);
+      if (!order) return (await runGuestShop(client, "browse", promo)).steps; // degrade
+      const acct = poolAccountFor(state, order.ownerEmail) ?? synthAccount();
+      return (await runRepeatOrderStatusFlow(client, acct, order)).steps;
     }
 
     case "returns": {

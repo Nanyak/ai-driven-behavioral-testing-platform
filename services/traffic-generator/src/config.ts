@@ -57,21 +57,25 @@ export type MixProfile = "realistic" | "signal-rich" | "smoke";
  * (plan §7). One key per taxonomy leaf.
  */
 export interface Weights {
-  bounce: number; // A1
-  browse: number; // A2
-  cartAbandon: number; // B1
-  checkoutAbandon: number; // B2
-  guestCheckout: number; // C1
+  bounce: number;           // A1
+  browse: number;           // A2
+  cartAbandon: number;      // B1
+  checkoutAbandon: number;  // B2
+  guestCheckout: number;    // C1
   returningCheckout: number; // C2
-  newCheckout: number; // C3 (holdout, LLM-only)
-  orderStatus: number; // D1
-  profileMgmt: number; // D2
-  returns: number; // E
-  adminCatalog: number; // F1
-  adminFulfill: number; // F2
-  adminRefund: number; // F3
-  adminSupport: number; // F4
-  edge: number; // G
+  newCheckout: number;      // C3 (holdout, LLM-only)
+  directLanding: number;    // C4 — share-link / ad product landing
+  comparisonBrowse: number; // A3 — high product-view research session
+  multiItemCheckout: number; // C5 — multi-browse-add-checkout
+  orderStatus: number;      // D1
+  repeatOrderCheck: number; // D1b — repeated status checks (post-purchase anxiety)
+  profileMgmt: number;      // D2
+  returns: number;          // E
+  adminCatalog: number;     // F1
+  adminFulfill: number;     // F2
+  adminRefund: number;      // F3
+  adminSupport: number;     // F4
+  edge: number;             // G
 }
 
 /** Conditional event probabilities within a flow (plan §4.1). */
@@ -119,18 +123,27 @@ export interface TrafficConfig {
   concurrency: number;
 }
 
-/** Default realistic shape (plan §4). Counts shown there are this × N≈300. */
+/**
+ * Realistic traffic shape modelled on Shopee/Lazada behaviour (plan §4).
+ * New types added: directLanding (share-link), comparisonBrowse (researcher),
+ * multiItemCheckout (bulk-add), repeatOrderCheck (tracking anxiety).
+ * Counts shown are proportional; actual sessions = weight/sum × totalSessions.
+ */
 const REALISTIC_WEIGHTS: Weights = {
-  bounce: 20,
-  browse: 18,
-  cartAbandon: 13,
-  checkoutAbandon: 9,
-  guestCheckout: 8,
-  returningCheckout: 6,
+  bounce: 15,
+  browse: 12,
+  cartAbandon: 11,
+  checkoutAbandon: 8,
+  guestCheckout: 7,
+  returningCheckout: 5,
   newCheckout: 2,
-  orderStatus: 7,
-  profileMgmt: 5,
-  returns: 4,
+  directLanding: 7,
+  comparisonBrowse: 6,
+  multiItemCheckout: 4,
+  orderStatus: 5,
+  repeatOrderCheck: 3,
+  profileMgmt: 3,
+  returns: 3,
   adminCatalog: 2,
   adminFulfill: 2,
   adminRefund: 1.5,
@@ -138,13 +151,15 @@ const REALISTIC_WEIGHTS: Weights = {
   edge: 2,
 };
 
-/** Signal-rich: same shape, purchase/return/refund leaves boosted for mining. */
+/** Signal-rich: purchase/return/refund leaves boosted for behavioural mining. */
 const SIGNAL_RICH_WEIGHTS: Weights = {
   ...REALISTIC_WEIGHTS,
   guestCheckout: 12,
   returningCheckout: 10,
   newCheckout: 4,
+  multiItemCheckout: 7,
   returns: 7,
+  repeatOrderCheck: 5,
   adminFulfill: 4,
   adminRefund: 3,
 };

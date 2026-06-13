@@ -36,6 +36,39 @@ export async function runOrderStatusFlow(
 }
 
 /**
+ * Repeat order-status flow — user checks delivery progress 3–5 times in one
+ * session. Common on Shopee/Lazada immediately after placing an order (tracking
+ * anxiety). The repeated view_order calls against the same order_id are the
+ * distinguishing log signal vs. the single-check orderStatus flow.
+ */
+export async function runRepeatOrderStatusFlow(
+  client: MedusaClient,
+  account: PoolAccount,
+  order: PoolOrder
+): Promise<StoreSession> {
+  const session = new StoreSession(client);
+  await session.loadRegions();
+
+  if (account.token && chance(0.6)) {
+    session.useExistingToken(account.email, account.token);
+  } else {
+    await session.loginExisting(account.email, account.password);
+    if (session.token) account.token = session.token;
+  }
+
+  session.lastOrderId = order.orderId;
+
+  // Check order list once, then poll the specific order 3–5 times.
+  await session.viewOrders();
+  const checkCount = 3 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < checkCount; i++) {
+    await session.viewOrder();
+  }
+
+  return session;
+}
+
+/**
  * Profile & address management (plan §4 D2). Returning identity, no purchase:
  * login → view profile → update profile → (sometimes) add an address.
  */
