@@ -157,7 +157,7 @@ async function checkFilter(field, label) {
 async function checkFilters() {
   console.log("\n[5] Field filters");
   await checkFilter("session_id", "session_id");
-  await checkFilter("persona", "persona");
+  await checkFilter("user_role", "user_role");
   await checkFilter("response_code", "response_code");
 }
 

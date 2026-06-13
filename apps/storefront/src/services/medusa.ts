@@ -18,7 +18,6 @@ function medusaHeaders() {
     "Content-Type": "application/json",
     ...(publishableApiKey ? { "x-publishable-api-key": publishableApiKey } : {}),
     "x-session-id": "storefront-manual-session",
-    "x-persona": "guest_shopper",
   };
 }
 

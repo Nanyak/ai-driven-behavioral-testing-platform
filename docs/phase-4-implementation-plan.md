@@ -129,10 +129,12 @@ After `npm run elk:up` and logs are indexed:
 4. Go to **Discover** to search and filter logs
 
 Useful filters:
-- `persona: "guest_shopper"`
+- `user_role: "customer"`
 - `session_id: "session-abc"`
 - `response_code: 404`
 - `normalized_endpoint: "/store/carts/{id}/line-items"`
+
+> Note: logs intentionally carry no `persona` field. Persona is **not** logged or assigned at ingestion — it is derived later as an emergent flow attribute in Phase 7 (see plan §10.3 and the `persona-classification` memory). Filter and group by `user_role` (`customer`, `admin`, or `null` for unauthenticated guests) instead; `user_role` is the JWT-derived signal and is also the held-out ground truth used to validate emergent classification.
 
 ## Elasticsearch Index Fields
 
@@ -144,8 +146,7 @@ The `behavior-logs-*` index is populated from Medusa structured logs. Key fields
 | `timestamp` | date | Request timestamp from Medusa middleware |
 | `trace_id` | keyword | Per-request trace identifier |
 | `session_id` | keyword | Per-session identifier |
-| `persona` | keyword | Traffic persona (`guest_shopper`, `registered_customer`, `admin_operator`, `edge_case`) |
-| `role` | keyword | User role (`guest`, `customer`, `admin`) |
+| `user_role` | keyword | JWT-derived user role (`customer`, `admin`, or `null` for unauthenticated guests); persona is **not** logged — it is derived later in Phase 7 |
 | `method` | keyword | HTTP method |
 | `endpoint` | keyword | Raw request path |
 | `normalized_endpoint` | keyword | Path with dynamic segments replaced (`/store/carts/{id}`) |
@@ -190,7 +191,7 @@ Phase 4: ELK Integration Check
 
 [5] Field filters
   ✓ Filter by session_id works (1377 docs, sample: "dashboard-status-session")
-  ✓ Filter by persona works (1377 docs, sample: "admin_operator")
+  ✓ Filter by user_role works (1377 docs, sample: "admin")
   ✓ Filter by response_code works (3012 docs, sample: 200)
 
 8 checks — 8 passed, 0 failed

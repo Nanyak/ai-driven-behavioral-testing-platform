@@ -170,7 +170,7 @@ Useful fields include:
 - `timestamp`
 - `trace_id`
 - `session_id`
-- `persona`
+- `user_role`
 - `method`
 - `raw_endpoint`
 - `normalized_endpoint`
@@ -180,14 +180,13 @@ Useful fields include:
 - `request_payload`
 - `response_body`
 
-For sequence mining, send traffic with headers like:
+For sequence mining, send traffic with a session header like:
 
 ```http
 x-session-id: guest-session-001
-x-persona: guest_shopper
 ```
 
-Then group log events by `session_id`, sort by `timestamp`, and mine ordered `normalized_endpoint` sequences.
+Clients do **not** send a persona header. `user_role` is derived from the JWT by the logging middleware (`null` for unauthenticated guests), and persona is derived later as an emergent flow attribute in Phase 7 (see `context/plan.md` §10.3). Then group log events by `session_id`, sort by `timestamp`, and mine ordered `normalized_endpoint` sequences.
 
 ## Frontend Apps
 

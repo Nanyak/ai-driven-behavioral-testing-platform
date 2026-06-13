@@ -96,7 +96,7 @@
 - [x] Verify logs are indexed in Elasticsearch.
 - [x] Verify logs are visible and searchable in Kibana.
 - [x] Test filtering logs by `session_id`.
-- [x] Test filtering logs by `persona`.
+- [x] Test filtering logs by `user_role` (logs carry no persona field; persona is emergent — see Phase 7 and plan §10.3).
 - [x] Test filtering logs by `response_code`.
 
 ## Phase 5: Synthetic Traffic Generator
@@ -119,11 +119,12 @@ Scripted flows (~70% of sessions):
 
 LLM-varied flows (~20% of sessions — holdout):
 
-- [ ] Implement LLM prompt to generate realistic session narratives using Claude API.
+- [ ] Implement LLM prompt to generate realistic session narratives using the Claude API (Haiku 4.5, `claude-haiku-4-5-20251001`, for bulk generation).
 - [ ] Translate LLM-generated narratives into API call sequences.
 - [ ] Implement Registered Customer flow from LLM-varied output only (no scripted equivalent).
 - [ ] Generate at least 20 LLM-varied sessions across all personas.
 - [ ] Confirm the Registered Customer full checkout sequence is present only in LLM-varied sessions.
+- [ ] Ensure at least 5 completed Registered Customer checkouts appear in logs so the holdout flow clears the PrefixSpan support threshold.
 
 Noise injection (~10% of sessions):
 
@@ -142,7 +143,7 @@ Validation:
 
 - [ ] Confirm generated traffic appears in Medusa logs.
 - [ ] Confirm generated traffic appears in Elasticsearch.
-- [ ] Confirm session mix (scripted / LLM-varied / noise) is reflected in log `persona` and `session_id` fields.
+- [ ] Confirm session mix (scripted / LLM-varied / noise) is reflected in the spread of log `user_role` and `session_id` fields (no persona field is logged).
 - [ ] Validate that at least one Registered Customer checkout sequence is present in logs without a corresponding scripted flow.
 
 ## Phase 6: Data Ingestion Service
@@ -157,7 +158,7 @@ Validation:
 - [ ] Remove noisy or irrelevant endpoints.
 - [ ] Convert logs into behavioral sequence records.
 - [ ] Store extracted session flows as JSON.
-- [ ] Extract candidate golden responses.
+- [ ] Extract candidate golden responses using the schema-extraction algorithm defined in Phase 8 (plan §11.1).
 - [ ] Store golden responses under `golden-responses/`.
 - [ ] Add a command to run ingestion from the terminal.
 - [ ] Verify at least 50 sessions can be processed.
@@ -166,8 +167,12 @@ Validation:
 
 - [ ] Create `services/behavior-engine`.
 - [ ] Load session flows from ingestion output.
-- [ ] Implement persona classifier: map `user_role` → persona via hashmap (`null` → `guest_shopper`, `customer` → `registered_customer`, `user` → `admin_operator`).
-- [ ] Add `persona_source: "jwt_role"` field to session flow output.
+- [ ] Mine flows from the raw, unlabeled sequence stream (do not pre-label sessions by persona).
+- [ ] Derive deterministic flow attributes from endpoint content: `requires_auth` (contains `/auth/customer/*` or `/store/customers`), `is_admin` (contains `/admin/*`), `has_errors` (contains 4xx/5xx).
+- [ ] Resolve persona from attributes: `is_admin` → admin_operator; `requires_auth` and not admin → registered_customer; neither → guest_shopper; `has_errors` as an orthogonal edge-case overlay.
+- [ ] Resolve mid-session role changes by highest-privilege attribute reached (admin > customer > guest).
+- [ ] Keep JWT `user_role` only as held-out ground truth for validation, never as classifier input.
+- [ ] Add `persona_source: "emergent_attributes"` field to flow output.
 - [ ] Identify Guest Shopper flows.
 - [ ] Identify Registered Customer flows.
 - [ ] Identify Admin Operator flows.
@@ -187,12 +192,21 @@ Validation:
 - [ ] Produce test candidate JSON.
 - [ ] Verify at least five test candidates are generated from mined behavior flows.
 - [ ] Verify the Registered Customer checkout flow is discovered despite not being present in scripted sessions (holdout validation).
+- [ ] Score emergent persona classification against JWT `user_role` ground truth (report precision/recall per persona).
+- [ ] Report holdout recovery as a support count (Registered Customer checkout sequence support ≥ threshold), not a binary.
+- [ ] Add a negative control: confirm no un-injected flow is reported as high-support.
+- [ ] Use the LLM (Opus 4.8) for flow naming, anomaly/contamination detection, and assertion recommendation (not for classification).
 
 ## Phase 8: Golden Response Handling
 
-- [ ] Define the golden response JSON format (endpoint, expected_status, expected_schema, ignore_fields, captured_at, source_sessions).
+- [ ] Define the golden response JSON format (endpoint, expected_status, expected_schema, ignore_fields, schema_source, oas_operation_id, oas_ref, oas_version, captured_at, source_sessions).
 - [ ] Define the global ignore-fields list (id, created_at, updated_at, deleted_at, metadata, token, cart_id, order_id, trace_id, session_id).
-- [ ] Implement schema extraction: walk response JSON tree and classify leaf types.
+- [ ] Load the OpenAPI spec and resolve `$ref` into typed per-(operation, status) schemas — the authoritative oracle (ADR 0001).
+- [ ] Source `expected_status` from the spec for happy-path steps; use the observed status for edge/error steps.
+- [ ] Implement schema extraction: walk observed response JSON tree and classify leaf types (observed half of the intersection).
+- [ ] Intersect the OAS skeleton with observed schemas to tighten under-specified fields; stamp `schema_source` (`openapi` / `openapi+observed` / `observed`).
+- [ ] Stamp OAS provenance on spec-sourced goldens (`oas_operation_id`, `oas_ref`, `oas_version`) for traceability and drift detection.
+- [ ] Confirm a valid spec-only golden is produced with bodies off (oracle works without logged bodies).
 - [ ] Implement merge logic for optional fields across multiple sessions of the same endpoint.
 - [ ] Normalize response bodies before comparison (strip ignored fields).
 - [ ] Add schema comparison utility.
@@ -296,6 +310,23 @@ Validation:
 - [ ] Confirm at least one regression can be detected.
 - [ ] Prepare final demo flow.
 
+## Phase 15: HITL Review Dashboard
+
+> Minimal read-only review is part of the MVP. Editing and execution gating are optional stretch goals.
+
+Read-only review (MVP):
+
+- [ ] Add a review view to the platform dashboard listing discovered flows and generated tests.
+- [ ] Group and filter the list by persona (read-only derived label from Phase 7; the reviewer never sets persona).
+- [ ] Show per-test provenance: source `session_id`/`trace_id`, support count, golden assertions.
+- [ ] Let the reviewer mark each generated test approved or discarded.
+- [ ] Persist approval/discard state in a lightweight JSON store.
+
+Optional (time-permitting):
+
+- [ ] Edit flow steps or assertions in the UI (persona re-derives from edited steps).
+- [ ] Gate which tests the runner executes based on approval state.
+
 ## MVP Completion Checklist
 
 - [x] Medusa runs locally.
@@ -313,3 +344,4 @@ Validation:
 - [ ] Generated tests are executable.
 - [ ] Golden response comparison works.
 - [ ] Regression report is generated.
+- [ ] HITL review: discovered flows and generated tests are reviewable in the dashboard with approve/discard.

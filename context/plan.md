@@ -141,7 +141,7 @@ Admin APIs:
 - View a specific order by ID.
 - Edge cases: call Store APIs without a publishable API key, add a non-existing product variant, complete checkout with an empty cart, send payloads with missing required fields.
 
-`registered_customer`:
+`registered_customer` (realized only via LLM-varied traffic — see §8.4):
 
 - Register an account.
 - Log in.
@@ -186,6 +186,8 @@ Each request log should contain:
 }
 ```
 
+Response-body reduction rule: to keep Elasticsearch light, response bodies are not logged unbounded. Each logged `response_body` is truncated to a maximum of 8 KB; for large arrays, only the first element plus an array-length count is logged; for endpoints known to return large catalogs (for example `GET /store/products`), a schema snapshot is stored instead of full content. The same reduction is applied to `request_payload`. This makes the §18 risk ("response bodies are too large for logs") concrete rather than aspirational.
+
 ### 7.2 Integration Approach
 
 MVP approach:
@@ -196,7 +198,7 @@ MVP approach:
 - Extract `user_role` from the JWT `actor_type` in the auth context (`null` for unauthenticated guests).
 - Log structured JSON lines to stdout or a log file.
 - Use Filebeat or Logstash to send logs to Elasticsearch.
-- Use Kibana to inspect and search logs by persona, session, trace, endpoint, and response code.
+- Use Kibana to inspect and search logs by `user_role`, session, trace, endpoint, and response code (no persona field is logged — persona is emergent, §10.3).
 
 Pipeline:
 
@@ -246,7 +248,7 @@ The behavior engine must recover signal from the combined, messy log stream rath
 
 ### 8.2 LLM-Varied Traffic
 
-For the LLM-varied portion, a Claude API call generates realistic session narratives that are then translated into API sequences. Example prompt:
+For the LLM-varied portion, a Claude API call generates realistic session narratives that are then translated into API sequences. Model selection: use Claude Haiku 4.5 (`claude-haiku-4-5-20251001`) for bulk narrative generation given its low cost and latency, and reserve Claude Opus 4.8 (`claude-opus-4-8`) for the low-volume flow-naming, anomaly-detection, and assertion-recommendation calls described in §10.5. Expected MVP volume is roughly 20–40 narrative generations, well within a few cents of API spend. Example prompt:
 
 > You are a realistic e-commerce user interacting with a store API. Given the following available endpoints, generate a plausible sequence of 5 to 15 API calls a real user might make. Vary the order, skip optional steps sometimes, abandon carts, retry after failures, and occasionally browse without buying.
 
@@ -370,12 +372,26 @@ The AI engine analyzes grouped logs and produces test candidates.
 - PrefixSpan is better for discovering full behavior flows with optional intermediate steps, but it requires support thresholds and pruning to avoid too many patterns.
 - Markov Chains are useful for transition probabilities and anomaly hints, but they are supporting signals rather than the primary test generation algorithm.
 
-### 10.3 Persona Classification Rules
+### 10.3 Persona As An Emergent Flow Attribute
 
-- Requests involving `/admin/*` and user authentication -> `Admin Operator`.
-- Requests involving `/store/customers` or customer authentication -> `Registered Customer`.
-- Requests involving `/store/carts` without customer authentication -> `Guest Shopper`.
-- Sessions with many `4xx` or `5xx` responses -> `Edge Case User`.
+Personas are not assigned to sessions up front. Instead, flows are mined from the raw, unlabeled sequence stream, and persona is derived deterministically from the endpoint content of each discovered flow:
+
+- `requires_auth: true` if the sequence contains `/auth/customer/*` or `/store/customers`.
+- `is_admin: true` if the sequence contains `/admin/*`.
+- `has_errors: true` if the sequence contains any `4xx` or `5xx` response.
+
+Personas then fall out of these attributes:
+
+- `is_admin` -> **Admin Operator**.
+- `requires_auth` and not `is_admin` -> **Registered Customer**.
+- not `requires_auth` and not `is_admin` -> **Guest Shopper**.
+- `has_errors` is an orthogonal overlay (an **Edge Case** flag), not a mutually exclusive persona; any flow may also carry it.
+
+For sessions that change role mid-stream — for example a guest who registers and then completes checkout (Medusa supports cart transfer) — persona is resolved by the highest-privilege attribute reached in the session (`is_admin` > `requires_auth` > guest).
+
+Why emergent rather than JWT-assigned: classifying sessions by the JWT `actor_type` before mining would let a skeptic argue the engine "discovered" nothing — the token simply told it the role. By separating authenticated from guest behavior from the sequences alone, the system demonstrates genuine discovery. The JWT `user_role` is retained, but only as a held-out ground-truth label used to **score** classification accuracy (see §10.6), never as an input to the classifier.
+
+Note that guest and registered-customer flows share most of their path (`browse -> cart -> line-items -> checkout`); the only behavioral discriminator is the presence of the authentication sub-flow. This is precisely why the distinction is sharp (a hard auth boundary) and why a deterministic attribute, not an LLM, is the correct classifier here.
 
 ### 10.4 Expected Output
 
@@ -405,11 +421,31 @@ The AI engine analyzes grouped logs and produces test candidates.
 }
 ```
 
+### 10.5 LLM-Assisted Naming and Anomaly Detection
+
+The mining and classification above are deterministic. The LLM is applied only to tasks that have no deterministic ground truth, which keeps the "AI-driven" claim honest on the output side as well as the input side:
+
+- **Flow naming**: turn a mined step sequence into a human-readable name such as "Guest abandons cart after applying promo."
+- **Anomaly / contamination detection**: flag sessions where out-of-persona endpoints appear (for example a guest session that hits a customer-auth endpoint) and judge whether it is contamination or a legitimate guest-to-customer transfer.
+- **Assertion recommendation**: suggest which response fields are meaningful to assert for a given flow's golden comparison.
+
+Model selection follows §8.2: Claude Opus 4.8 (`claude-opus-4-8`) for these low-volume judgment calls. These are MVP features, not future enhancements.
+
+### 10.6 Classification and Discovery Validation
+
+The holdout claim (§8.4) is reported as a measured result, not a binary:
+
+- **Classification accuracy**: compare the emergent persona attribute of each session against the held-out JWT `user_role` ground truth, and report precision/recall per persona.
+- **Holdout recovery**: report that PrefixSpan recovers the Registered Customer checkout sequence with support at or above the configured threshold, from N LLM-varied sessions — with a specific support count, not just "present."
+- **Negative control**: confirm the engine does **not** report a high-support flow that was never injected, to show discovery is not hallucinated.
+
 ## 11. Golden Response Store
 
-Golden responses are extracted from Medusa logs and used as references during regression testing.
+Golden responses are used as references during regression testing.
 
-### 11.1 Extraction Algorithm
+> **Schema source (ADR 0001).** The authoritative assertion oracle is the **OpenAPI contract** (Store + Admin), not logged bodies: it is PII-free, authoritative on status codes, and lets production run bodies-off. The spec schema is **intersected with observed responses** from logs to tighten under-specified fields. The extraction algorithm below describes the *observed half* of that intersection (and the sole source when the spec lacks an operation). Generation stays log-driven; the OAS is the assertion oracle only. See `docs/adr/0001-assertion-oracle-openapi-contract.md` and the Phase 8 plan.
+
+### 11.1 Extraction Algorithm (observed half of the OAS intersection)
 
 During the data ingestion phase, for each unique normalized endpoint and response code combination:
 
@@ -453,14 +489,22 @@ Golden responses are versioned by a run timestamp. When a schema changes intenti
     }
   },
   "ignore_fields": ["id", "created_at", "updated_at"],
+  "schema_source": "openapi+observed",
+  "oas_operation_id": "PostCarts",
+  "oas_ref": "#/components/schemas/StoreCart",
+  "oas_version": "2.4.0",
   "captured_at": "2026-06-11T10:00:00Z",
   "source_sessions": ["session-guest-001", "session-guest-007"]
 }
 ```
 
+The `schema_source` and `oas_*` provenance fields trace each golden back to the OpenAPI clause it enforces (ADR 0001); they are omitted when a golden falls back to observed-only.
+
 ## 12. Script Generator
 
 The Script Generator converts behavioral flows into Playwright API tests.
+
+Note: the problem statement lists "Jest or Mocha" as example API-testing frameworks. This project standardizes on Playwright's request context for API testing instead, so a single runner and report format covers both API and any future UI tests. Playwright API testing supersedes the Jest/Mocha deliverable.
 
 ### 12.1 Deduplication Before Generation
 
@@ -589,6 +633,7 @@ Behavioral platform:
 
 - TypeScript for traffic generation, ingestion, and script generation.
 - Python as an optional choice for advanced sequence mining or ML.
+- Claude API (Anthropic SDK): Haiku 4.5 (`claude-haiku-4-5-20251001`) for LLM-varied traffic generation; Opus 4.8 (`claude-opus-4-8`) for flow naming, anomaly/contamination detection, and assertion recommendation.
 
 Test execution:
 
@@ -600,6 +645,23 @@ Containerization:
 - Docker Compose for Medusa, PostgreSQL, Redis if needed, Elasticsearch, Logstash/Filebeat, and Kibana.
 
 ## 16. Implementation Roadmap
+
+> **Numbering note.** This roadmap groups the work into ten conceptual stages. The canonical, finer-grained implementation breakdown — used by `context/checklist.md` and `docs/phase-*-implementation-plan.md` — splits these into **Phase 0–15**. Where the two disagree, the docs/checklist numbering is authoritative. Mapping:
+>
+> | This roadmap | docs / checklist |
+> | --- | --- |
+> | _(setup, implicit)_ | Phase 0: Project Setup |
+> | Phase 1: Initialize Medusa | Phase 1 |
+> | Phase 2: Add Structured Logging | Phase 2 (+ Phase 2.1 Docker Compose) |
+> | Phase 3: Storefront & Dashboard | Phase 3 |
+> | Phase 4: Integrate ELK | Phase 4 |
+> | Phase 5: Generate Synthetic Traffic | Phase 5 |
+> | Phase 6: Data Ingestion | Phase 6 |
+> | Phase 7: Behavioral Modeling | Phase 7 |
+> | Phase 8: Script Generation | Phase 8 (Golden Response Handling) + Phase 9 (Script Generator) |
+> | Phase 9: Execution & Reporting | Phase 10 (Execution) + Phase 11 (Reporting) + Phase 12 (Regression Demo) |
+> | _(reproducibility)_ | Phase 13 (Documentation) + Phase 14 (Final Validation) |
+> | Phase 10: HITL Review Dashboard | Phase 15 |
 
 ### Phase 1: Initialize Medusa
 
@@ -622,7 +684,7 @@ Tasks:
 
 - Add logging middleware to Medusa.
 - Capture request and response metadata.
-- Attach `trace_id`, `session_id`, and `persona`.
+- Attach `trace_id`, `session_id`, and `user_role` (from the JWT `actor_type`). Do **not** log a persona field — persona is emergent and derived later in Phase 7 (§10.3).
 - Log JSON lines.
 - Mask sensitive fields such as passwords and tokens.
 
@@ -665,7 +727,7 @@ Tasks:
 
 - Implement traffic generator flows for guest, customer, admin, and edge cases.
 - Call real Medusa APIs.
-- Attach persona, session, and trace headers.
+- Attach `session_id` and `trace_id` headers only — **no persona header** (see §8 and §10.3; the generator must not label sessions, or the emergent-discovery claim collapses). Run Medusa with `LOG_CAPTURE_BODIES=true` so bodies reach the logs for golden extraction.
 - Generate enough data, for example 100-500 sessions.
 
 Deliverable:
@@ -702,7 +764,7 @@ Deliverable:
 
 - A list of behavior flows ready for test generation.
 
-### Phase 8: Script Generation
+### Phase 8: Script Generation (docs Phase 8 Golden Handling + Phase 9 Script Generator)
 
 Tasks:
 
@@ -715,7 +777,7 @@ Deliverable:
 
 - Generated test suite in `generated-tests/`.
 
-### Phase 9: Execution And Reporting
+### Phase 9: Execution And Reporting (docs Phase 10 Execution + Phase 11 Reporting + Phase 12 Regression Demo)
 
 Tasks:
 
@@ -727,6 +789,26 @@ Tasks:
 Deliverable:
 
 - Complete regression report.
+
+### Phase 10: HITL Review Dashboard (docs Phase 15)
+
+A human-in-the-loop review surface over the discovered flows and generated tests. The minimal **read-only review is part of the MVP**; richer controls are optional stretch goals.
+
+MVP tasks (read-only review):
+
+- Extend the platform dashboard with a review view of discovered flows and generated tests.
+- Group and filter the list by persona — the read-only derived label from Phase 7. The reviewer never sets persona (see §10.3).
+- Show per-test provenance: source `session_id`/`trace_id`, support count, and golden assertions.
+- Let a reviewer mark each generated test `approved` or `discarded`, and persist that state in a lightweight JSON store.
+
+Optional (time-permitting, may defer to §19 future work):
+
+- Edit flow steps or assertions in the UI — persona re-derives from the edited steps (see §10.3).
+- Gate which tests the runner executes based on approval state.
+
+Deliverable:
+
+- A reviewer can browse discovered flows and generated tests, filter by persona, and mark each test approved or discarded, with the decision persisted. (Editing and execution gating are optional extensions.)
 
 ## 17. Acceptance Criteria
 
@@ -742,10 +824,13 @@ The project is considered successful when:
 - Logs are stored in Elasticsearch and visible in Kibana.
 - Logs can be grouped by session.
 - At least five behavioral flows are discovered.
+- Persona is derived as an emergent flow attribute and validated against JWT `user_role` ground truth with reported precision/recall.
+- A negative control confirms no un-injected flow is falsely reported as high-support.
 - At least five Playwright API tests are generated.
 - Generated tests can be executed.
 - The system can detect regressions when response code or response schema changes.
 - JSON and HTML reports are produced.
+- A reviewer can browse discovered flows and generated tests in the dashboard, filter by persona, and mark each test approved or discarded (read-only HITL review; editing and execution gating are optional extensions).
 
 ## 18. Risks And Mitigations
 
@@ -764,7 +849,6 @@ The project is considered successful when:
 
 ## 19. Future Enhancements
 
-- Integrate an LLM to name flows and summarize personas.
 - Use embeddings to cluster user behavior.
 - Add anomaly detection for unusual API sequences.
 - Expand the platform dashboard with live flow, persona, and regression analytics.

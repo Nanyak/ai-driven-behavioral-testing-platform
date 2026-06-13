@@ -47,7 +47,6 @@ if (existsSync(middlewarePath)) {
     "timestamp",
     "trace_id",
     "session_id",
-    "persona",
     "user_role",
     "user_id",
     "method",
@@ -72,7 +71,6 @@ if (existsSync(middlewarePath)) {
   requireSnippet(middleware, "randomUUID()", "trace_id generation");
   requireSnippet(middleware, "traceparent", "W3C traceparent parsing");
   requireSnippet(middleware, "getSessionId(req)", "session_id header or cookie lookup");
-  requireSnippet(middleware, "x-persona", "persona header lookup");
   requireSnippet(middleware, "SENSITIVE_KEY_PATTERN", "sensitive value masking");
   requireSnippet(middleware, "SAFE_HEADER_NAMES", "safe header allowlist");
   requireSnippet(middleware, "LOG_CAPTURE_BODIES", "body capture feature flag");

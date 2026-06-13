@@ -23,8 +23,9 @@ Add structured Medusa request logging so API traffic can be mined later for pers
    - Read or generate `trace_id`.
    - Parse W3C `traceparent` when present instead of storing the whole header as the trace ID.
    - Read `session_id` from headers or cookies.
-   - Read `persona` from custom persona headers.
-   - Capture user role and user/customer/admin ID when authentication context exposes them.
+   - **Do not read or log a `persona` field.** Persona is intentionally *not* assigned at the logging layer — it is derived later as an emergent flow attribute in Phase 7 (plan §10.3 and the `persona-classification` memory). Logging a persona here would reintroduce the circularity the design avoids.
+   - Capture `user_role` from the JWT `actor_type` (`customer`, `admin`, or `null` for unauthenticated guests). This is the JWT-derived signal and doubles as the held-out ground truth for Phase 7 validation.
+   - Capture user/customer/admin ID when the authentication context exposes it.
 
 3. Capture response context.
    - Wrap `res.json` and `res.send` to capture the returned body without changing the response.
@@ -32,11 +33,12 @@ Add structured Medusa request logging so API traffic can be mined later for pers
    - Capture response size when available.
    - Disable request and response body logging by default in production-style logs.
    - Allow body logging only when `LOG_CAPTURE_BODIES=true`, still with redaction and reduction.
+   - **Body capture is enrichment, not a hard requirement (ADR 0001).** The golden **assertion oracle is the OpenAPI spec** (Phase 8), which is PII-free and needs no logged bodies — so production can run **bodies-off** and still produce a valid oracle. Bodies remain useful for two things: realistic **sample request payloads** in generated tests (Phase 9 reuses `request_payload`) and **tightening** under-specified spec schemas against real responses (the observed half of Phase 8's intersection). For the MVP we therefore run `LOG_CAPTURE_BODIES=true` in dev for richer payloads and tighter schemas; this is safe because traffic runs against synthetic data with a mock payment provider (no real PII/PCI). The masking + reduction below is what keeps body capture production-safe when it is enabled.
 
 4. Protect sensitive values.
    - Recursively mask passwords, tokens, secrets, cookies, authorization values, API keys, sessions, phone numbers, emails, addresses, PAN/card/payment fields, account IDs, and similar fields.
    - Mask sensitive headers and preserve only safe operational headers such as content type, user agent, accept language, and content length.
-   - Limit large strings, arrays, objects, and deep response structures.
+   - Apply the plan §7.1 reduction rules so Elasticsearch stays light: truncate each logged `response_body`/`request_payload` to a maximum of 8 KB; for large arrays log only the first element plus an array-length count; for endpoints known to return large catalogs (e.g. `GET /store/products`) store a schema snapshot instead of full content.
    - Record whether bodies were captured or disabled so ingestion can distinguish missing data from intentionally omitted data.
 
 5. Emit JSON lines.
@@ -84,8 +86,8 @@ The `medusa` service bind mounts `apps/medusa` for development, mounts the root 
 
 - Medusa has request logging middleware configured for API routes.
 - Logs include event type, level, timestamp, method, raw endpoint, normalized endpoint, query parameters, selected headers, response code, response size, duration, remote IP, and user agent.
-- Logs include trace, session, persona, role, and actor identity fields when available.
+- Logs include trace, session, `user_role`, and actor identity fields when available. Persona is intentionally **not** logged or read from headers — it is derived later as an emergent flow attribute in Phase 7 (plan §10.3).
 - Sensitive request and response values are masked.
-- Request and response bodies are disabled by default and can be enabled with `LOG_CAPTURE_BODIES=true`.
+- Request and response bodies are disabled by default and can be enabled with `LOG_CAPTURE_BODIES=true`. Bodies are enrichment only — the golden oracle is the OpenAPI spec (ADR 0001), so the pipeline still functions with bodies off.
 - Logs are emitted as JSON lines to stdout and a log file.
 - Phase 2 verification passes.

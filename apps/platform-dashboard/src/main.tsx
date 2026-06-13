@@ -31,7 +31,6 @@ function baseHeaders() {
   return {
     "Content-Type": "application/json",
     "x-session-id": "dashboard-status-session",
-    "x-persona": "admin_operator",
   };
 }
 
