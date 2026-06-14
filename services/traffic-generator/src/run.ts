@@ -41,23 +41,26 @@ interface SessionResult {
 const returnedOrders = new Set<string>();
 const refundedOrders = new Set<string>();
 
-/** Per-type identity split for the leaves where identity isn't fixed by type (plan §4). */
+/**
+ * Per-type identity split for the leaves where identity isn't fixed by type (plan §4).
+ * Cart-bearing leaves (cartAbandon, checkoutAbandon, multiItemCheckout) are always
+ * returning — the storefront requires auth to add to cart. directLanding guest identity
+ * applies only to bounce/browse intents; cart intents force auth in dispatch.
+ */
 const IDENTITY_SPLIT: Partial<Record<SessionType, Partial<Record<Identity, number>>>> = {
   bounce: { guest: 90, returning: 10 },
   browse: { guest: 90, returning: 10 },
-  cartAbandon: { guest: 75, returning: 25 },
-  checkoutAbandon: { guest: 75, returning: 25 },
+  cartAbandon: { returning: 100 },
+  checkoutAbandon: { returning: 100 },
   directLanding: { guest: 70, returning: 30 },
   comparisonBrowse: { guest: 80, returning: 20 },
-  multiItemCheckout: { guest: 60, returning: 40 },
+  multiItemCheckout: { returning: 100 },
 };
 
 function identityFor(type: SessionType): Identity {
   const split = IDENTITY_SPLIT[type];
   if (split) return splitIdentity(split);
   switch (type) {
-    case "guestCheckout":
-      return "guest";
     case "returningCheckout":
     case "orderStatus":
     case "repeatOrderCheck":
@@ -122,28 +125,18 @@ async function dispatch(
     case "bounce":
       return returning
         ? (await runReturningFlow(client, drawOrSynth(state), "bounce", promo)).steps
-        : (await runGuestShop(client, "bounce", promo)).steps;
+        : (await runGuestShop(client, "bounce")).steps;
 
     case "browse":
       return returning
         ? (await runReturningFlow(client, drawOrSynth(state), "browse", promo)).steps
-        : (await runGuestShop(client, "browse", promo)).steps;
+        : (await runGuestShop(client, "browse")).steps;
 
     case "cartAbandon":
-      return returning
-        ? (await runReturningFlow(client, drawOrSynth(state), "cartAbandon", promo)).steps
-        : (await runGuestShop(client, "cartAbandon", promo)).steps;
+      return (await runReturningFlow(client, drawOrSynth(state), "cartAbandon", promo)).steps;
 
     case "checkoutAbandon":
-      return returning
-        ? (await runReturningFlow(client, drawOrSynth(state), "checkoutAbandon", promo)).steps
-        : (await runGuestShop(client, "checkoutAbandon", promo)).steps;
-
-    case "guestCheckout": {
-      const s = await runGuestShop(client, "buy", promo);
-      if (s.email) poolOrder(state, s, s.email, s.token);
-      return s.steps;
-    }
+      return (await runReturningFlow(client, drawOrSynth(state), "checkoutAbandon", promo)).steps;
 
     case "returningCheckout": {
       const acct = drawOrSynth(state);
@@ -160,10 +153,12 @@ async function dispatch(
     }
 
     case "directLanding": {
-      const acct = returning ? drawOrSynth(state) : null;
       // Weighted toward bounce/browse since most share-link clicks don't convert.
       const landingIntents: DirectIntent[] = ["bounce", "bounce", "browse", "browse", "cartAbandon", "buy"];
       const landingIntent = landingIntents[Math.floor(Math.random() * landingIntents.length)];
+      // Cart-bearing intents require auth; browse/bounce intents honour the identity split.
+      const cartBearing = landingIntent === "cartAbandon" || landingIntent === "buy";
+      const acct = (cartBearing || returning) ? drawOrSynth(state) : null;
       const s = await runDirectLandingFlow(client, acct, landingIntent, promo);
       if (landingIntent === "buy" && s.email) poolOrder(state, s, s.email, s.token);
       return s.steps;
@@ -175,7 +170,7 @@ async function dispatch(
     }
 
     case "multiItemCheckout": {
-      const acct = returning ? drawOrSynth(state) : null;
+      const acct = drawOrSynth(state);
       const multiIntent = chance(0.35) ? "cartAbandon" : "buy";
       const s = await runMultiItemFlow(client, acct, multiIntent, promo);
       if (multiIntent === "buy" && s.email) poolOrder(state, s, s.email, s.token);
@@ -193,7 +188,7 @@ async function dispatch(
 
     case "orderStatus": {
       const order = drawReturningOrder(state, false);
-      if (!order) return (await runGuestShop(client, "browse", promo)).steps; // degrade
+      if (!order) return (await runGuestShop(client, "browse")).steps; // degrade
       const acct = poolAccountFor(state, order.ownerEmail) ?? synthAccount();
       return (
         await runOrderStatusFlow(client, acct, order, cfg.eventProbs.reorderDuringStatus)
@@ -202,14 +197,14 @@ async function dispatch(
 
     case "repeatOrderCheck": {
       const order = drawReturningOrder(state, false);
-      if (!order) return (await runGuestShop(client, "browse", promo)).steps; // degrade
+      if (!order) return (await runGuestShop(client, "browse")).steps; // degrade
       const acct = poolAccountFor(state, order.ownerEmail) ?? synthAccount();
       return (await runRepeatOrderStatusFlow(client, acct, order)).steps;
     }
 
     case "returns": {
       const order = drawReturningOrder(state, true);
-      if (!order) return (await runGuestShop(client, "browse", promo)).steps; // degrade
+      if (!order) return (await runGuestShop(client, "browse")).steps; // degrade
       const acct = poolAccountFor(state, order.ownerEmail) ?? synthAccount();
       const { session, returnId, filed } = await runReturnFlow(client, acct, order);
       if (filed) {
@@ -314,7 +309,6 @@ async function stage0(cfg: TrafficConfig, state: RunState): Promise<SessionResul
 function applyFloors(counts: Record<SessionType, number>, floors: Floors): void {
   counts.newCheckout = Math.max(counts.newCheckout, floors.holdout);
   counts.returningCheckout = Math.max(counts.returningCheckout, floors.returningCheckout);
-  counts.guestCheckout = Math.max(counts.guestCheckout, floors.guestCheckout);
   counts.returns = Math.max(counts.returns, floors.returns);
   counts.adminRefund = Math.max(counts.adminRefund, floors.linkedRefunds);
 }
@@ -416,7 +410,6 @@ function countOk(results: SessionResult[], type: SessionType, action: string): n
 
 function printAcceptance(all: SessionResult[], state: RunState, floors: Floors): void {
   const holdout = countOk(all, "newCheckout", "complete_checkout");
-  const guestCheckouts = countOk(all, "guestCheckout", "complete_checkout");
   const returningCheckouts = countOk(all, "returningCheckout", "complete_checkout");
   const returnsFiled = all.filter((r) => r.steps.some((s) => s.action === "request_return" && s.ok)).length;
   const linkedRefunds = [...refundedOrders].filter((id) => returnedOrders.has(id)).length;
@@ -438,7 +431,6 @@ function printAcceptance(all: SessionResult[], state: RunState, floors: Floors):
 
   console.log("\nAcceptance gates (plan §7)");
   console.log(`  ${flag(holdout, floors.holdout)} holdout (new-customer checkout):   ${holdout} / ≥${floors.holdout}`);
-  console.log(`  ${flag(guestCheckouts, floors.guestCheckout)} guest checkouts:               ${guestCheckouts} / ≥${floors.guestCheckout}`);
   console.log(`  ${flag(returningCheckouts, floors.returningCheckout)} returning checkouts:           ${returningCheckouts} / ≥${floors.returningCheckout}`);
   console.log(`  ${flag(returnsFiled, floors.returns)} returns filed:                 ${returnsFiled} / ≥${floors.returns}`);
   console.log(`  ${flag(linkedRefunds, floors.linkedRefunds)} cross-role linked refunds:     ${linkedRefunds} / ≥${floors.linkedRefunds}`);

@@ -2,7 +2,8 @@ import { StoreSession } from "../actions.js";
 import type { MedusaClient } from "../client.js";
 import type { PoolAccount } from "../state.js";
 import { chance } from "../noise.js";
-import type { ShopIntent } from "./guest.js";
+/** Full set of intents a returning (authenticated) session can take. */
+export type ReturningIntent = "bounce" | "browse" | "cartAbandon" | "checkoutAbandon" | "buy";
 
 /**
  * Checkout abandonment cut weighted toward the payment step (Baymard Institute
@@ -28,7 +29,7 @@ function baymarkCut(stepsLength: number): number {
 export async function runReturningFlow(
   client: MedusaClient,
   account: PoolAccount,
-  intent: ShopIntent,
+  intent: ReturningIntent,
   validPromoCode?: string
 ): Promise<StoreSession> {
   const session = new StoreSession(client);

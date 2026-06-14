@@ -57,25 +57,24 @@ export type MixProfile = "realistic" | "signal-rich" | "smoke";
  * (plan §7). One key per taxonomy leaf.
  */
 export interface Weights {
-  bounce: number;           // A1
-  browse: number;           // A2
-  cartAbandon: number;      // B1
-  checkoutAbandon: number;  // B2
-  guestCheckout: number;    // C1
-  returningCheckout: number; // C2
-  newCheckout: number;      // C3 (holdout, LLM-only)
-  directLanding: number;    // C4 — share-link / ad product landing
-  comparisonBrowse: number; // A3 — high product-view research session
-  multiItemCheckout: number; // C5 — multi-browse-add-checkout
-  orderStatus: number;      // D1
-  repeatOrderCheck: number; // D1b — repeated status checks (post-purchase anxiety)
-  profileMgmt: number;      // D2
-  returns: number;          // E
-  adminCatalog: number;     // F1
-  adminFulfill: number;     // F2
-  adminRefund: number;      // F3
-  adminSupport: number;     // F4
-  edge: number;             // G
+  bounce: number;            // A1
+  browse: number;            // A2
+  cartAbandon: number;       // B1
+  checkoutAbandon: number;   // B2
+  returningCheckout: number; // C1 — auth-required checkout (anonymous cart removed)
+  newCheckout: number;       // C2 (holdout, LLM-only)
+  directLanding: number;     // C3 — share-link / ad product landing
+  comparisonBrowse: number;  // A3 — high product-view research session
+  multiItemCheckout: number; // C4 — multi-browse-add-checkout
+  orderStatus: number;       // D1
+  repeatOrderCheck: number;  // D1b — repeated status checks (post-purchase anxiety)
+  profileMgmt: number;       // D2
+  returns: number;           // E
+  adminCatalog: number;      // F1
+  adminFulfill: number;      // F2
+  adminRefund: number;       // F3
+  adminSupport: number;      // F4
+  edge: number;              // G
 }
 
 /** Conditional event probabilities within a flow (plan §4.1). */
@@ -98,7 +97,6 @@ export interface EventProbs {
 export interface Floors {
   holdout: number;
   returningCheckout: number;
-  guestCheckout: number;
   returns: number;
   linkedRefunds: number;
   promoSuccess: number;
@@ -134,8 +132,7 @@ const REALISTIC_WEIGHTS: Weights = {
   browse: 12,
   cartAbandon: 11,
   checkoutAbandon: 8,
-  guestCheckout: 7,
-  returningCheckout: 5,
+  returningCheckout: 12, // absorbed former guestCheckout weight (7 → +7)
   newCheckout: 2,
   directLanding: 7,
   comparisonBrowse: 6,
@@ -154,8 +151,7 @@ const REALISTIC_WEIGHTS: Weights = {
 /** Signal-rich: purchase/return/refund leaves boosted for behavioural mining. */
 const SIGNAL_RICH_WEIGHTS: Weights = {
   ...REALISTIC_WEIGHTS,
-  guestCheckout: 12,
-  returningCheckout: 10,
+  returningCheckout: 22, // absorbed former guestCheckout boost (12 → +10 from original returning)
   newCheckout: 4,
   multiItemCheckout: 7,
   returns: 7,
@@ -199,8 +195,7 @@ const DEFAULT_EVENT_PROBS: EventProbs = {
 
 const DEFAULT_FLOORS: Floors = {
   holdout: 6,
-  returningCheckout: 5,
-  guestCheckout: 5,
+  returningCheckout: 10,
   returns: 5,
   linkedRefunds: 5,
   promoSuccess: 3,
@@ -209,8 +204,7 @@ const DEFAULT_FLOORS: Floors = {
 /** Smoke profile shrinks floors so a tiny run can still pass structurally. */
 const SMOKE_FLOORS: Floors = {
   holdout: 2,
-  returningCheckout: 2,
-  guestCheckout: 2,
+  returningCheckout: 4,
   returns: 1,
   linkedRefunds: 1,
   promoSuccess: 1,

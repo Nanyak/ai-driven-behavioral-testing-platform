@@ -26,6 +26,10 @@ sessions, JWT-reuse without re-login, and post-purchase tracking-anxiety loops.
 - It never hardcodes product or order IDs. Every runtime ID (region, product,
   variant, cart, order, return) is resolved against the live backend so the run
   is reproducible against any seeded Medusa instance.
+- It never creates an anonymous (guest) cart. The storefront requires
+  authentication before adding to cart, so every cart-bearing session uses a
+  pooled returning account. Unauthenticated sessions are browse-only (bounce,
+  browse, comparisonBrowse, directLanding bounce/browse intents).
 
 ## Layout
 
@@ -115,41 +119,47 @@ then topped up to the floors (plan §7). Example counts shown for `N=300`.
 | `signal-rich` | 300   | same shape, purchase/return/refund leaves boosted        |
 | `smoke`       | 40    | tiny structural check                                    |
 
-| Group | Leaves                                                        | ~Weight |
-| ----- | ------------------------------------------------------------- | ------- |
-| A     | bounce, deeper browse, comparison-browse (no cart)            | 30%     |
-| B     | cart abandon, checkout abandon                                | 17%     |
-| C     | direct landing, guest / returning / multi-item / new checkout | 27%     |
-| D     | order status, repeat order check, profile management          | 10%     |
-| E     | returns                                                       | 3%      |
-| F     | admin catalog / fulfill / refund / support                    | 6%      |
-| G     | edge / error                                                  | 2%      |
+| Group | Leaves                                                              | ~Weight |
+| ----- | ------------------------------------------------------------------- | ------- |
+| A     | bounce, deeper browse, comparison-browse (no cart)                  | 30%     |
+| B     | cart abandon, checkout abandon (both auth-required)                 | 20%     |
+| C     | direct landing, returning / multi-item / new checkout (all auth)    | 24%     |
+| D     | order status, repeat order check, profile management                | 10%     |
+| E     | returns                                                             | 3%      |
+| F     | admin catalog / fulfill / refund / support                          | 6%      |
+| G     | edge / error                                                        | 2%      |
 
 ### Session types
 
-| Type               | Stage | Identity          | Distinguishing log signal                                    |
-| ------------------ | ----- | ----------------- | ------------------------------------------------------------ |
-| `bounce`           | 1     | 90% guest         | view 1–2 products, exit                                      |
-| `browse`           | 1     | 90% guest         | search/filter + 1–2 product views, no cart                  |
-| `comparisonBrowse` | 1     | 80% guest         | **4–8 `view_product` calls**, search-first 60%              |
-| `cartAbandon`      | 1     | 75% guest         | cart created, items added, no checkout                       |
-| `checkoutAbandon`  | 1     | 75% guest         | checkout started, Baymard-weighted cut (60% at payment)      |
-| `directLanding`    | 1     | 70% guest         | **first step is `view_product`**, no leading `browse_products` |
-| `guestCheckout`    | 1     | guest             | complete purchase with no auth                               |
-| `returningCheckout`| 1     | returning         | `login` (or `resume_session`) → cart → complete             |
-| `multiItemCheckout`| 1     | 60% guest         | **3–5 browse→add cycles**, cart has 3+ line items           |
-| `newCheckout`      | 1     | new               | HOLDOUT — LLM-varied `register → login → checkout`          |
-| `profileMgmt`      | 1     | returning         | login → view/update profile → maybe add address             |
-| `adminCatalog`     | 1     | admin             | list/view/update products                                    |
-| `edge`             | 1     | —                 | intentional 4xx/5xx edge cases                              |
-| `orderStatus`      | 2     | returning         | login → view orders → view specific order → maybe reorder   |
-| `repeatOrderCheck` | 2     | returning         | login → **view same order 3–5×** (tracking anxiety)        |
-| `returns`          | 2     | returning         | login → request return against a real completed order        |
-| `adminFulfill`     | 2     | admin             | fulfill a real order from the order pool                     |
-| `adminRefund`      | 2     | admin             | refund the **same `order_id`** a customer returned (linkage) |
-| `adminSupport`     | 2     | admin             | search customers by email                                    |
+| Type               | Stage | Identity          | Distinguishing log signal                                      |
+| ------------------ | ----- | ----------------- | -------------------------------------------------------------- |
+| `bounce`           | 1     | 90% guest         | view 1–2 products, exit                                        |
+| `browse`           | 1     | 90% guest         | search/filter + 1–2 product views, no cart                    |
+| `comparisonBrowse` | 1     | 80% guest         | **4–8 `view_product` calls**, search-first 60%                |
+| `cartAbandon`      | 1     | returning         | login → cart created, items added, no checkout                 |
+| `checkoutAbandon`  | 1     | returning         | login → checkout started, Baymard-weighted cut (60% at payment)|
+| `directLanding`    | 1     | 70% guest†        | **first step is `view_product`**, no leading `browse_products` |
+| `returningCheckout`| 1     | returning         | `login` (or `resume_session`) → cart → complete               |
+| `multiItemCheckout`| 1     | returning         | login → **3–5 browse→add cycles**, cart has 3+ line items     |
+| `newCheckout`      | 1     | new               | HOLDOUT — LLM-varied `register → login → checkout`            |
+| `profileMgmt`      | 1     | returning         | login → view/update profile → maybe add address               |
+| `adminCatalog`     | 1     | admin             | list/view/update products                                      |
+| `edge`             | 1     | —                 | intentional 4xx/5xx edge cases                                |
+| `orderStatus`      | 2     | returning         | login → view orders → view specific order → maybe reorder     |
+| `repeatOrderCheck` | 2     | returning         | login → **view same order 3–5×** (tracking anxiety)           |
+| `returns`          | 2     | returning         | login → request return against a real completed order          |
+| `adminFulfill`     | 2     | admin             | fulfill a real order from the order pool                       |
+| `adminRefund`      | 2     | admin             | refund the **same `order_id`** a customer returned (linkage)  |
+| `adminSupport`     | 2     | admin             | search customers by email                                      |
+
+† `directLanding` guest identity applies only to bounce/browse intents. Cart-bearing
+  direct-landing intents (`cartAbandon`, `buy`) always use a returning account.
 
 ### Identity and JWT-reuse
+
+The storefront requires authentication before adding to cart, so all cart-bearing
+sessions use a pooled returning account. Browse-only sessions (bounce, browse,
+comparisonBrowse, directLanding bounce/browse intents) are unauthenticated.
 
 Returning-identity sessions draw a pooled account seeded in Stage 0. Roughly
 55% of those sessions skip the auth endpoint entirely because the JWT is still

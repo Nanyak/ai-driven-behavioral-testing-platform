@@ -498,11 +498,45 @@ async function structuredRequestLogger(
   next()
 }
 
+/**
+ * Require an authenticated customer JWT for all cart and checkout mutations.
+ * The storefront gates "Add to cart" behind sign-in, but that is a UI-only gate —
+ * anyone with curl can hit POST /store/carts directly. This middleware closes
+ * that gap at the API layer.
+ *
+ * Covered: cart creation, line-item add/update/remove, shipping, payment
+ * collection, and checkout completion. GET requests are intentionally left open
+ * so order-confirmation pages can load a cart without re-authenticating.
+ */
+function requireCustomerAuth(
+  req: MedusaRequest,
+  res: MedusaResponse,
+  next: MedusaNextFunction
+) {
+  const authContext = (req as MedusaRequest & {
+    auth_context?: { actor_type?: string }
+  }).auth_context
+
+  if (authContext?.actor_type === "customer") {
+    return next()
+  }
+
+  res.status(401).json({
+    type: "unauthorized",
+    message: "Cart and checkout operations require a customer account. Please sign in."
+  })
+}
+
 export default defineMiddlewares({
   routes: [
     {
       matcher: "/*",
       middlewares: [structuredRequestLogger]
+    },
+    {
+      matcher: /^\/store\/(carts|payment-collections)/,
+      method: ["POST", "PATCH", "DELETE"],
+      middlewares: [requireCustomerAuth]
     }
   ]
 })
