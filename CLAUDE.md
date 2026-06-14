@@ -142,6 +142,7 @@ Do not assume any service is running. Use `npm run check:phaseN` or a direct
 | Medusa API endpoints + seed data | `docs/phase-1-implementation-plan.md` |
 | Storefront UI | `apps/storefront/` README |
 | Assertion oracle design | `docs/adr/0001-assertion-oracle-openapi-contract.md` |
+| Cross-run dedup / skip gate / flow signature | `docs/adr/0002-cross-run-flow-signature-skip-gate.md` |
 | Overall architecture decisions | `docs/adr/` |
 
 ## 8. Hard constraints (never break these)

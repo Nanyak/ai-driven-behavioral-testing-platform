@@ -20,7 +20,9 @@ services/behavior-engine/
     ngram.ts             # n-gram mining (baseline)
     prefixspan.ts        # variable-length frequent sequence mining
     markov.ts            # transition probabilities (supporting signal)
-    dedup.ts             # dedup + prefix clustering + per-persona cap
+    signature.ts         # canonical flow signature (normalized step-sequence hash) — shared by dedup, gate, emit
+    dedup.ts             # dedup + prefix clustering + per-persona cap (uses signature.ts)
+    coverage.ts          # load already-covered signatures (generated tests + HITL approvals)
     rank.ts              # score and rank candidates
     naming.ts            # LLM (Opus 4.8) flow naming + anomaly detection
     validate.ts          # classification precision/recall + holdout + control
@@ -55,15 +57,60 @@ Resolve persona:
 3. **Markov chain.** Build a transition-probability matrix between normalized endpoints; use it for anomaly hints and to flag low-probability transitions — a supporting signal, not the primary generator.
 4. **Compare n-gram vs PrefixSpan** output and keep the comparison in the run summary (useful for the writeup).
 
+## Flow signature (one definition, shared) — `signature.ts`
+
+Every "is this the same flow?" question in the pipeline uses **one** key: a stable
+hash of the **normalized step sequence** — the ordered list of `METHOD
+normalized_endpoint` tokens (dynamic segments already collapsed by ingestion, e.g.
+`/store/carts/{id}/line-items`). **Persona is not part of the key** — identity is the
+endpoint sequence, not its derived label. `signature.ts` is the single source of this
+function; `dedup.ts` (below), the cross-run skip gate, and Phase 9's `emit.ts` all
+call it rather than recomputing it (see ADR 0002).
+
 ## Dedup / clustering (before ranking, plan §12.1)
 
-- Collapse flows with **identical** normalized step sequences → keep highest support.
+- Collapse flows with **identical** normalized step sequences (compared by
+  `signature.ts`) → keep highest support.
 - Cluster flows sharing a **common prefix of ≥3 steps** → keep the longest representative.
 - Cap output at **10 canonical flows per persona** to prevent test-suite bloat.
+
+This is a **within-run** collapse only. Cross-run "already has a test" filtering is
+the separate skip gate below.
 
 ## Ranking
 
 Score each candidate by a weighted sum of: support, persona coverage, endpoint importance (checkout/auth weigh higher than browsing), error coverage, and business importance. Emit a sorted list. Keep weights in one config object so they are tunable and explainable.
+
+## Cross-run skip gate (before LLM naming) — `coverage.ts` (ADR 0002)
+
+The within-run dedup above collapses duplicates *inside* a single run. It does **not**
+stop a flow that was already discovered, named, emitted as a test, and reviewed in a
+previous run from being re-processed. The skip gate closes that gap and is the answer
+to "where do we skip flows that already have a test?".
+
+Placement — between ranking and LLM naming:
+
+```
+mine → dedup (within-run) → rank → [SKIP GATE] → naming (LLM) → candidates
+```
+
+1. **Build the coverage manifest** (`coverage.ts`): the set of already-covered flow
+   signatures, from two sources —
+   - the generated test corpus: every `generated-tests/**/*.spec.ts`, read back via
+     the signature each test stamps on itself (Phase 9 `emit.ts`);
+   - the Phase 15 HITL approval JSON store: entries marked `approved` **and** entries
+     marked `discarded` (a human-rejected flow must not re-surface every run).
+2. **Filter ranked flows.** For each ranked canonical flow, compute its `signature`.
+   If it is in the manifest, **drop it before the LLM call** — no naming, no
+   anomaly/assertion call — and exclude it from the emitted candidate set so Phase 9
+   does not regenerate it.
+3. **Record, don't hide.** Count skipped flows in the run summary as
+   `skipped_existing`. A run that mines only already-covered behavior should report
+   `skipped_existing > 0` and few/zero new candidates — legible, not broken.
+
+On a clean checkout with no prior tests, the manifest is empty and every flow is
+treated as new (correct by construction). Only the flows surviving this gate reach the
+LLM, so LLM judgment cost scales with *new* behavior, not total behavior.
 
 ## LLM use (Opus 4.8, `claude-opus-4-8`) — judgment only, never classification
 
@@ -107,6 +154,11 @@ Write `data/validation/classification-report-<runId>.json` with:
 1. **Classification accuracy.** Compare each session's emergent persona against the highest-privilege `role_observed` ground truth; report precision/recall per persona and a confusion matrix.
 2. **Holdout recovery.** Confirm PrefixSpan recovered the registered-customer checkout sequence and report its **support count** (e.g. "support 6"), not a yes/no.
 3. **Negative control.** Confirm no high-support flow corresponds to a sequence that was never injected (guard against hallucinated discovery).
+
+The run summary additionally reports `skipped_existing` — the count of ranked flows
+dropped by the cross-run skip gate because they already have a test or approval
+decision (ADR 0002) — so an incremental run that produces few new candidates is
+explained rather than mistaken for a failure.
 
 ## Acceptance
 

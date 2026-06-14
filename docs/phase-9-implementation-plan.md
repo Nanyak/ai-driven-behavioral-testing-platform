@@ -32,8 +32,10 @@ generated-tests/
 ## Implementation steps
 
 1. **Load candidates** from `services/behavior-engine/data/candidates/`.
-2. **Defensive dedup** (candidates are already deduped in Phase 7, but re-apply): identical step sequences → highest support; common-prefix ≥3 → longest representative; cap 10 per persona.
+2. **Defensive dedup** (candidates are already deduped in Phase 7, but re-apply): identical step sequences → highest support; common-prefix ≥3 → longest representative; cap 10 per persona. Use the **same canonical flow signature** as Phase 7 (`behavior-engine/src/signature.ts`, ADR 0002) — do not define a second "same flow?" key here.
 3. **Per-flow generation.** One `.spec.ts` per canonical flow, grouped into `guest/ customer/ admin/ edge/` folders by emergent persona.
+   - **Filename is derived from the flow signature**, not a sequential index: `<persona>/<short-hash>.spec.ts` where `<short-hash>` is a truncation of the signature. This makes regeneration **idempotent** — re-emitting a flow that already exists writes the same path, so it is a no-op rather than a duplicate or a blind overwrite, and filename collisions are meaningful (same signature = same flow).
+   - **Stamp the flow signature into each test** as a Playwright annotation / header comment (e.g. `test.info().annotations` or a `// flow-signature: <hash>` header). This makes the generated-tests corpus **self-describing**, so the Phase 7 cross-run skip gate (`coverage.ts`, ADR 0002) can rebuild its coverage manifest by reading signatures back out of the emitted `.spec.ts` files.
 4. **Runtime resolution** (never hardcode seeded IDs):
    - product/variant IDs ← `GET /store/products` at test start
    - cart ID ← captured from `POST /store/carts` response
@@ -77,6 +79,7 @@ test("guest_shopper — create cart and add item", async ({ request }) => {
 ## Key decisions
 
 - **One test per canonical flow** — clustering already happened upstream; the generator should not re-expand.
+- **Signature-keyed, idempotent emission (ADR 0002)** — filenames derive from the canonical flow signature and each test stamps that signature on itself, so regeneration is a no-op for already-covered flows and the corpus feeds Phase 7's cross-run skip gate.
 - **All IDs resolved at runtime** — tests must survive a reseed.
 - **Golden comparator is vendored, not reached-back-to** — `services/golden` stays the single source of truth, but it is copied into `generated-tests/_golden/` each run so the generated suite is self-contained and portable.
 

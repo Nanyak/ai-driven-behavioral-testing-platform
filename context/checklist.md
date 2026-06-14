@@ -202,9 +202,13 @@ Staged situation taxonomy (plan §4–§7 — supersedes the flat mix above):
 - [ ] Implement PrefixSpan frequent sequential pattern mining.
 - [ ] Configure minimum support threshold for PrefixSpan.
 - [ ] Prune duplicate or subsumed flows.
+- [ ] Implement a single canonical flow-signature function (`signature.ts`): stable hash of the normalized `METHOD endpoint` step sequence, persona-independent (ADR 0002); reuse it in dedup, the skip gate, and Phase 9 emit.
 - [ ] Deduplicate flows with identical normalized step sequences (keep highest-support).
 - [ ] Cluster flows sharing a common prefix of three or more steps (keep longest representative).
 - [ ] Cap output at ten canonical flows per persona.
+- [ ] Implement the cross-run coverage manifest (`coverage.ts`): collect already-covered signatures from `generated-tests/**/*.spec.ts` and the HITL approval store (approved + discarded).
+- [ ] Apply the cross-run skip gate after ranking and before LLM naming: drop ranked flows whose signature is already covered (ADR 0002).
+- [ ] Report `skipped_existing` count in the run summary.
 - [ ] Compare n-gram output against PrefixSpan output.
 - [ ] Identify the top frequent flows.
 - [ ] Identify important error flows based on `4xx` and `5xx` responses.
@@ -257,6 +261,9 @@ Staged situation taxonomy (plan §4–§7 — supersedes the flat mix above):
 - [ ] Resolve customer/admin tokens at runtime.
 - [ ] Add status code assertions.
 - [ ] Add schema or golden response assertions.
+- [ ] Derive each test filename from the canonical flow signature (`<persona>/<short-hash>.spec.ts`) so regeneration is idempotent (ADR 0002).
+- [ ] Stamp the flow signature into each generated test (annotation / header comment) so the corpus is self-describing for the Phase 7 skip gate.
+- [ ] Reuse the Phase 7 `signature.ts` in the defensive dedup re-pass (no second "same flow?" key).
 - [ ] Write generated tests to `generated-tests/`.
 - [ ] Verify generated tests are syntactically valid.
 
@@ -340,7 +347,7 @@ Read-only review (MVP):
 - [ ] Group and filter the list by persona (read-only derived label from Phase 7; the reviewer never sets persona).
 - [ ] Show per-test provenance: source `session_id`/`trace_id`, support count, golden assertions.
 - [ ] Let the reviewer mark each generated test approved or discarded.
-- [ ] Persist approval/discard state in a lightweight JSON store.
+- [ ] Persist approval/discard state in a lightweight JSON store, recording each entry's flow signature so the Phase 7 skip gate can read approval/discard decisions (ADR 0002).
 
 Optional (time-permitting):
 
