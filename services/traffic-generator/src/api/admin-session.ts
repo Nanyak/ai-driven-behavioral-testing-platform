@@ -10,6 +10,7 @@ import { MISSING, recordStep, type StepResult } from "./step.js";
 export class AdminSession {
   token?: string;
   productIds: string[] = [];
+  stockLocationId?: string;
   steps: StepResult[] = [];
 
   constructor(
@@ -131,27 +132,109 @@ export class AdminSession {
   }
 
   /**
-   * Process a refund against the SAME order_id the customer filed a return on
-   * (plan §5 Stage 2 F3) — the cross-role linkage Phase 7 joins on. VERIFY: the
-   * admin return-receive + refund sequence is the most version-sensitive path in
-   * 2.x; each call degrades to a logged 4xx if the shape is off.
+   * Resolve (and cache) a stock location for receiving returns. The return
+   * receive workflow's inventory step fails ("Cannot receive the Return at
+   * location null") unless the return is bound to a location at begin time.
    */
-  async processRefund(orderId: string, returnId?: string): Promise<ApiResponse> {
-    // Touch the order so an admin event references this order_id even if the
-    // refund call shape is wrong (keeps the linkage joinable on order_id).
-    await this.getOrder(orderId);
-    if (returnId) {
-      const recv = await this.client.request("POST", `/admin/returns/${returnId}/receive`, {
-        token: this.token,
-        body: { items: [] },
-      });
-      this.record("admin_receive_return", "POST", "/admin/returns/{id}/receive", recv);
-    }
-    const res = await this.client.request("POST", `/admin/orders/${orderId}/refunds`, {
+  async resolveStockLocation(): Promise<string | undefined> {
+    if (this.stockLocationId) return this.stockLocationId;
+    const res = await this.client.request("GET", "/admin/stock-locations?limit=1", {
       token: this.token,
-      body: { amount: 1, reason: "return" },
     });
-    return this.record("admin_refund", "POST", "/admin/orders/{id}/refunds", res);
+    this.record("admin_list_stock_locations", "GET", "/admin/stock-locations", res);
+    this.stockLocationId = res.ok ? res.body?.stock_locations?.[0]?.id : undefined;
+    return this.stockLocationId;
+  }
+
+  /**
+   * Begin a draft return for an order (plan §5 Stage 2 F3) and resolve its id.
+   * `location_id` is required for the later receive/confirm to settle. VERIFY:
+   * the begin-return response carries the new return under `return` on this
+   * build; the `order_id` filter is the fallback if a future minor changes that.
+   */
+  async beginReturn(
+    orderId: string,
+    locationId?: string
+  ): Promise<{ returnId?: string; res: ApiResponse }> {
+    const body: Record<string, unknown> = { order_id: orderId };
+    if (locationId) body.location_id = locationId;
+    const res = await this.client.request("POST", "/admin/returns", { token: this.token, body });
+    this.record("admin_begin_return", "POST", "/admin/returns", res);
+    let returnId: string | undefined = res.ok ? res.body?.return?.id : undefined;
+    if (res.ok && !returnId) {
+      const list = await this.client.request(
+        "GET",
+        `/admin/returns?order_id=${encodeURIComponent(orderId)}&order=-created_at&limit=1`,
+        { token: this.token }
+      );
+      returnId = list.ok ? list.body?.returns?.[0]?.id : undefined;
+    }
+    return { returnId, res };
+  }
+
+  /** Add line items to the draft return (plan §5 Stage 2 F3). */
+  async requestReturnItems(
+    returnId: string,
+    items: { id: string; quantity: number }[]
+  ): Promise<ApiResponse> {
+    const res = await this.client.request("POST", `/admin/returns/${returnId}/request-items`, {
+      token: this.token,
+      body: { items },
+    });
+    return this.record("admin_request_return_items", "POST", "/admin/returns/{id}/request-items", res);
+  }
+
+  /** Confirm the return request — the return is now "filed" against the order. */
+  async confirmReturnRequest(returnId: string): Promise<ApiResponse> {
+    const res = await this.client.request("POST", `/admin/returns/${returnId}/request`, {
+      token: this.token,
+      body: {},
+    });
+    return this.record("admin_request_return", "POST", "/admin/returns/{id}/request", res);
+  }
+
+  /** Begin receiving the requested return (creates the order change). */
+  async receiveReturn(returnId: string): Promise<ApiResponse> {
+    const res = await this.client.request("POST", `/admin/returns/${returnId}/receive`, {
+      token: this.token,
+      body: {},
+    });
+    return this.record("admin_receive_return", "POST", "/admin/returns/{id}/receive", res);
+  }
+
+  /** Record received quantities against the in-progress receipt. */
+  async receiveReturnItems(
+    returnId: string,
+    items: { id: string; quantity: number }[]
+  ): Promise<ApiResponse> {
+    const res = await this.client.request("POST", `/admin/returns/${returnId}/receive-items`, {
+      token: this.token,
+      body: { items },
+    });
+    return this.record("admin_receive_return_items", "POST", "/admin/returns/{id}/receive-items", res);
+  }
+
+  /** Confirm receipt — settles the refund against the order. */
+  async confirmReturnReceipt(returnId: string): Promise<ApiResponse> {
+    const res = await this.client.request("POST", `/admin/returns/${returnId}/receive/confirm`, {
+      token: this.token,
+      body: {},
+    });
+    return this.record("admin_confirm_return_receipt", "POST", "/admin/returns/{id}/receive/confirm", res);
+  }
+
+  /**
+   * Cancel an order (plan §5 Stage 2 F5) — the reversal path for an order that
+   * has NOT shipped yet. The backend rejects canceling a fulfilled order ("All
+   * fulfillments must be canceled first"), so callers pass unfulfilled orders.
+   * Canceling reverses the authorized payment (refund-equivalent).
+   */
+  async cancelOrder(orderId: string): Promise<ApiResponse> {
+    const res = await this.client.request("POST", `/admin/orders/${orderId}/cancel`, {
+      token: this.token,
+      body: {},
+    });
+    return this.record("admin_cancel_order", "POST", "/admin/orders/{id}/cancel", res);
   }
 
   async searchCustomer(query: string): Promise<ApiResponse> {

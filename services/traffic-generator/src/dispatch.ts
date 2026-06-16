@@ -9,7 +9,7 @@ import { newCustomerEmail } from "./ids.js";
 import { runGuestShop } from "./flows/guest.js";
 import { runReturningFlow } from "./flows/returning.js";
 import { runOrderStatusFlow, runRepeatOrderStatusFlow, runProfileMgmtFlow } from "./flows/account.js";
-import { runReturnFlow } from "./flows/returns.js";
+import { runReturnInquiryFlow } from "./flows/returns.js";
 import { runDirectLandingFlow, type DirectIntent } from "./flows/direct-landing.js";
 import { runComparisonBrowseFlow } from "./flows/comparison-browse.js";
 import { runMultiItemFlow } from "./flows/multi-item.js";
@@ -17,6 +17,7 @@ import {
   runAdminFlow,
   runAdminFulfillFlow,
   runAdminRefundFlow,
+  runAdminCancelFlow,
   runAdminSupportFlow,
 } from "./flows/admin.js";
 import { runEdgeFlow } from "./flows/edge.js";
@@ -152,40 +153,75 @@ export async function dispatch(
     }
 
     case "returns": {
-      const order = drawReturningOrder(state, true);
+      // Customer return INQUIRY (read-only): the storefront has no customer
+      // return endpoint, so the customer only views an order they received
+      // (fulfilled). Flagging it hands settlement to an admin refund session
+      // (F3) on the same order_id — the cross-role touch.
+      const order = state.drawFulfilledOwnedOrder();
       if (!order) return (await runGuestShop(client, "browse")).steps; // degrade
       const acct = poolAccountFor(state, order.ownerEmail) ?? synthAccount();
-      const { session, returnId, filed } = await runReturnFlow(client, acct, order);
+      state.markReturnRequested(order.orderId);
+      return (await runReturnInquiryFlow(client, acct, order)).steps;
+    }
+
+    case "adminFulfill": {
+      // Stage 2a: fulfill a pooled order so it becomes returnable in F3.
+      const order = state.drawForFulfill();
+      if (!order) {
+        return (await runAdminFlow(client, cfg.adminEmail, cfg.adminPassword, LIGHT_NOISE)).steps;
+      }
+      const { session, fulfilled } = await runAdminFulfillFlow(
+        client,
+        cfg.adminEmail,
+        cfg.adminPassword,
+        order.orderId
+      );
+      if (fulfilled) state.markFulfilled(order.orderId);
+      return session.steps;
+    }
+
+    case "adminRefund": {
+      // Stage 2b: full return+refund lifecycle on a FULFILLED order, preferring
+      // one a customer inquired about (E) so it links cross-role on order_id.
+      // drawReturnable() claims the order synchronously, so concurrent sessions
+      // never open a return on the same order_id.
+      const order = state.drawReturnable();
+      if (!order) {
+        return (await runAdminFlow(client, cfg.adminEmail, cfg.adminPassword, LIGHT_NOISE)).steps;
+      }
+      const { session, returnId, filed, refunded } = await runAdminRefundFlow(
+        client,
+        cfg.adminEmail,
+        cfg.adminPassword,
+        order.orderId
+      );
       if (filed) {
-        state.addReturn({ orderId: order.orderId, returnId: returnId ?? "unknown", ownerEmail: order.ownerEmail });
+        state.addReturn({
+          orderId: order.orderId,
+          returnId: returnId ?? "unknown",
+          ownerEmail: order.ownerEmail,
+        });
+      }
+      if (refunded) {
+        state.markRefunded(order.orderId);
       }
       return session.steps;
     }
 
-    case "adminFulfill": {
-      const order = state.drawOrder();
+    case "adminCancel": {
+      // Stage 2b: cancel an UNFULFILLED order (reversal before shipping).
+      // drawCancelable() claims the order synchronously.
+      const order = state.drawCancelable();
       if (!order) {
         return (await runAdminFlow(client, cfg.adminEmail, cfg.adminPassword, LIGHT_NOISE)).steps;
       }
-      return (await runAdminFulfillFlow(client, cfg.adminEmail, cfg.adminPassword, order.orderId)).steps;
-    }
-
-    case "adminRefund": {
-      const pending = state.drawReturn();
-      const orderId = pending?.orderId ?? state.drawOrder()?.orderId;
-      if (!orderId) {
-        return (await runAdminFlow(client, cfg.adminEmail, cfg.adminPassword, LIGHT_NOISE)).steps;
-      }
-      const session = await runAdminRefundFlow(
+      const { session, canceled } = await runAdminCancelFlow(
         client,
         cfg.adminEmail,
         cfg.adminPassword,
-        orderId,
-        pending?.returnId && pending.returnId !== "unknown" ? pending.returnId : undefined
+        order.orderId
       );
-      if (session.steps.some((s) => s.action === "admin_refund" && s.ok)) {
-        state.markRefunded(orderId);
-      }
+      if (canceled) state.markCanceled(order.orderId);
       return session.steps;
     }
 

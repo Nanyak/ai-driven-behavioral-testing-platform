@@ -5,10 +5,12 @@ export function formatMoney(amount?: number, currency = "USD") {
     return "Price pending";
   }
 
+  // Medusa v2 stores money as decimal major units (e.g. 15 = $15.00), so the
+  // amount is formatted as-is — no division by 100 (that was a Medusa v1 habit).
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: currency.toUpperCase(),
-  }).format(amount / 100);
+  }).format(amount);
 }
 
 export function getVariantPrice(variant?: Variant) {

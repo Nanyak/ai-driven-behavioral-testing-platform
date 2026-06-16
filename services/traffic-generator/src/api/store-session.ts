@@ -447,44 +447,7 @@ export class StoreSession {
     return this.record("apply_promo", "POST", "/store/carts/{id}", res);
   }
 
-  // --- Stage-2 additions (plan §6.5) — VERIFY endpoint shapes against live 2.15.5 ---
-
-  async getReturnReasons(): Promise<ApiResponse> {
-    const res = await this.client.request("GET", "/store/return-reasons", { token: this.token });
-    return this.record("get_return_reasons", "GET", "/store/return-reasons", res);
-  }
-
-  /**
-   * Request a return against a REAL completed order (plan §5 Stage 2 / §risks).
-   * Resolves the order's line-item ids and a return reason at runtime — never
-   * fabricated. VERIFY: `POST /store/returns` body shape
-   * (createAndCompleteReturnOrderWorkflow) varies across Medusa 2.x minors; this
-   * degrades to a logged 4xx if the shape is off rather than crashing.
-   */
-  async requestReturn(orderId: string): Promise<{ returnId?: string; res: ApiResponse }> {
-    const order = await this.client.request("GET", `/store/orders/${orderId}`, {
-      token: this.token,
-    });
-    this.record("view_order", "GET", "/store/orders/{id}", order);
-    const items: any[] = order.ok ? order.body?.order?.items ?? [] : [];
-    if (items.length === 0) {
-      const miss = this.record("request_return", "POST", "/store/returns", MISSING);
-      return { res: miss };
-    }
-    const reasons = await this.getReturnReasons();
-    const reasonId = reasons.ok ? reasons.body?.return_reasons?.[0]?.id : undefined;
-    const item = items[Math.floor(Math.random() * items.length)];
-    const res = await this.client.request("POST", "/store/returns", {
-      token: this.token,
-      body: {
-        order_id: orderId,
-        items: [{ id: item.id, quantity: 1, ...(reasonId ? { reason_id: reasonId } : {}) }],
-      },
-    });
-    this.record("request_return", "POST", "/store/returns", res);
-    const returnId = res.ok ? res.body?.return?.id : undefined;
-    return { returnId, res };
-  }
+  // --- Stage-2 additions (plan §6.5) ---
 
   /** Reorder a previously purchased variant into a fresh cart (status-check reorder). */
   async reorder(variantId: string): Promise<ApiResponse> {

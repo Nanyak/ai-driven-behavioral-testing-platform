@@ -53,9 +53,42 @@ Resolve persona:
 ## Mining steps
 
 1. **n-gram baseline.** Slide windows (n = 2,3,4) over normalized endpoint sequences; count frequencies. Fast, explainable, good for a demo contrast against PrefixSpan.
-2. **PrefixSpan.** Mine frequent variable-length sequential patterns across sessions with a configurable `minSupport` (start ~0.05 of sessions or an absolute floor like 3). This finds full journeys with optional intermediate steps.
+2. **PrefixSpan.** Mine frequent variable-length sequential patterns across sessions with a configurable `minSupport`. **Use an absolute support floor (`minSupport = 3` sessions), not a fraction of `N`** (see "Support threshold: absolute floor, not fractional" below). This finds full journeys with optional intermediate steps.
 3. **Markov chain.** Build a transition-probability matrix between normalized endpoints; use it for anomaly hints and to flag low-probability transitions — a supporting signal, not the primary generator.
 4. **Compare n-gram vs PrefixSpan** output and keep the comparison in the run summary (useful for the writeup).
+
+## Support threshold: absolute floor, not fractional
+
+`minSupport` is an **absolute floor of 3 sessions**, never `~0.05 × N`. This is a
+binding decision, not a tunable preference, because it is what lets edge-case
+(`has_errors`) behavior survive into candidates.
+
+Rationale — keep the traffic realistic, fix the threshold instead:
+
+- The traffic generator stays realistic (plan §4, Phase 5). Edge sessions are an
+  honest ~2% of the mix and run a **randomized 3–5 of 6** error cases
+  (`services/traffic-generator/src/flows/edge.ts`), so per-case support is thin —
+  ~4 sessions at the realistic default of 300. A fractional threshold
+  (`0.05 × 300 = 15`) would silently discard every one of them, and the suite
+  would generate **no negative tests at all** despite the errors being present in
+  the logs.
+- The fix is analysis-side, not traffic-side: an absolute floor of 3 keeps thin
+  negative flows without distorting the mix. **Do not** raise the edge weight,
+  add an edge floor in the traffic generator, or make `edge.ts` deterministic to
+  compensate — those distort realism. The realistic lever for more edge coverage
+  is **more total traffic**, not engineered injection (e.g. ~1000 sessions →
+  ~13 support per edge case).
+
+**Edge coverage is frequency-weighted, and that is correct.** The dominant source
+of negative logs is not the contrived `edge.ts` bucket but **organic errors riding
+on high-volume flows** — invalid-promo 400/422 (`promoAttempt 0.25 × promoInvalid
+0.45` ≈ 11% of every cart/checkout flow), `retryOn4xx 0.5` retries, and
+`contaminate 0.08` guest→customer bleed. Generated edge tests therefore skew toward
+errors real users actually hit often (bad promo codes, expired/missing-token 401s,
+retries) and away from rare contrived ones. This is the log-driven discovery thesis
+working as intended, not a gap to patch: rare error paths that never appear in
+realistic traffic legitimately get no test (ADR 0001 — generation is log-driven, the
+OAS is the oracle, not the generator).
 
 ## Flow signature (one definition, shared) — `signature.ts`
 
@@ -167,3 +200,6 @@ explained rather than mistaken for a failure.
 - Classification report shows per-persona precision/recall against ground truth.
 - Negative control passes.
 - Per-persona output capped at 10 canonical flows.
+- At least one `has_errors` (edge-case) flow survives mining into the candidate set
+  on the realistic profile, confirming the absolute support floor (`minSupport = 3`)
+  admits negative behavior. Report its support count in the run summary.

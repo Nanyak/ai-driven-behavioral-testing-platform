@@ -221,15 +221,15 @@ export default async function initial_data_seed({
         prices: [
           {
             currency_code: "usd",
-            amount: 1000,
+            amount: 10,
           },
           {
             currency_code: "eur",
-            amount: 1000,
+            amount: 10,
           },
           {
             region_id: region.id,
-            amount: 1000,
+            amount: 10,
           },
         ],
         rules: [
@@ -259,15 +259,15 @@ export default async function initial_data_seed({
         prices: [
           {
             currency_code: "usd",
-            amount: 1000,
+            amount: 10,
           },
           {
             currency_code: "eur",
-            amount: 1000,
+            amount: 10,
           },
           {
             region_id: region.id,
-            amount: 1000,
+            amount: 10,
           },
         ],
         rules: [
@@ -370,7 +370,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 1000,
+                  amount: 10,
                   currency_code: "eur",
                 },
                 {
@@ -388,7 +388,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 1000,
+                  amount: 10,
                   currency_code: "eur",
                 },
                 {
@@ -406,7 +406,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 1000,
+                  amount: 10,
                   currency_code: "eur",
                 },
                 {
@@ -424,7 +424,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 1000,
+                  amount: 10,
                   currency_code: "eur",
                 },
                 {
@@ -442,7 +442,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 1000,
+                  amount: 10,
                   currency_code: "eur",
                 },
                 {
@@ -460,7 +460,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 1000,
+                  amount: 10,
                   currency_code: "eur",
                 },
                 {
@@ -478,7 +478,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 1000,
+                  amount: 10,
                   currency_code: "eur",
                 },
                 {
@@ -496,7 +496,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 1000,
+                  amount: 10,
                   currency_code: "eur",
                 },
                 {
@@ -546,7 +546,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 1000,
+                  amount: 10,
                   currency_code: "eur",
                 },
                 {
@@ -563,7 +563,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 1000,
+                  amount: 10,
                   currency_code: "eur",
                 },
                 {
@@ -580,7 +580,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 1000,
+                  amount: 10,
                   currency_code: "eur",
                 },
                 {
@@ -597,7 +597,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 1000,
+                  amount: 10,
                   currency_code: "eur",
                 },
                 {
@@ -647,7 +647,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 1000,
+                  amount: 10,
                   currency_code: "eur",
                 },
                 {
@@ -664,7 +664,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 1000,
+                  amount: 10,
                   currency_code: "eur",
                 },
                 {
@@ -681,7 +681,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 1000,
+                  amount: 10,
                   currency_code: "eur",
                 },
                 {
@@ -698,7 +698,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 1000,
+                  amount: 10,
                   currency_code: "eur",
                 },
                 {
@@ -748,7 +748,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 1000,
+                  amount: 10,
                   currency_code: "eur",
                 },
                 {
@@ -765,7 +765,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 1000,
+                  amount: 10,
                   currency_code: "eur",
                 },
                 {
@@ -782,7 +782,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 1000,
+                  amount: 10,
                   currency_code: "eur",
                 },
                 {
@@ -799,7 +799,7 @@ export default async function initial_data_seed({
               },
               prices: [
                 {
-                  amount: 1000,
+                  amount: 10,
                   currency_code: "eur",
                 },
                 {
@@ -848,7 +848,7 @@ export default async function initial_data_seed({
               sku: `POLO-${size}-${color.toUpperCase()}`,
               options: { Size: size, Color: color },
               prices: [
-                { amount: 2500, currency_code: "eur" },
+                { amount: 25, currency_code: "eur" },
                 { amount: 28, currency_code: "usd" },
               ],
             }))
@@ -872,7 +872,7 @@ export default async function initial_data_seed({
             sku: `CAP-${color.toUpperCase()}`,
             options: { Color: color },
             prices: [
-              { amount: 2000, currency_code: "eur" },
+              { amount: 20, currency_code: "eur" },
               { amount: 22, currency_code: "usd" },
             ],
           })),
@@ -896,7 +896,7 @@ export default async function initial_data_seed({
             sku: `JOGGER-SET-${size}`,
             options: { Size: size },
             prices: [
-              { amount: 6000, currency_code: "eur" },
+              { amount: 60, currency_code: "eur" },
               { amount: 65, currency_code: "usd" },
             ],
           })),
@@ -919,7 +919,7 @@ export default async function initial_data_seed({
             sku: `TOTE-${color.toUpperCase()}`,
             options: { Color: color },
             prices: [
-              { amount: 2500, currency_code: "eur" },
+              { amount: 25, currency_code: "eur" },
               { amount: 27, currency_code: "usd" },
             ],
           })),
@@ -951,7 +951,7 @@ export default async function initial_data_seed({
             sku: `CARGO-${size}`,
             options: { Size: size },
             prices: [
-              { amount: 4500, currency_code: "eur" },
+              { amount: 45, currency_code: "eur" },
               { amount: 50, currency_code: "usd" },
             ],
           })),
@@ -975,7 +975,7 @@ export default async function initial_data_seed({
             sku: `ZIP-HOODIE-${size}`,
             options: { Size: size },
             prices: [
-              { amount: 5500, currency_code: "eur" },
+              { amount: 55, currency_code: "eur" },
               { amount: 60, currency_code: "usd" },
             ],
           })),
@@ -998,7 +998,7 @@ export default async function initial_data_seed({
             sku: `TRACK-JACKET-${size}`,
             options: { Size: size },
             prices: [
-              { amount: 4500, currency_code: "eur" },
+              { amount: 45, currency_code: "eur" },
               { amount: 48, currency_code: "usd" },
             ],
           })),
@@ -1026,7 +1026,7 @@ export default async function initial_data_seed({
               sku: `CREW-${size}-${color.toUpperCase()}`,
               options: { Size: size, Color: color },
               prices: [
-                { amount: 1800, currency_code: "eur" },
+                { amount: 18, currency_code: "eur" },
                 { amount: 20, currency_code: "usd" },
               ],
             }))
@@ -1054,7 +1054,6 @@ export default async function initial_data_seed({
         {
           title: "Seasonal Sale",
           description: "Limited-time discounts on selected items",
-          type: "sale" as const,
           status: "active" as const,
           prices: dealVariantIds.map((variantId) => {
             const sku = dealProducts

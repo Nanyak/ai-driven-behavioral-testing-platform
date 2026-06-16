@@ -72,7 +72,8 @@ export interface Weights {
   returns: number;           // E
   adminCatalog: number;      // F1
   adminFulfill: number;      // F2
-  adminRefund: number;       // F3
+  adminRefund: number;       // F3 — return + refund a fulfilled order
+  adminCancel: number;       // F5 — cancel + refund an unfulfilled order
   adminSupport: number;      // F4
   edge: number;              // G
 }
@@ -99,6 +100,7 @@ export interface Floors {
   returningCheckout: number;
   returns: number;
   linkedRefunds: number;
+  canceledOrders: number;
   promoSuccess: number;
 }
 
@@ -142,8 +144,9 @@ const REALISTIC_WEIGHTS: Weights = {
   profileMgmt: 3,
   returns: 3,
   adminCatalog: 2,
-  adminFulfill: 2,
+  adminFulfill: 3,
   adminRefund: 1.5,
+  adminCancel: 2,
   adminSupport: 0.5,
   edge: 2,
 };
@@ -156,8 +159,9 @@ const SIGNAL_RICH_WEIGHTS: Weights = {
   multiItemCheckout: 7,
   returns: 7,
   repeatOrderCheck: 5,
-  adminFulfill: 4,
+  adminFulfill: 6,
   adminRefund: 3,
+  adminCancel: 3,
 };
 
 const PROFILE_WEIGHTS: Record<MixProfile, Weights> = {
@@ -198,6 +202,7 @@ const DEFAULT_FLOORS: Floors = {
   returningCheckout: 10,
   returns: 5,
   linkedRefunds: 5,
+  canceledOrders: 5,
   promoSuccess: 3,
 };
 
@@ -207,6 +212,7 @@ const SMOKE_FLOORS: Floors = {
   returningCheckout: 4,
   returns: 1,
   linkedRefunds: 1,
+  canceledOrders: 1,
   promoSuccess: 1,
 };
 

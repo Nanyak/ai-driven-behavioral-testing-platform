@@ -27,6 +27,7 @@ Initialize Medusa as the backend system under test and prove that Store and Admi
    - Run Medusa migrations through `db:setup`.
    - Run migration scripts through `db:migrate:scripts`.
    - Use the existing `initial-data-seed.ts` script for products, regions, currency, shipping option, fulfillment, payment provider, inventory, sales channel, and publishable API key.
+   - Prices use **decimal major units** (Medusa v2 convention): `amount: 15` means $15.00, not 15 cents. Do not seed cents and do not divide by 100 when rendering. `normalize-price-units.ts` is a one-off fix that converted legacy cents-style rows in an existing DB.
 
 4. Configure access.
    - Create the admin user from `MEDUSA_ADMIN_EMAIL` and `MEDUSA_ADMIN_PASSWORD`.

@@ -19,7 +19,8 @@ export interface PoolAccount {
 }
 
 export interface PoolOrderItem {
-  /** Order line-item id (required by POST /store/returns). */
+  /** Cart line-item id (used for reorder/buy-again; admin returns resolve order
+   * line-item ids fresh from the backend). */
   id: string;
   quantity: number;
   variantId?: string;
@@ -31,8 +32,23 @@ export interface PoolOrder {
   token?: string;
   items: PoolOrderItem[];
   regionId?: string;
-  /** True once a customer has filed a return against this order. */
+  /** True once a customer has inquired about returning this order (Stage-2 E
+   * flow). The storefront has no customer return endpoint, so this is a
+   * read-only signal that flags the order for admin-side settlement. */
+  returnRequested?: boolean;
+  /** Claimed by an in-flight admin fulfillment (F2) — prevents a concurrent
+   * session double-fulfilling the same order. */
+  fulfillClaimed?: boolean;
+  /** True once an admin has fulfilled the order (F2). Returns require fulfilled
+   * items; cancels only apply to UNFULFILLED orders. */
+  fulfilled?: boolean;
+  /** Claimed by an in-flight Stage-2b reversal (return or cancel) — an order
+   * gets at most one reversal. */
+  claimed?: boolean;
+  /** True once an admin has filed a return against this order (Stage-2 F3). */
   returned?: boolean;
+  /** True once an admin has canceled this order (Stage-2 F5). */
+  canceled?: boolean;
 }
 
 export interface PoolReturn {
@@ -47,6 +63,8 @@ export class RunState {
   returnPool: PoolReturn[] = [];
   /** order_ids an admin has refunded — joined against returnPool for linkage. */
   refundedOrderIds = new Set<string>();
+  /** order_ids an admin canceled (unfulfilled-order reversal path). */
+  canceledOrderIds = new Set<string>();
   validPromoCode?: string;
 
   addAccount(account: PoolAccount): void {
@@ -70,12 +88,74 @@ export class RunState {
     return pick(candidates);
   }
 
-  /** A random order that has not yet been returned (for return sessions). */
-  drawReturnableOrder(ownerEmail?: string): PoolOrder | undefined {
-    const candidates = this.orderPool.filter(
-      (o) => !o.returned && (!ownerEmail || o.ownerEmail === ownerEmail)
+  // --- Stage-2a: fulfillment (F2) -------------------------------------------
+
+  /**
+   * Claim an unfulfilled order for the admin fulfillment flow. Claims
+   * synchronously so concurrent F2 sessions don't double-fulfill one order.
+   */
+  drawForFulfill(): PoolOrder | undefined {
+    const order = pick(this.orderPool.filter((o) => !o.fulfillClaimed && !o.canceled));
+    if (order) order.fulfillClaimed = true;
+    return order;
+  }
+
+  /** Record a successful fulfillment — the order is now returnable. */
+  markFulfilled(orderId: string): void {
+    const order = this.orderPool.find((o) => o.orderId === orderId);
+    if (order) order.fulfilled = true;
+  }
+
+  // --- Stage-2b: customer return inquiry (E) --------------------------------
+
+  /**
+   * A fulfilled order owned by a pooled account, for the customer return
+   * inquiry. Customers only inquire about orders they actually received, so the
+   * inquiry targets fulfilled orders (which an admin can then return/refund).
+   */
+  drawFulfilledOwnedOrder(): PoolOrder | undefined {
+    return pick(
+      this.orderPool.filter(
+        (o) =>
+          o.fulfilled &&
+          !o.canceled &&
+          this.accountPool.some((a) => a.email === o.ownerEmail)
+      )
     );
-    return pick(candidates);
+  }
+
+  /** Mark that a customer inquired about returning this order (Stage-2 E). */
+  markReturnRequested(orderId: string): void {
+    const order = this.orderPool.find((o) => o.orderId === orderId);
+    if (order) order.returnRequested = true;
+  }
+
+  // --- Stage-2b: admin reversals (F3 return / F5 cancel) --------------------
+
+  /**
+   * Claim a fulfilled order for the admin return/refund flow (F3), preferring
+   * orders a customer inquired about (the cross-role touch). Returns require
+   * fulfilled items, so the candidate set is the Stage-2a fulfilled orders.
+   */
+  drawReturnable(): PoolOrder | undefined {
+    const fulfilled = this.orderPool.filter((o) => o.fulfilled && !o.claimed && !o.canceled);
+    const inquired = fulfilled.filter((o) => o.returnRequested);
+    const order = pick(inquired.length ? inquired : fulfilled);
+    if (order) order.claimed = true;
+    return order;
+  }
+
+  /**
+   * Claim an UNFULFILLED order for the admin cancel flow (F5) — the natural
+   * reversal before an order ships. A fulfilled order cannot be canceled
+   * directly on this build, so those are excluded.
+   */
+  drawCancelable(): PoolOrder | undefined {
+    const order = pick(
+      this.orderPool.filter((o) => !o.fulfilled && !o.fulfillClaimed && !o.claimed && !o.canceled)
+    );
+    if (order) order.claimed = true;
+    return order;
   }
 
   addReturn(entry: PoolReturn): void {
@@ -84,17 +164,21 @@ export class RunState {
     if (order) order.returned = true;
   }
 
-  /** A pending return for the admin refund-processing flow to settle. */
-  drawReturn(): PoolReturn | undefined {
-    return pick(this.returnPool);
-  }
-
   /** Record that an admin refunded this order (for cross-role linkage). */
   markRefunded(orderId: string): void {
     this.refundedOrderIds.add(orderId);
   }
 
-  /** order_ids that were both returned by a customer and refunded by an admin. */
+  /** Record that an admin canceled this order (unfulfilled-order reversal). */
+  markCanceled(orderId: string): void {
+    this.canceledOrderIds.add(orderId);
+    const order = this.orderPool.find((o) => o.orderId === orderId);
+    if (order) order.canceled = true;
+  }
+
+  /** order_ids that were both returned and refunded by an admin (full F3
+   * lifecycle) — the cross-role linkage Phase 7 joins on (customer placed the
+   * order, admin reversed it). */
   get linkedRefundCount(): number {
     const returned = new Set(this.returnPool.map((r) => r.orderId));
     let n = 0;
@@ -108,6 +192,7 @@ export class RunState {
       orders: this.orderPool.length,
       returns: this.returnPool.length,
       refunds: this.refundedOrderIds.size,
+      cancels: this.canceledOrderIds.size,
       validPromo: this.validPromoCode ?? null,
     };
   }

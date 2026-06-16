@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { clearCustomerToken, getCustomerToken, setCustomerToken } from "../services/authToken";
 import { medusaStore } from "../services/medusa";
-import type { Cart, CheckoutAddress, Customer, Order, OrderSupportRequest, PaymentProvider, Product, ProductQuestion, ProductReview, ShippingOption, StoreNotification, Variant } from "../types/storefront";
+import type { Cart, CheckoutAddress, Customer, Order, PaymentProvider, Product, ProductQuestion, ProductReview, ShippingOption, StoreNotification, Variant } from "../types/storefront";
 
 type StorefrontContextValue = {
   authEmail: string;
@@ -17,7 +17,6 @@ type StorefrontContextValue = {
   products: Product[];
   productQuestions: ProductQuestion[];
   productReviews: ProductReview[];
-  orderSupportRequests: OrderSupportRequest[];
   recentOrderIds: string[];
   recentlyViewedProductIds: string[];
   savedAddresses: CheckoutAddress[];
@@ -29,7 +28,6 @@ type StorefrontContextValue = {
   applyPromoCode: (promoCode: string) => Promise<void>;
   getProductReviews: (productId: string) => ProductReview[];
   getProductQuestions: (productId: string) => ProductQuestion[];
-  getOrderSupportRequests: (orderId: string) => OrderSupportRequest[];
   getProduct: (productId: string) => Product | undefined;
   getSelectedVariant: (product?: Product) => Variant | undefined;
   hasPurchasedProduct: (productId: string) => boolean;
@@ -46,7 +44,6 @@ type StorefrontContextValue = {
   rememberViewedProduct: (productId: string) => void;
   runCheckout: (shippingOptionId: string, paymentProviderId: string) => Promise<string | null>;
   saveAddress: (address: CheckoutAddress) => void;
-  submitOrderSupportRequest: (request: Omit<OrderSupportRequest, "id" | "created_at" | "status">) => void;
   submitProductQuestion: (question: Omit<ProductQuestion, "id" | "created_at" | "answer">) => void;
   submitReview: (review: Omit<ProductReview, "id" | "created_at">) => void;
   setAuthEmail: (value: string) => void;
@@ -63,7 +60,6 @@ const wishlistStorageKey = "behavior-storefront-wishlist";
 const recentOrderStorageKey = "behavior-storefront-orders";
 const addressStorageKey = "behavior-storefront-addresses";
 const reviewStorageKey = "behavior-storefront-reviews";
-const supportStorageKey = "behavior-storefront-support";
 const recentlyViewedStorageKey = "behavior-storefront-recently-viewed";
 const notificationStorageKey = "behavior-storefront-notifications";
 const questionStorageKey = "behavior-storefront-questions";
@@ -82,7 +78,6 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
   const [savedAddresses, setSavedAddresses] = useState<CheckoutAddress[]>(() => readStoredAddresses());
   const [productReviews, setProductReviews] = useState<ProductReview[]>(() => readStoredReviews());
   const [productQuestions, setProductQuestions] = useState<ProductQuestion[]>(() => readStoredQuestions());
-  const [orderSupportRequests, setOrderSupportRequests] = useState<OrderSupportRequest[]>(() => readStoredSupportRequests());
   const [notifications, setNotifications] = useState<StoreNotification[]>(() => readStoredNotifications());
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedVariantId, setSelectedVariantId] = useState("");
@@ -149,10 +144,6 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
 
   function getProductQuestions(productId: string) {
     return productQuestions.filter((question) => question.product_id === productId);
-  }
-
-  function getOrderSupportRequests(orderId: string) {
-    return orderSupportRequests.filter((request) => request.order_id === orderId);
   }
 
   function toggleWishlist(productId: string) {
@@ -251,27 +242,6 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
         title: "Question submitted",
         body: "Your product question was added to the Q&A.",
         type: "account",
-      });
-      return next;
-    });
-  }
-
-  function submitOrderSupportRequest(request: Omit<OrderSupportRequest, "id" | "created_at" | "status">) {
-    const nextRequest: OrderSupportRequest = {
-      ...request,
-      id: `support_${Date.now()}`,
-      status: "requested",
-      created_at: new Date().toISOString(),
-    };
-
-    setOrderSupportRequests((current) => {
-      const next = [nextRequest, ...current].slice(0, 100);
-      writeStoredSupportRequests(next);
-      setStatus(`${request.type === "return" ? "Return" : request.type === "cancel" ? "Cancellation" : "Support"} request submitted`);
-      addNotification({
-        title: "Order request submitted",
-        body: `Your ${request.type} request is waiting for review.`,
-        type: "support",
       });
       return next;
     });
@@ -630,7 +600,6 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
       paymentProviders,
       products,
       productQuestions,
-      orderSupportRequests,
       productReviews,
       recentOrderIds,
       recentlyViewedProductIds,
@@ -643,7 +612,6 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
       applyPromoCode,
       getProductReviews,
       getProductQuestions,
-      getOrderSupportRequests,
       getProduct,
       getSelectedVariant,
       hasPurchasedProduct,
@@ -664,7 +632,6 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
       setAuthPassword,
       setSearchQuery,
       setSelectedVariantId,
-      submitOrderSupportRequest,
       submitProductQuestion,
       submitReview,
       toggleWishlist,
@@ -683,7 +650,6 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
       paymentProviders,
       products,
       productQuestions,
-      orderSupportRequests,
       productReviews,
       purchasedVariantIds,
       recentOrderIds,
@@ -698,36 +664,6 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
   );
 
   return <StorefrontContext.Provider value={value}>{children}</StorefrontContext.Provider>;
-}
-
-function readStoredSupportRequests() {
-  if (typeof window === "undefined") {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(supportStorageKey) || "[]");
-    return Array.isArray(parsed) ? parsed.filter(isOrderSupportRequest) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeStoredSupportRequests(requests: OrderSupportRequest[]) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.setItem(supportStorageKey, JSON.stringify(requests));
-}
-
-function isOrderSupportRequest(value: unknown): value is OrderSupportRequest {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const candidate = value as Partial<OrderSupportRequest>;
-  return Boolean(candidate.id && candidate.order_id && candidate.type && candidate.message && candidate.status && candidate.created_at);
 }
 
 function readStoredNotifications() {

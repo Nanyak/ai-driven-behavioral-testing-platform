@@ -38,12 +38,12 @@ src/
   config.ts                  env loading; mix profile, weights, event probs, floors
   ids.ts                     session_id / trace_id / customer-email helpers
   client.ts                  HTTP wrapper, header injection (no persona header)
-  state.ts                   RunState: account / order / return pools, refund linkage
+  state.ts                   RunState: account / order / return pools, fulfillment + refund/cancel linkage
   taxonomy.ts                session types, stage map, weighted allocation, identity assignment
   noise.ts                   abandonment + retry-on-4xx helpers (LIGHT_NOISE, runSteps, maybeAbandon)
   dispatch.ts                runs one session per (type, identity) and pools resulting orders/returns
   reporting.ts               observed-vs-target distribution + acceptance-gate tables
-  run.ts                     staged orchestrator: seed -> browse&buy -> post-purchase
+  run.ts                     staged orchestrator: seed -> browse&buy -> fulfill -> post-purchase
   util/
     random.ts                pick / chance / shuffleInPlace — single source for randomness
   api/
@@ -56,8 +56,8 @@ src/
   flows/comparison-browse.ts researcher: 4–8 product views, search-first, no purchase
   flows/multi-item.ts        Lazada bulk-add: 3–5 browse→add cycles then checkout
   flows/account.ts           order-status (D1) + repeat-check (D1b) + profile/address (D2)
-  flows/returns.ts           customer return request against a real order (E)
-  flows/admin.ts             admin catalog (F1) + fulfill (F2) + refund (F3) + support (F4)
+  flows/returns.ts           customer return INQUIRY (read-only) against a real order (E)
+  flows/admin.ts             admin catalog (F1) + fulfill (F2) + return+refund (F3) + cancel (F5) + support (F4)
   flows/edge.ts              edge-case 4xx/5xx flows (G)
   llm/narrative.ts           Haiku 4.5 narrative (+ offline stochastic fallback)
   personas/customer-llm.ts   HOLDOUT: registered-customer full checkout (C3)
@@ -79,18 +79,30 @@ state, so the run is split into ordered stages over a shared `RunState`:
   real orders into the order pool. Returning identities draw a pooled account;
   ~55% of those sessions skip re-authentication because the customer's JWT is
   still live (`resume_session` step, no `login` event).
-- **Stage 2 — post-purchase.** Draws from the order pool: order-status (D1),
-  repeat order checks (D1b), returns (E), admin fulfillment (F2), and admin
-  refund (F3) — F3 settles the **same `order_id`** the customer returned in E,
-  the cross-role linkage Phase 7 discovers. Stage 2 hard-fails loudly if the
-  order pool is empty.
+- **Stage 2 — post-purchase, in two waves.** Returns/refunds and cancels are
+  **admin-operated** (the storefront has no customer reversal endpoint), and the
+  backend gates them on order state, so fulfillment must come first:
+  - **Stage 2a — fulfillment (F2).** Admin fulfills pooled orders so they become
+    returnable. Each success marks the order `fulfilled` (claimed synchronously
+    so concurrent sessions don't double-fulfill).
+  - **Stage 2b — post-purchase & reversals.** Order-status (D1), repeat checks
+    (D1b), the read-only customer return **inquiry** (E), admin **return+refund**
+    (F3) on a fulfilled order, and admin **cancel** (F5) on an unfulfilled order.
+    F3 settles the **same `order_id`** the customer placed/inquired about — the
+    cross-role linkage Phase 7 discovers.
 
-> **Stage-2 endpoint shapes need live verification.** `POST /store/returns`, the
-> admin return-receive + refund sequence, fulfillment, and `POST /admin/promotions`
-> vary across Medusa 2.x minors (plan §risks). They are written to best-effort
-> v2 shapes, degrade to a logged 4xx rather than crashing, and are marked
+  Stage 2 hard-fails loudly if the order pool is empty.
+
+> **Returns/refunds/cancels are admin-only and order-state-gated** (verified on
+> the live 2.15.5 build): a return covers **only fulfilled quantities** and must
+> be bound to a `location_id` at begin; a cancel works **only on unfulfilled**
+> orders. The customer `POST /store/returns` path is dead (no return shipping
+> option in the seed) and `POST /admin/orders/{id}/refunds` does not exist (404)
+> — refunds are settled through the admin return receive/confirm sequence. These
+> calls degrade to a logged non-2xx rather than crashing and are marked
 > `// VERIFY against live backend`. If the acceptance report shows
-> `✗ cross-role linked refunds`, check those calls against the running instance.
+> `✗ cross-role linked refunds` or `✗ orders canceled`, check them against the
+> running instance.
 
 ## Run
 
@@ -109,8 +121,9 @@ The Medusa logging middleware emits **production-shaped hybrid logs**: a logical
 golden oracle per ADR 0001).
 
 The run prints an **observed-vs-target distribution** table and an
-**acceptance-gate** report (holdout, guest/returning checkouts, returns,
-cross-role linked refunds, promo applications) plus identity-decoupling counts.
+**acceptance-gate** report (holdout, returning checkouts, returns filed,
+cross-role linked refunds, admin order cancels, promo applications) plus
+identity-decoupling counts.
 
 Configuration comes from the repository root `.env` (Medusa URL, publishable
 key, admin creds, `ANTHROPIC_API_KEY`) with optional overrides in
@@ -135,8 +148,8 @@ then topped up to the floors (plan §7). Example counts shown for `N=300`.
 | B     | cart abandon, checkout abandon (both auth-required)                 | 20%     |
 | C     | direct landing, returning / multi-item / new checkout (all auth)    | 24%     |
 | D     | order status, repeat order check, profile management                | 10%     |
-| E     | returns                                                             | 3%      |
-| F     | admin catalog / fulfill / refund / support                          | 6%      |
+| E     | return inquiry (read-only)                                          | 3%      |
+| F     | admin catalog / fulfill / return+refund / cancel / support          | 8%      |
 | G     | edge / error                                                        | 2%      |
 
 ### Session types
@@ -157,10 +170,11 @@ then topped up to the floors (plan §7). Example counts shown for `N=300`.
 | `edge`             | 1     | —                 | intentional 4xx/5xx edge cases                                |
 | `orderStatus`      | 2     | returning         | login → view orders → view specific order → maybe reorder     |
 | `repeatOrderCheck` | 2     | returning         | login → **view same order 3–5×** (tracking anxiety)           |
-| `returns`          | 2     | returning         | login → request return against a real completed order          |
-| `adminFulfill`     | 2     | admin             | fulfill a real order from the order pool                       |
-| `adminRefund`      | 2     | admin             | refund the **same `order_id`** a customer returned (linkage)  |
-| `adminSupport`     | 2     | admin             | search customers by email                                      |
+| `returns`          | 2b    | returning         | login → view orders → view a **fulfilled** order (read-only return inquiry) |
+| `adminFulfill`     | 2a    | admin             | fulfill a real order from the pool (makes it returnable)       |
+| `adminRefund`      | 2b    | admin             | **return + refund** a fulfilled order — same `order_id` a customer inquired about (linkage) |
+| `adminCancel`      | 2b    | admin             | **cancel + refund** an UNFULFILLED order (pre-shipping reversal)|
+| `adminSupport`     | 2b    | admin             | search customers by email                                      |
 
 † `directLanding` guest identity applies only to bounce/browse intents. Cart-bearing
   direct-landing intents (`cartAbandon`, `buy`) always use a returning account.

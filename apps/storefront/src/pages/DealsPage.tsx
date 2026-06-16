@@ -18,6 +18,7 @@ export function DealsPage({ onNavigate }: DealsPageProps) {
     toggleWishlist,
   } = useStorefront();
   const dealProducts = [...products]
+    .filter((product) => getProductDeal(product).discountPercent > 0)
     .sort((left, right) => getDealScore(right) - getDealScore(left))
     .slice(0, 12);
   const bestDiscount = dealProducts.reduce((best, product) => Math.max(best, getProductDeal(product).discountPercent), 0);
@@ -33,7 +34,7 @@ export function DealsPage({ onNavigate }: DealsPageProps) {
             <p className="text-xs font-black uppercase tracking-normal text-orange-700">Deals</p>
             <h1 className="mt-1 text-4xl font-black tracking-tight text-orange-950 md:text-6xl">Voucher picks</h1>
             <p className="mt-2 max-w-2xl font-semibold leading-7 text-orange-900/70">
-              Browse discounted, low-stock, and checkout-ready products from the current catalog.
+              Browse every product currently on sale from the live catalog.
             </p>
           </div>
         </div>

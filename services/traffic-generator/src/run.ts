@@ -82,6 +82,13 @@ function applyFloors(counts: Record<SessionType, number>, floors: Floors): void 
   counts.returningCheckout = Math.max(counts.returningCheckout, floors.returningCheckout);
   counts.returns = Math.max(counts.returns, floors.returns);
   counts.adminRefund = Math.max(counts.adminRefund, floors.linkedRefunds);
+  counts.adminCancel = Math.max(counts.adminCancel, floors.canceledOrders);
+  // Fulfillment (Stage 2a) must out-supply the return path: each F3 return
+  // claims one fulfilled order (the read-only E inquiry does not). The margin
+  // covers occasional fulfillment failures so the returns / linked-refund
+  // floors stay reachable, and leaves fulfilled-but-unreturned orders — the
+  // realistic majority that simply shipped.
+  counts.adminFulfill = Math.max(counts.adminFulfill, counts.adminRefund + 3);
 }
 
 async function runJobs(jobs: Job[], cfg: TrafficConfig, state: RunState): Promise<SessionResult[]> {
@@ -153,9 +160,24 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`\nStage 2 — post-purchase: ${stage2Jobs.length} sessions...`);
-  const stage2Results = await runJobs(stage2Jobs, cfg, state);
-  console.log(`  ✓ Stage 2 done. returnPool=${state.returnPool.length}`);
+  // Stage 2 runs in two waves: fulfillment first (2a) so the return path (2b)
+  // has fulfilled, returnable orders to draw from. Cancels (2b) take the
+  // remaining unfulfilled orders.
+  const fulfillJobs = stage2Jobs.filter((j) => j.type === "adminFulfill");
+  const reversalJobs = stage2Jobs.filter((j) => j.type !== "adminFulfill");
+
+  console.log(`\nStage 2a — fulfillment: ${fulfillJobs.length} sessions...`);
+  const stage2aResults = await runJobs(fulfillJobs, cfg, state);
+  const fulfilledCount = state.orderPool.filter((o) => o.fulfilled).length;
+  console.log(`  ✓ Stage 2a done. fulfilled orders=${fulfilledCount}`);
+
+  console.log(`\nStage 2b — post-purchase & reversals: ${reversalJobs.length} sessions...`);
+  const stage2bResults = await runJobs(reversalJobs, cfg, state);
+  console.log(
+    `  ✓ Stage 2b done. returnPool=${state.returnPool.length}, canceled=${state.canceledOrderIds.size}`
+  );
+
+  const stage2Results = [...stage2aResults, ...stage2bResults];
 
   const all = [...stage1Results, ...stage2Results];
   const elapsed = ((Date.now() - start) / 1000).toFixed(1);

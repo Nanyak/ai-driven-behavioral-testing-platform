@@ -20,6 +20,7 @@ export const SESSION_TYPES: SessionType[] = [
   "adminCatalog",
   "adminFulfill",
   "adminRefund",
+  "adminCancel",
   "adminSupport",
   "edge",
 ];
@@ -46,6 +47,7 @@ export const STAGE_OF: Record<SessionType, 1 | 2> = {
   returns: 2,
   adminFulfill: 2,
   adminRefund: 2,
+  adminCancel: 2,
   adminSupport: 2,
 };
 

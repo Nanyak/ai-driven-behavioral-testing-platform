@@ -112,15 +112,6 @@ export type ProductQuestion = {
   created_at: string;
 };
 
-export type OrderSupportRequest = {
-  id: string;
-  order_id: string;
-  type: "cancel" | "return" | "support";
-  message: string;
-  status: "requested" | "reviewing" | "resolved";
-  created_at: string;
-};
-
 export type StoreNotification = {
   id: string;
   title: string;
@@ -140,6 +131,9 @@ export type Order = {
   subtotal?: number;
   shipping_total?: number;
   tax_total?: number;
+  status?: string;
+  payment_status?: string;
+  fulfillment_status?: string;
   items?: CartItem[];
   shipping_methods?: Cart["shipping_methods"];
 };

@@ -92,8 +92,11 @@ function countOk(results: SessionResult[], type: SessionType, action: string): n
 export function printAcceptance(all: SessionResult[], state: RunState, floors: Floors): void {
   const holdout = countOk(all, "newCheckout", "complete_checkout");
   const returningCheckouts = countOk(all, "returningCheckout", "complete_checkout");
-  const returnsFiled = all.filter((r) => r.steps.some((s) => s.action === "request_return" && s.ok)).length;
+  // Returns are admin-filed (the storefront has no customer return endpoint);
+  // returnPool holds one entry per confirmed admin return request.
+  const returnsFiled = state.returnPool.length;
   const linkedRefunds = state.linkedRefundCount;
+  const canceledOrders = state.canceledOrderIds.size;
   const promoSuccess = all.reduce(
     (n, r) => n + (r.steps.some((s) => s.action === "apply_promo" && s.ok) ? 1 : 0),
     0
@@ -115,6 +118,7 @@ export function printAcceptance(all: SessionResult[], state: RunState, floors: F
   console.log(`  ${flag(returningCheckouts, floors.returningCheckout)} returning checkouts:           ${returningCheckouts} / ≥${floors.returningCheckout}`);
   console.log(`  ${flag(returnsFiled, floors.returns)} returns filed:                 ${returnsFiled} / ≥${floors.returns}`);
   console.log(`  ${flag(linkedRefunds, floors.linkedRefunds)} cross-role linked refunds:     ${linkedRefunds} / ≥${floors.linkedRefunds}`);
+  console.log(`  ${flag(canceledOrders, floors.canceledOrders)} orders canceled (admin):       ${canceledOrders} / ≥${floors.canceledOrders}`);
   console.log(`  ${flag(promoSuccess, floors.promoSuccess)} promo applications (ok):       ${promoSuccess} / ≥${floors.promoSuccess}`);
   console.log("\nIdentity decoupling (plan §1.4)");
   console.log(`  register-without-checkout sessions: ${registerNoCheckout}`);
