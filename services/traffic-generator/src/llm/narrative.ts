@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { TrafficConfig } from "../config.js";
+import type { TrafficConfig } from "../config/config.js";
 
 /**
  * The constrained action vocabulary the LLM may choose from. Keeping the

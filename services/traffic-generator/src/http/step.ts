@@ -1,4 +1,4 @@
-import type { ApiResponse } from "../client.js";
+import type { ApiResponse } from "./client.js";
 
 /** One recorded API call within a session — the unit Phase 7 mines. */
 export interface StepResult {

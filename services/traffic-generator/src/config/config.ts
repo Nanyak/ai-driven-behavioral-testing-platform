@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// services/traffic-generator/src -> repository root is three levels up.
-const SERVICE_ROOT = resolve(__dirname, "..");
+// services/traffic-generator/src/config -> service root is two levels up.
+const SERVICE_ROOT = resolve(__dirname, "..", "..");
 const REPO_ROOT = resolve(SERVICE_ROOT, "..", "..");
 
 function parseEnvFile(path: string): Record<string, string> {
@@ -65,8 +65,10 @@ export interface Weights {
   newCheckout: number;       // C2 (holdout, LLM-only)
   directLanding: number;     // C3 — share-link / ad product landing
   comparisonBrowse: number;  // A3 — high product-view research session
+  categoryBrowse: number;    // A4 — category-led discovery (categories + sort + pagination)
   multiItemCheckout: number; // C4 — multi-browse-add-checkout
   cartWallConversion: number; // C5 — guest hits auth wall, signs in, converts (401→login→200)
+  stockOutCheckout: number;  // C6 — returning customer hits insufficient-inventory 400 (Theme 3)
   orderStatus: number;       // D1
   repeatOrderCheck: number;  // D1b — repeated status checks (post-purchase anxiety)
   profileMgmt: number;       // D2
@@ -74,6 +76,7 @@ export interface Weights {
   adminCatalog: number;      // F1
   adminFulfill: number;      // F2
   adminRefund: number;       // F3 — return + refund a fulfilled order
+  adminReturnReject: number; // F6 — reject (cancel) a requested return (Theme 4c)
   adminCancel: number;       // F5 — cancel + refund an unfulfilled order
   adminSupport: number;      // F4
   edge: number;              // G
@@ -139,8 +142,10 @@ const REALISTIC_WEIGHTS: Weights = {
   newCheckout: 2,
   directLanding: 7,
   comparisonBrowse: 6,
+  categoryBrowse: 10,
   multiItemCheckout: 4,
   cartWallConversion: 6,
+  stockOutCheckout: 3,
   orderStatus: 5,
   repeatOrderCheck: 3,
   profileMgmt: 3,
@@ -148,6 +153,7 @@ const REALISTIC_WEIGHTS: Weights = {
   adminCatalog: 2,
   adminFulfill: 3,
   adminRefund: 1.5,
+  adminReturnReject: 1,
   adminCancel: 2,
   adminSupport: 0.5,
   edge: 2,
@@ -159,12 +165,15 @@ const SIGNAL_RICH_WEIGHTS: Weights = {
   returningCheckout: 22, // absorbed former guestCheckout boost (12 → +10 from original returning)
   newCheckout: 4,
   multiItemCheckout: 7,
+  categoryBrowse: 12, // boost category/sort/pagination coverage for mining
   cartWallConversion: 10, // boost the 401→login→200 guest-conversion pivot for mining
+  stockOutCheckout: 5, // boost the insufficient-inventory 400 for mining
 
   returns: 7,
   repeatOrderCheck: 5,
   adminFulfill: 6,
   adminRefund: 3,
+  adminReturnReject: 3, // boost the return-rejection reversal archetype for mining
   adminCancel: 3,
 };
 

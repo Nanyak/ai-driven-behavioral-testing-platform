@@ -1,7 +1,7 @@
-import type { Floors } from "./config.js";
+import type { Floors } from "../config/config.js";
 import type { RunState } from "./state.js";
-import type { StepResult } from "./api/step.js";
-import { SESSION_TYPES, STAGE_OF, type SessionType, type Identity } from "./taxonomy.js";
+import type { StepResult } from "../http/step.js";
+import { SESSION_TYPES, STAGE_OF, type SessionType, type Identity } from "../config/taxonomy.js";
 
 /** The outcome of one generated session, as consumed by the report tables. */
 export interface SessionResult {
@@ -109,6 +109,30 @@ export function printAcceptance(all: SessionResult[], state: RunState, floors: F
     return wall !== -1 && r.steps.slice(wall + 1).some((s) => s.action === "create_cart" && s.ok);
   }).length;
 
+  // Inventory arc (Theme 3): the customer over-adds a low-stock variant and gets
+  // a 400 on POST /store/carts/{id}/line-items (Medusa reports it as `not_allowed`
+  // "does not have the required inventory"). Key on the 400 status, not the error
+  // type string. Plus the admin create-product + restock 2xx that seed the arc.
+  const stockOuts = all.filter(
+    (r) => r.type === "stockOutCheckout" && r.steps.some((s) => s.action === "add_item" && s.status === 400)
+  ).length;
+  const productsCreated = all.filter((r) =>
+    r.steps.some((s) => s.action === "admin_create_product" && s.ok)
+  ).length;
+  const inventoryRestocks = all.filter((r) =>
+    r.steps.some((s) => s.action === "admin_set_inventory_level" && s.ok)
+  ).length;
+
+  // Promo failures (Theme 4a): a customer applied an unknown code and got a clean
+  // 400 on POST /store/carts/{id}/promotions — the negative-test signal.
+  const invalidPromo400s = all.filter(
+    (r) => r.steps.some((s) => s.action === "apply_promo" && s.status === 400)
+  ).length;
+  // Admin return-rejection (Theme 4c): a POST /admin/returns/{id}/cancel 2xx on a
+  // pooled order whose return was filed then declined (rejectedReturnOrderIds is
+  // only populated when the cancel succeeded on a drawn pooled order).
+  const returnRejections = state.rejectedReturnOrderIds.size;
+
   const registerNoCheckout = all.filter(
     (r) =>
       r.steps.some((s) => s.action === "register") &&
@@ -128,6 +152,11 @@ export function printAcceptance(all: SessionResult[], state: RunState, floors: F
   console.log(`  ${flag(canceledOrders, floors.canceledOrders)} orders canceled (admin):       ${canceledOrders} / ≥${floors.canceledOrders}`);
   console.log(`  ${flag(promoSuccess, floors.promoSuccess)} promo applications (ok):       ${promoSuccess} / ≥${floors.promoSuccess}`);
   console.log(`  ${flag(conversionPivots, 1)} cart-wall conversions (401→login→200): ${conversionPivots} / ≥1`);
+  console.log(`  ${flag(stockOuts, 1)} stock-out 400s (insufficient inventory): ${stockOuts} / ≥1`);
+  console.log(`  ${flag(productsCreated, 1)} admin create-product (2xx):    ${productsCreated} / ≥1`);
+  console.log(`  ${flag(inventoryRestocks, 1)} admin set-inventory-level (2xx): ${inventoryRestocks} / ≥1`);
+  console.log(`  ${flag(invalidPromo400s, 1)} invalid-promo 400s:            ${invalidPromo400s} / ≥1`);
+  console.log(`  ${flag(returnRejections, 1)} admin return-rejections (cancel 2xx, pooled order): ${returnRejections} / ≥1`);
   console.log("\nIdentity decoupling (plan §1.4)");
   console.log(`  register-without-checkout sessions: ${registerNoCheckout}`);
   console.log(`  login-without-register sessions:    ${loginNoRegister}`);

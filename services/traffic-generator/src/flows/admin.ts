@@ -1,6 +1,6 @@
 import { AdminSession } from "../api/admin-session.js";
-import type { MedusaClient } from "../client.js";
-import { maybeAbandon, runSteps, type NoiseConfig } from "../noise.js";
+import type { MedusaClient } from "../http/client.js";
+import { maybeAbandon, runSteps, type NoiseConfig } from "../http/noise.js";
 import { chance } from "../util/random.js";
 
 /**
@@ -33,6 +33,12 @@ export async function runAdminFlow(
   ];
   if (chance(0.5)) {
     operations.push(() => session.updateProduct());
+  }
+  // The seller's core catalog loop also creates products (plan §8.5). Exercises
+  // POST /admin/products on the normal admin path (Theme 3). createProduct
+  // returns a richer result; only its ApiResponse matters to the noise runner.
+  if (chance(0.4)) {
+    operations.push(async () => (await session.createProduct()).res);
   }
 
   await runSteps(maybeAbandon(operations, noise), noise);
@@ -111,6 +117,56 @@ export async function runAdminRefundFlow(
     refunded = (await session.confirmReturnReceipt(returnId)).ok;
   }
   return { session, returnId, filed, refunded };
+}
+
+/**
+ * Return REJECTION for a FULFILLED order (Theme 4c / ADR 0003) — the third admin
+ * reversal archetype next to refund (F3) and cancel (F5): the operator declines a
+ * requested return instead of receiving and refunding it. Reuses the F3 begin →
+ * request-items → request sequence to put the return into `requested` state, then
+ * `cancelReturn(...)` rather than the receive/refund tail. Like F3 it runs on a
+ * fulfilled, pooled order so the rejected return links cross-role on order_id.
+ * Each step degrades to a logged non-2xx rather than crashing.
+ *
+ *   begin return (+location) -> request-items -> request   [return requested]
+ *     -> cancel                                             [return rejected]
+ *
+ * Returns whether the return was `filed` (request confirmed) and `rejected`
+ * (cancel succeeded) plus the `returnId` for pool linkage.
+ */
+export async function runAdminReturnRejectFlow(
+  client: MedusaClient,
+  email: string,
+  password: string,
+  orderId: string
+): Promise<{ session: AdminSession; returnId?: string; filed: boolean; rejected: boolean }> {
+  const session = new AdminSession(client, email, password);
+  if (!(await session.login()).ok) {
+    return { session, filed: false, rejected: false };
+  }
+  await session.listReturns();
+  const location = await session.resolveStockLocation();
+
+  // Resolve order line-item ids fresh — cart line-item ids in the pool differ.
+  const order = await session.getOrder(orderId);
+  const items: any[] = order.ok ? order.body?.order?.items ?? [] : []; // admin order shape; only id/quantity used
+  if (items.length === 0) {
+    return { session, filed: false, rejected: false };
+  }
+  const returnItems = [{ id: items[0].id, quantity: 1 }];
+
+  const { returnId } = await session.beginReturn(orderId, location);
+  if (!returnId) {
+    return { session, filed: false, rejected: false };
+  }
+  await session.requestReturnItems(returnId, returnItems);
+  const filed = (await session.confirmReturnRequest(returnId)).ok;
+
+  let rejected = false;
+  if (filed) {
+    rejected = (await session.cancelReturn(returnId)).ok;
+  }
+  return { session, returnId, filed, rejected };
 }
 
 /**

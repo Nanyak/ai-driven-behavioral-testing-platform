@@ -1,5 +1,5 @@
-import type { TrafficConfig } from "./config.js";
-import { newTraceId } from "./ids.js";
+import type { TrafficConfig } from "../config/config.js";
+import { newTraceId } from "../config/ids.js";
 
 export interface ApiResponse<T = any> {
   status: number;

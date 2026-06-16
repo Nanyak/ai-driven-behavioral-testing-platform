@@ -1,6 +1,6 @@
 import { StoreSession } from "../api/store-session.js";
-import type { MedusaClient } from "../client.js";
-import type { PoolAccount, PoolOrder } from "../state.js";
+import type { MedusaClient } from "../http/client.js";
+import type { PoolAccount, PoolOrder } from "../orchestration/state.js";
 import { chance } from "../util/random.js";
 
 /**

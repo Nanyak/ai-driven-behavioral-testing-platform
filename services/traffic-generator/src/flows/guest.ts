@@ -1,4 +1,4 @@
-import type { MedusaClient } from "../client.js";
+import type { MedusaClient } from "../http/client.js";
 import { StoreSession } from "../api/store-session.js";
 import { chance } from "../util/random.js";
 
@@ -30,6 +30,8 @@ export async function runGuestShop(
   // browse
   if (chance(0.3)) await session.searchProducts("shirt");
   if (chance(0.25)) await session.filterProducts();
+  if (chance(0.2)) await session.sortProducts("-created_at"); // "newest first" sort
+  if (chance(0.2)) await session.browsePage(5, 5); // "load more" page 2
   await session.viewProduct();
   if (chance(0.5)) await session.viewProduct();
   return session;

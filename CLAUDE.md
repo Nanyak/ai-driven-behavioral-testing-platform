@@ -156,8 +156,9 @@ Do not assume any service is running. Use `npm run check:phaseN` or a direct
    prefix must never be used as a classifier signal in Phase 7.
 3. **Stage 2 hard-fails on an empty order pool.** Do not add fallbacks that
    silently skip post-purchase sessions when no orders exist — the hard exit
-   in `run.ts` is intentional.
-4. **Floors are minimums, not targets.** `applyFloors` tops up counts; it does
-   not cap them. Do not treat floor values as the desired session count.
+   in `orchestration/run.ts` is intentional.
+4. **Floors are minimums, not targets.** `applyFloors` (in `orchestration/run.ts`)
+   tops up counts; it does not cap them. Do not treat floor values as the desired
+   session count.
 5. **The holdout is LLM-only.** `newCheckout` sessions must go through
    `personas/customer-llm.ts`. Never add a scripted fallback that bypasses it.

@@ -1,6 +1,6 @@
-import type { MedusaClient } from "../client.js";
-import type { StepResult } from "../api/step.js";
-import { newCustomerEmail } from "../ids.js";
+import type { MedusaClient } from "../http/client.js";
+import type { StepResult } from "../http/step.js";
+import { newCustomerEmail } from "../config/ids.js";
 import { shuffleInPlace } from "../util/random.js";
 
 /**

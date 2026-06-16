@@ -163,7 +163,7 @@ Staged situation taxonomy (plan §4–§7 — supersedes the flat mix above):
 - [x] Implement Stage 0 (seed promo + account pool) → Stage 1 (browse & buy) → Stage 2 (post-purchase) orchestrator with floor top-up.
 - [x] Stage 2 hard-fails loudly on an empty order pool.
 - [x] Print observed-vs-target distribution + acceptance-gate report (holdout, checkouts, returns, linked refunds, promo, decoupling).
-- [ ] **VERIFY against live Medusa 2.15.5:** `POST /store/returns`, admin return-receive + refund, fulfillment, and `POST /admin/promotions` body shapes (currently best-effort, degrade to logged 4xx).
+- [x] **VERIFIED against live Medusa 2.15.5:** `POST /admin/promotions` order-level body (`application_method` `target_type:"order"`, `allocation:"across"`) returns **200** — the old "promotions 400" note was stale; a 400 now only means the code already exists (re-run idempotency). The admin return lifecycle (begin+location → request-items → request → receive → receive-items → receive/confirm) and `POST /admin/orders/{id}/fulfillments` are confirmed working; `POST /admin/returns/{id}/cancel` (return-reject, Theme 4c) returns **200 with an empty body** (the per-item `{items}` body 400s — "Unrecognized fields"). `POST /store/returns` stays dead (no seed return-shipping option, ADR 0003). Version-sensitive calls still degrade to a logged non-2xx.
 - [ ] Run end-to-end against the running stack and confirm the acceptance gates clear (≥6 holdout, ≥5 linked refunds, floors met).
 
 ## Phase 6: Data Ingestion Service

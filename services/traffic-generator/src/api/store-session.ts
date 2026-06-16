@@ -1,17 +1,17 @@
-import type { ApiResponse, MedusaClient } from "../client.js";
-import { newCustomerEmail } from "../ids.js";
+import type { ApiResponse, MedusaClient } from "../http/client.js";
+import { newCustomerEmail } from "../config/ids.js";
 import { pick } from "../util/random.js";
-import { MISSING, recordStep, type StepResult } from "./step.js";
+import { MISSING, recordStep, type StepResult } from "../http/step.js";
+import {
+  mapProducts,
+  productListParams,
+  type ProductLite,
+  type SortOrder,
+} from "./catalog-query.js";
 
-interface ProductLite {
-  id: string;
-  variantId?: string;
-}
+export type { SortOrder };
 
 export const DEFAULT_PASSWORD = "Password123!";
-
-const PRODUCT_FIELDS =
-  "*variants.calculated_price,+variants.inventory_quantity,*variants.options,*options";
 
 /**
  * Drives the Medusa Store API for one shopping session. Every method records a
@@ -24,6 +24,8 @@ export class StoreSession {
   /** First ISO-2 country of the cart's region — address country must be in-region. */
   countryCode?: string;
   products: ProductLite[] = [];
+  /** Category ids resolved by listCategories() — never hardcoded. */
+  categories: string[] = [];
   cartId?: string;
   items: { id: string; variantId: string }[] = [];
   token?: string;
@@ -73,17 +75,10 @@ export class StoreSession {
 
   async browseProducts(): Promise<ApiResponse> {
     await this.ensureRegion();
-    const params = new URLSearchParams({ limit: "20", fields: PRODUCT_FIELDS });
-    if (this.regionId) {
-      params.set("region_id", this.regionId);
-    }
-    const path = `/store/products?${params.toString()}`;
-    const res = await this.client.request("GET", path);
-    if (res.ok && Array.isArray(res.body?.products)) {
-      this.products = res.body.products.map((p: any) => ({
-        id: p.id,
-        variantId: p?.variants?.[0]?.id,
-      }));
+    const params = productListParams(this.regionId, { limit: "20" });
+    const res = await this.client.request("GET", `/store/products?${params.toString()}`);
+    if (res.ok) {
+      this.products = mapProducts(res);
     }
     return this.record("browse_products", "GET", "/store/products", res);
   }
@@ -94,12 +89,17 @@ export class StoreSession {
     if (!product) {
       return this.record("view_product", "GET", "/store/products/{id}", MISSING);
     }
-    const params = new URLSearchParams({ fields: PRODUCT_FIELDS });
-    if (this.regionId) {
-      params.set("region_id", this.regionId);
-    }
-    const path = `/store/products/${product.id}?${params.toString()}`;
-    const res = await this.client.request("GET", path);
+    const params = productListParams(this.regionId);
+    const res = await this.client.request("GET", `/store/products/${product.id}?${params.toString()}`);
+    return this.record("view_product", "GET", "/store/products/{id}", res);
+  }
+
+  /** View a specific product detail page by id (the stock-out arc lands on the
+   * dedicated low-stock product, which isn't in the random browse list). */
+  async viewProductById(productId: string): Promise<ApiResponse> {
+    await this.ensureRegion();
+    const params = productListParams(this.regionId);
+    const res = await this.client.request("GET", `/store/products/${productId}?${params.toString()}`);
     return this.record("view_product", "GET", "/store/products/{id}", res);
   }
 
@@ -151,15 +151,24 @@ export class StoreSession {
     return this.record("create_cart", "POST", "/store/carts", res);
   }
 
-  async addItem(): Promise<ApiResponse> {
+  /**
+   * Add a line item. With no args it picks a random in-stock variant (the
+   * default browse→cart path); `variantId`/`quantity` target a specific variant
+   * and amount — used by the stock-out arc to add `stock + 1` of the low-stock
+   * variant (expecting a 400) and then a recovering quantity of 1.
+   */
+  async addItem(variantId?: string, quantity = 1): Promise<ApiResponse> {
     await this.ensureCart();
-    await this.ensureProducts();
-    const variant = pick(this.products.filter((p) => p.variantId))?.variantId;
+    let variant = variantId;
+    if (!variant) {
+      await this.ensureProducts();
+      variant = pick(this.products.filter((p) => p.variantId))?.variantId;
+    }
     if (!this.cartId || !variant) {
       return this.record("add_item", "POST", "/store/carts/{id}/line-items", MISSING);
     }
     const res = await this.client.request("POST", `/store/carts/${this.cartId}/line-items`, {
-      body: { variant_id: variant, quantity: 1 },
+      body: { variant_id: variant, quantity },
       token: this.token,
     });
     if (res.ok && Array.isArray(res.body?.cart?.items)) {
@@ -363,14 +372,10 @@ export class StoreSession {
   async prefetchProductIds(): Promise<void> {
     if (this.products.length > 0) return;
     await this.ensureRegion();
-    const params = new URLSearchParams({ limit: "20", fields: PRODUCT_FIELDS });
-    if (this.regionId) params.set("region_id", this.regionId);
+    const params = productListParams(this.regionId, { limit: "20" });
     const res = await this.client.request("GET", `/store/products?${params.toString()}`);
-    if (res.ok && Array.isArray(res.body?.products)) {
-      this.products = res.body.products.map((p: any) => ({
-        id: p.id,
-        variantId: p?.variants?.[0]?.id,
-      }));
+    if (res.ok) {
+      this.products = mapProducts(res);
     }
   }
 
@@ -390,16 +395,10 @@ export class StoreSession {
 
   async searchProducts(query: string): Promise<ApiResponse> {
     await this.ensureRegion();
-    const params = new URLSearchParams({ limit: "20", q: query, fields: PRODUCT_FIELDS });
-    if (this.regionId) {
-      params.set("region_id", this.regionId);
-    }
+    const params = productListParams(this.regionId, { limit: "20", q: query });
     const res = await this.client.request("GET", `/store/products?${params.toString()}`);
-    if (res.ok && Array.isArray(res.body?.products)) {
-      this.products = res.body.products.map((p: any) => ({
-        id: p.id,
-        variantId: p?.variants?.[0]?.id,
-      }));
+    if (res.ok) {
+      this.products = mapProducts(res);
     }
     return this.record("search_products", "GET", "/store/products", res);
   }
@@ -409,15 +408,59 @@ export class StoreSession {
     this.record("list_categories", "GET", "/store/product-categories", cats);
     const categoryId = cats.ok ? cats.body?.product_categories?.[0]?.id : undefined;
     await this.ensureRegion();
-    const params = new URLSearchParams({ limit: "20", fields: PRODUCT_FIELDS });
-    if (this.regionId) {
-      params.set("region_id", this.regionId);
-    }
-    if (categoryId) {
-      params.set("category_id[]", categoryId);
-    }
+    const params = productListParams(
+      this.regionId,
+      categoryId ? { limit: "20", "category_id[]": categoryId } : { limit: "20" }
+    );
     const res = await this.client.request("GET", `/store/products?${params.toString()}`);
     return this.record("filter_products", "GET", "/store/products", res);
+  }
+
+  // --- Catalog discovery (Theme 2): categories, pagination, sort ---
+
+  /** List product categories — the category-led discovery entry point. */
+  async listCategories(): Promise<ApiResponse> {
+    const res = await this.client.request("GET", "/store/product-categories?limit=10");
+    if (res.ok && Array.isArray(res.body?.product_categories)) {
+      this.categories = res.body.product_categories.map((c: any) => c.id);
+    }
+    return this.record("list_categories", "GET", "/store/product-categories", res);
+  }
+
+  /** Browse products scoped to one category — `?category_id[]=<id>`. */
+  async browseByCategory(categoryId: string): Promise<ApiResponse> {
+    await this.ensureRegion();
+    const params = productListParams(this.regionId, { limit: "20", "category_id[]": categoryId });
+    const res = await this.client.request("GET", `/store/products?${params.toString()}`);
+    if (res.ok) {
+      this.products = mapProducts(res);
+    }
+    return this.record("browse_by_category", "GET", "/store/products", res);
+  }
+
+  /** Paginate the catalog — `?limit=<l>&offset=<o>` ("load more" / page N). */
+  async browsePage(offset: number, limit: number): Promise<ApiResponse> {
+    await this.ensureRegion();
+    const params = productListParams(this.regionId, {
+      limit: String(limit),
+      offset: String(offset),
+    });
+    const res = await this.client.request("GET", `/store/products?${params.toString()}`);
+    if (res.ok) {
+      this.products = mapProducts(res);
+    }
+    return this.record("browse_page", "GET", "/store/products", res);
+  }
+
+  /** Sort the catalog — `?order=<order>` with order ∈ {title,-title,created_at,-created_at}. */
+  async sortProducts(order: SortOrder): Promise<ApiResponse> {
+    await this.ensureRegion();
+    const params = productListParams(this.regionId, { limit: "20", order });
+    const res = await this.client.request("GET", `/store/products?${params.toString()}`);
+    if (res.ok) {
+      this.products = mapProducts(res);
+    }
+    return this.record("sort_products", "GET", "/store/products", res);
   }
 
   async updateProfile(): Promise<ApiResponse> {
@@ -445,14 +488,21 @@ export class StoreSession {
     return this.record("add_address", "POST", "/store/customers/me/addresses", res);
   }
 
-  /** Apply a specific promo code (valid or invalid) — both emit the same event. */
+  /**
+   * Apply a specific promo code (valid or invalid) via the dedicated promotions
+   * endpoint `POST /store/carts/{id}/promotions { promo_codes }` (Theme 4a). A
+   * valid order-level code applies the discount (200); an unknown code surfaces a
+   * clean, countable 400 ("The promotion code ... is invalid"). Both emit the
+   * same `apply_promo` event so the success/failure split is a status signal, not
+   * a separate endpoint.
+   */
   async applyPromoCode(code: string): Promise<ApiResponse> {
     await this.ensureCart();
-    const res = await this.client.request("POST", `/store/carts/${this.cartId}`, {
+    const res = await this.client.request("POST", `/store/carts/${this.cartId}/promotions`, {
       body: { promo_codes: [code] },
       token: this.token,
     });
-    return this.record("apply_promo", "POST", "/store/carts/{id}", res);
+    return this.record("apply_promo", "POST", "/store/carts/{id}/promotions", res);
   }
 
   // --- Stage-2 additions (plan §6.5) ---

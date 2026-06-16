@@ -12,8 +12,10 @@ export const SESSION_TYPES: SessionType[] = [
   "newCheckout",
   "directLanding",
   "comparisonBrowse",
+  "categoryBrowse",
   "multiItemCheckout",
   "cartWallConversion",
+  "stockOutCheckout",
   "orderStatus",
   "repeatOrderCheck",
   "profileMgmt",
@@ -21,6 +23,7 @@ export const SESSION_TYPES: SessionType[] = [
   "adminCatalog",
   "adminFulfill",
   "adminRefund",
+  "adminReturnReject",
   "adminCancel",
   "adminSupport",
   "edge",
@@ -38,8 +41,10 @@ export const STAGE_OF: Record<SessionType, 1 | 2> = {
   newCheckout: 1,
   directLanding: 1,
   comparisonBrowse: 1,
+  categoryBrowse: 1,
   multiItemCheckout: 1,
   cartWallConversion: 1,
+  stockOutCheckout: 1,
   profileMgmt: 1,
   adminCatalog: 1,
   edge: 1,
@@ -49,6 +54,7 @@ export const STAGE_OF: Record<SessionType, 1 | 2> = {
   returns: 2,
   adminFulfill: 2,
   adminRefund: 2,
+  adminReturnReject: 2,
   adminCancel: 2,
   adminSupport: 2,
 };
@@ -104,6 +110,7 @@ const IDENTITY_SPLIT: Partial<Record<SessionType, Partial<Record<Identity, numbe
   checkoutAbandon: { returning: 100 },
   directLanding: { guest: 70, returning: 30 },
   comparisonBrowse: { guest: 80, returning: 20 },
+  categoryBrowse: { guest: 80, returning: 20 },
   multiItemCheckout: { returning: 100 },
 };
 
@@ -114,6 +121,7 @@ export function identityFor(type: SessionType): Identity {
   switch (type) {
     case "returningCheckout":
     case "cartWallConversion": // guest hits the wall, then logs into a pooled account
+    case "stockOutCheckout": // returning customer hits the insufficient-inventory 400
     case "orderStatus":
     case "repeatOrderCheck":
     case "profileMgmt":

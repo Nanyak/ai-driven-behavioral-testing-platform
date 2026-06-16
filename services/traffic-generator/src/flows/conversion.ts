@@ -1,6 +1,6 @@
 import { StoreSession } from "../api/store-session.js";
-import type { MedusaClient } from "../client.js";
-import type { PoolAccount } from "../state.js";
+import type { MedusaClient } from "../http/client.js";
+import type { PoolAccount } from "../orchestration/state.js";
 
 /** Intents a guest→sign-in conversion session can take (Theme 1). */
 export type ConversionIntent = "convertBuy" | "convertAbandon" | "wallBounce";

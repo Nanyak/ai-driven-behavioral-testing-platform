@@ -1,6 +1,6 @@
 import { StoreSession } from "../api/store-session.js";
-import type { MedusaClient } from "../client.js";
-import type { PoolAccount } from "../state.js";
+import type { MedusaClient } from "../http/client.js";
+import type { PoolAccount } from "../orchestration/state.js";
 import { chance } from "../util/random.js";
 
 const SEARCH_QUERIES = ["shirt", "shoes", "bag", "watch", "phone case", "jacket", "dress", "wallet"];
@@ -47,10 +47,13 @@ export async function runComparisonBrowseFlow(
   const firstPass = 4 + Math.floor(Math.random() * 3);
   await session.viewMultipleProducts(firstPass);
 
-  // Mid-session refinement: filter or search again to narrow results (~50%).
+  // Mid-session refinement: filter, re-sort, or search again to narrow results (~50%).
   if (chance(0.5)) {
-    if (chance(0.5)) {
+    const r = Math.random();
+    if (r < 0.4) {
       await session.filterProducts();
+    } else if (r < 0.7) {
+      await session.sortProducts("title"); // re-sort the comparison set
     } else {
       await session.searchProducts(pickQuery());
     }

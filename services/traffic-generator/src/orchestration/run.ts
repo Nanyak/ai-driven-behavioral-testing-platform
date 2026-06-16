@@ -1,8 +1,8 @@
-import { MedusaClient } from "./client.js";
-import { loadConfig, type TrafficConfig, type Floors } from "./config.js";
-import { newSessionId } from "./ids.js";
-import { AdminSession } from "./api/admin-session.js";
-import { DEFAULT_PASSWORD, StoreSession } from "./api/store-session.js";
+import { MedusaClient } from "../http/client.js";
+import { loadConfig, type TrafficConfig, type Floors } from "../config/config.js";
+import { newSessionId } from "../config/ids.js";
+import { AdminSession } from "../api/admin-session.js";
+import { DEFAULT_PASSWORD, StoreSession } from "../api/store-session.js";
 import { RunState } from "./state.js";
 import {
   SESSION_TYPES,
@@ -11,8 +11,8 @@ import {
   identityFor,
   type SessionType,
   type Identity,
-} from "./taxonomy.js";
-import { chance } from "./util/random.js";
+} from "../config/taxonomy.js";
+import { chance } from "../util/random.js";
 import { dispatch } from "./dispatch.js";
 import { printDistribution, printAcceptance, type SessionResult } from "./reporting.js";
 
@@ -39,6 +39,7 @@ async function runPool<T>(items: Array<() => Promise<T>>, concurrency: number): 
 async function stage0(cfg: TrafficConfig, state: RunState): Promise<SessionResult[]> {
   state.validPromoCode = cfg.validPromoCode;
 
+  const LOW_STOCK_QTY = 4;
   const adminClient = new MedusaClient(cfg, newSessionId("seed-admin"));
   const admin = new AdminSession(adminClient, cfg.adminEmail, cfg.adminPassword);
   const login = await admin.login();
@@ -46,10 +47,51 @@ async function stage0(cfg: TrafficConfig, state: RunState): Promise<SessionResul
     const promo = await admin.createPromotion(cfg.validPromoCode);
     if (promo.ok) {
       console.log(`  ✓ Seeded promotion ${cfg.validPromoCode} (deal-seeker conversions enabled)`);
+    } else if (promo.status === 400 && /already exists/i.test(String(promo.body?.message ?? ""))) {
+      // The order-level promo body is verified-working (200) on this build; a 400
+      // here is just a re-run idempotency collision — the code already exists and
+      // is still usable, so deal-seeker conversions remain enabled.
+      console.log(`  ✓ Promotion ${cfg.validPromoCode} already exists (re-run) — reusing it.`);
     } else {
       console.warn(
         `  ! Promo seed returned ${promo.status} — deal-seeker conversions may not apply. ` +
           `VERIFY POST /admin/promotions shape against this Medusa build.`
+      );
+    }
+
+    // Theme 3: a dedicated limited-stock product so the customer stock-out arc
+    // is deterministic WITHOUT contaminating the 12 seeded products' stock. If
+    // create-product 4xx, log and continue — stockOutCheckout then degrades to a
+    // normal returning browse (lowStockVariantId stays unset; no hard-fail).
+    const { res: createRes, created } = await admin.createProduct({ lowStock: true });
+    if (createRes.ok && created?.variantId) {
+      state.lowStockVariantId = created.variantId;
+      state.lowStockProductId = created.productId;
+      state.lowStockQty = LOW_STOCK_QTY;
+      if (created.inventoryItemId && created.locationId) {
+        const level = await admin.setInventoryLevel(
+          created.inventoryItemId,
+          created.locationId,
+          LOW_STOCK_QTY
+        );
+        if (level.ok) {
+          console.log(`  ✓ Seeded limited-stock product (stock=${LOW_STOCK_QTY}) for stock-out arc`);
+        } else {
+          console.warn(
+            `  ! Set-inventory-level returned ${level.status} — stock-out 400 may not trigger. ` +
+              `VERIFY POST /admin/inventory-items/{id}/location-levels against this Medusa build.`
+          );
+        }
+      } else {
+        console.warn(
+          "  ! Could not resolve inventory item/location for the limited-stock product — " +
+            "stock-out 400 may not trigger."
+        );
+      }
+    } else {
+      console.warn(
+        `  ! Limited-stock product create returned ${createRes.status} — stockOutCheckout will ` +
+          `degrade to a returning browse. VERIFY POST /admin/products against this Medusa build.`
       );
     }
   } else {
@@ -73,6 +115,10 @@ async function stage0(cfg: TrafficConfig, state: RunState): Promise<SessionResul
   });
   const seedResults = await runPool(seedTasks, cfg.concurrency);
   console.log(`  ✓ Stage 0: ${state.accountPool.length}/${cfg.accountPoolSize} accounts seeded.`);
+  // Surface the seed admin's steps (promo + limited-stock create/restock) so the
+  // acceptance gate can see the one-off Stage-0 create-product / set-inventory
+  // 2xx signals (Theme 3). Typed as adminCatalog — the admin catalog path.
+  seedResults.push({ type: "adminCatalog", identity: "guest", sessionId: adminClient.sessionId, steps: admin.steps });
   return seedResults;
 }
 
@@ -83,12 +129,15 @@ function applyFloors(counts: Record<SessionType, number>, floors: Floors): void 
   counts.returns = Math.max(counts.returns, floors.returns);
   counts.adminRefund = Math.max(counts.adminRefund, floors.linkedRefunds);
   counts.adminCancel = Math.max(counts.adminCancel, floors.canceledOrders);
-  // Fulfillment (Stage 2a) must out-supply the return path: each F3 return
-  // claims one fulfilled order (the read-only E inquiry does not). The margin
-  // covers occasional fulfillment failures so the returns / linked-refund
-  // floors stay reachable, and leaves fulfilled-but-unreturned orders — the
-  // realistic majority that simply shipped.
-  counts.adminFulfill = Math.max(counts.adminFulfill, counts.adminRefund + 3);
+  // Fulfillment (Stage 2a) must out-supply the return paths: each F3 refund AND
+  // each F6 return-rejection claims one fulfilled order (the read-only E inquiry
+  // does not). The margin covers occasional fulfillment failures so the returns /
+  // linked-refund / reject floors stay reachable, and leaves fulfilled-but-
+  // unreturned orders — the realistic majority that simply shipped.
+  counts.adminFulfill = Math.max(
+    counts.adminFulfill,
+    counts.adminRefund + counts.adminReturnReject + 3
+  );
 }
 
 async function runJobs(jobs: Job[], cfg: TrafficConfig, state: RunState): Promise<SessionResult[]> {

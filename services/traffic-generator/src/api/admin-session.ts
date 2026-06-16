@@ -1,6 +1,15 @@
-import type { ApiResponse, MedusaClient } from "../client.js";
+import type { ApiResponse, MedusaClient } from "../http/client.js";
+import { randomUUID } from "node:crypto";
 import { pick } from "../util/random.js";
-import { MISSING, recordStep, type StepResult } from "./step.js";
+import { MISSING, recordStep, type StepResult } from "../http/step.js";
+
+/** Ids resolved from a successful createProduct(), for the stock-out arc (Theme 3). */
+export interface CreatedProduct {
+  productId: string;
+  variantId: string;
+  inventoryItemId?: string;
+  locationId?: string;
+}
 
 /**
  * Drives the Medusa Admin API for one operator session. Establishes the admin
@@ -11,6 +20,8 @@ export class AdminSession {
   token?: string;
   productIds: string[] = [];
   stockLocationId?: string;
+  salesChannelId?: string;
+  shippingProfileId?: string;
   steps: StepResult[] = [];
 
   constructor(
@@ -65,6 +76,126 @@ export class AdminSession {
     return this.record("admin_update_product", "POST", "/admin/products/{id}", res);
   }
 
+  /**
+   * Resolve (and cache) the sales channel a new product must be linked to so it
+   * is visible/purchasable in the Store API. A product created without a sales
+   * channel is invisible in /store, so the stock-out arc could never add it to a
+   * cart. VERIFY against live backend: confirmed the seed's single
+   * "Default Sales Channel" is the one store carts resolve against.
+   */
+  private async resolveSalesChannel(): Promise<string | undefined> {
+    if (this.salesChannelId) return this.salesChannelId;
+    const res = await this.client.request("GET", "/admin/sales-channels?limit=1", {
+      token: this.token,
+    });
+    this.salesChannelId = res.ok ? res.body?.sales_channels?.[0]?.id : undefined;
+    return this.salesChannelId;
+  }
+
+  /**
+   * Create a published product with a single "One Size" variant (plan §8.5; the
+   * seller's core catalog loop + the prerequisite for the customer stock-out
+   * arc, Theme 3). Resolves the shipping profile, sales channel, and — for the
+   * stock-out product — the created variant's inventory item + stock location so
+   * the orchestrator can pin its stock with setInventoryLevel().
+   *
+   * VERIFY against live backend (Medusa 2.15.5): the create body needs
+   * `sales_channels` for store visibility (the minimal Theme-3 body omitted it
+   * and the product was unpurchasable); a fresh variant's inventory item is NOT
+   * yet stocked at any location, so it is resolved here and stocked separately.
+   * Degrades to a logged non-2xx (returns `created: undefined`) rather than
+   * crashing if any version-sensitive step 4xxs.
+   */
+  async createProduct(
+    opts: { lowStock?: boolean } = {}
+  ): Promise<{ res: ApiResponse; created?: CreatedProduct }> {
+    if (!this.shippingProfileId) {
+      const profiles = await this.client.request("GET", "/admin/shipping-profiles?limit=1", {
+        token: this.token,
+      });
+      this.record("admin_list_shipping_profiles", "GET", "/admin/shipping-profiles", profiles);
+      this.shippingProfileId = profiles.ok ? profiles.body?.shipping_profiles?.[0]?.id : undefined;
+    }
+    const salesChannelId = await this.resolveSalesChannel();
+
+    const suffix = randomUUID().slice(0, 8);
+    const sku = `GEN-${opts.lowStock ? "LOWSTOCK" : "CATALOG"}-${suffix}`;
+    const body: Record<string, unknown> = {
+      title: `Generated Product ${suffix}`,
+      status: "published",
+      shipping_profile_id: this.shippingProfileId,
+      options: [{ title: "Size", values: ["One Size"] }],
+      variants: [
+        {
+          title: "Default",
+          sku,
+          options: { Size: "One Size" },
+          prices: [{ amount: 1500, currency_code: "eur" }],
+        },
+      ],
+    };
+    // Link to the sales channel so the variant is purchasable in /store.
+    if (salesChannelId) body.sales_channels = [{ id: salesChannelId }];
+
+    const res = await this.client.request("POST", "/admin/products", {
+      token: this.token,
+      body,
+    });
+    this.record("admin_create_product", "POST", "/admin/products", res);
+    if (!res.ok) {
+      return { res };
+    }
+
+    const product = res.body?.product;
+    const variantId: string | undefined = product?.variants?.[0]?.id;
+    if (product?.id) this.productIds.push(product.id);
+    if (!variantId) {
+      return { res };
+    }
+
+    const created: CreatedProduct = { productId: product.id, variantId };
+    // The stock-out product needs its inventory item + location resolved so the
+    // orchestrator can pin a low stocked_quantity. The create response carries no
+    // inventory item, so look it up by the just-generated (unique) SKU.
+    if (opts.lowStock) {
+      const items = await this.client.request(
+        "GET",
+        `/admin/inventory-items?sku=${encodeURIComponent(sku)}&limit=1`,
+        { token: this.token }
+      );
+      this.record("admin_list_inventory_items", "GET", "/admin/inventory-items", items);
+      created.inventoryItemId = items.ok ? items.body?.inventory_items?.[0]?.id : undefined;
+      created.locationId = await this.resolveStockLocation();
+    }
+    return { res, created };
+  }
+
+  /**
+   * Stock an inventory item at a location (Theme 3). Uses the create endpoint
+   * `POST /admin/inventory-items/{id}/location-levels` with `location_id` in the
+   * body: a freshly-created variant's inventory item is not yet stocked at any
+   * location, so the per-location update endpoint 404s ("not stocked at
+   * location") until this association exists. This single call both associates
+   * and sets the quantity. VERIFY against live backend (Medusa 2.15.5).
+   */
+  async setInventoryLevel(
+    inventoryItemId: string,
+    locationId: string,
+    qty: number
+  ): Promise<ApiResponse> {
+    const res = await this.client.request(
+      "POST",
+      `/admin/inventory-items/${inventoryItemId}/location-levels`,
+      { token: this.token, body: { location_id: locationId, stocked_quantity: qty } }
+    );
+    return this.record(
+      "admin_set_inventory_level",
+      "POST",
+      "/admin/inventory-items/{id}/location-levels",
+      res
+    );
+  }
+
   async listOrders(): Promise<ApiResponse> {
     const res = await this.client.request("GET", "/admin/orders?limit=20", { token: this.token });
     return this.record("admin_list_orders", "GET", "/admin/orders", res);
@@ -81,8 +212,13 @@ export class AdminSession {
 
   /**
    * Seed a valid percentage promotion so deal-seeker conversions can actually
-   * succeed (plan §5 Stage 0). VERIFY: the Medusa 2.x promotions create body
-   * (`application_method`) is version-sensitive.
+   * succeed (plan §5 Stage 0). The order-level `application_method`
+   * (`target_type:"order"`, `allocation:"across"`) body is **verified working
+   * (200)** on this Medusa 2.15.5 build — the old "POST /admin/promotions 400"
+   * project note was stale (the discount applies on a checkout cart). The
+   * `application_method` shape is still version-sensitive across 2.x minors, so
+   * it stays marked `// VERIFY against live backend` and degrades to a logged
+   * non-2xx rather than crashing.
    */
   async createPromotion(code: string, currencyCode = "usd"): Promise<ApiResponse> {
     const res = await this.client.request("POST", "/admin/promotions", {
@@ -221,6 +357,26 @@ export class AdminSession {
       body: {},
     });
     return this.record("admin_confirm_return_receipt", "POST", "/admin/returns/{id}/receive/confirm", res);
+  }
+
+  /**
+   * Reject (cancel) a requested return instead of receiving/refunding it — the
+   * third admin reversal archetype (ADR 0003), modelling an operator declining a
+   * return after the customer filed it. Operates on a return in `requested`
+   * state (begin -> request-items -> request).
+   *
+   * VERIFY against live backend (Medusa 2.15.5): the cancel endpoint takes an
+   * **empty body**. The Theme-4 spec's `{ items: [{ id, quantity }] }` shape is
+   * rejected on this build with 400 "Unrecognized fields: 'items'" — the cancel
+   * is whole-return, not per-item — so no items are sent. Degrades to a logged
+   * non-2xx rather than crashing.
+   */
+  async cancelReturn(returnId: string): Promise<ApiResponse> {
+    const res = await this.client.request("POST", `/admin/returns/${returnId}/cancel`, {
+      token: this.token,
+      body: {},
+    });
+    return this.record("admin_cancel_return", "POST", "/admin/returns/{id}/cancel", res);
   }
 
   /**

@@ -1,6 +1,6 @@
 import { StoreSession } from "../api/store-session.js";
-import type { MedusaClient } from "../client.js";
-import type { TrafficConfig } from "../config.js";
+import type { MedusaClient } from "../http/client.js";
+import type { TrafficConfig } from "../config/config.js";
 import { generateNarrative } from "../llm/narrative.js";
 
 /**

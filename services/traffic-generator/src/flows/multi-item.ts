@@ -1,7 +1,8 @@
 import { StoreSession } from "../api/store-session.js";
-import type { MedusaClient } from "../client.js";
-import type { PoolAccount } from "../state.js";
+import type { MedusaClient } from "../http/client.js";
+import type { PoolAccount } from "../orchestration/state.js";
 import { chance } from "../util/random.js";
+import { maybeApplyPromo, type PromoConfig } from "./promo.js";
 
 const SEARCH_QUERIES = ["shirt", "shoes", "bag", "watch", "jacket", "pants", "dress"];
 
@@ -22,7 +23,7 @@ export async function runMultiItemFlow(
   client: MedusaClient,
   account: PoolAccount | null,
   intent: "cartAbandon" | "buy",
-  validPromoCode?: string
+  promo?: PromoConfig
 ): Promise<StoreSession> {
   const session = new StoreSession(client);
   await session.loadRegions();
@@ -66,7 +67,7 @@ export async function runMultiItemFlow(
     await session.addItem();
   }
 
-  if (validPromoCode && chance(0.3)) await session.applyPromoCode(validPromoCode);
+  await maybeApplyPromo(session, promo);
 
   if (intent === "cartAbandon") {
     return session;

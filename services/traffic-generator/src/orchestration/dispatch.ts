@@ -1,29 +1,33 @@
-import type { MedusaClient } from "./client.js";
-import type { TrafficConfig } from "./config.js";
-import { DEFAULT_PASSWORD, StoreSession } from "./api/store-session.js";
-import type { StepResult } from "./api/step.js";
+import type { MedusaClient } from "../http/client.js";
+import type { TrafficConfig } from "../config/config.js";
+import { DEFAULT_PASSWORD, StoreSession } from "../api/store-session.js";
+import type { StepResult } from "../http/step.js";
 import { RunState, type PoolAccount, type PoolOrder } from "./state.js";
-import type { SessionType, Identity } from "./taxonomy.js";
-import { chance } from "./util/random.js";
-import { newCustomerEmail } from "./ids.js";
-import { runGuestShop } from "./flows/guest.js";
-import { runReturningFlow } from "./flows/returning.js";
-import { runOrderStatusFlow, runRepeatOrderStatusFlow, runProfileMgmtFlow } from "./flows/account.js";
-import { runReturnInquiryFlow } from "./flows/returns.js";
-import { runDirectLandingFlow, type DirectIntent } from "./flows/direct-landing.js";
-import { runComparisonBrowseFlow } from "./flows/comparison-browse.js";
-import { runMultiItemFlow } from "./flows/multi-item.js";
-import { runCartWallConversion, type ConversionIntent } from "./flows/conversion.js";
+import type { SessionType, Identity } from "../config/taxonomy.js";
+import { chance } from "../util/random.js";
+import { newCustomerEmail } from "../config/ids.js";
+import { runGuestShop } from "../flows/guest.js";
+import { runReturningFlow } from "../flows/returning.js";
+import { runOrderStatusFlow, runRepeatOrderStatusFlow, runProfileMgmtFlow } from "../flows/account.js";
+import { runReturnInquiryFlow } from "../flows/returns.js";
+import { runDirectLandingFlow, type DirectIntent } from "../flows/direct-landing.js";
+import { runComparisonBrowseFlow } from "../flows/comparison-browse.js";
+import { runCategoryBrowse } from "../flows/category-browse.js";
+import { runMultiItemFlow } from "../flows/multi-item.js";
+import { runCartWallConversion, type ConversionIntent } from "../flows/conversion.js";
+import { runStockOutCheckout } from "../flows/stockout.js";
 import {
   runAdminFlow,
   runAdminFulfillFlow,
   runAdminRefundFlow,
+  runAdminReturnRejectFlow,
   runAdminCancelFlow,
   runAdminSupportFlow,
-} from "./flows/admin.js";
-import { runEdgeFlow } from "./flows/edge.js";
-import { runCustomerCheckout } from "./personas/customer-llm.js";
-import { LIGHT_NOISE } from "./noise.js";
+} from "../flows/admin.js";
+import type { PromoConfig } from "../flows/promo.js";
+import { runEdgeFlow } from "../flows/edge.js";
+import { runCustomerCheckout } from "../personas/customer-llm.js";
+import { LIGHT_NOISE } from "../http/noise.js";
 
 // --- pool helpers ---
 
@@ -60,6 +64,20 @@ function poolOrder(state: RunState, s: StoreSession, ownerEmail: string, token?:
   });
 }
 
+// --- degrade fallbacks ---
+// When a session type can't draw the state it needs (empty pool), it degrades to
+// a benign session of the matching role rather than emitting nothing. Admin
+// reversal/fulfill types fall back to an admin catalog session; customer
+// post-purchase types fall back to a guest browse.
+
+async function adminDegrade(client: MedusaClient, cfg: TrafficConfig): Promise<StepResult[]> {
+  return (await runAdminFlow(client, cfg.adminEmail, cfg.adminPassword, LIGHT_NOISE)).steps;
+}
+
+async function guestDegrade(client: MedusaClient): Promise<StepResult[]> {
+  return (await runGuestShop(client, "browse")).steps;
+}
+
 // --- dispatch: one session of the given type/identity ---
 
 export async function dispatch(
@@ -69,7 +87,14 @@ export async function dispatch(
   state: RunState,
   cfg: TrafficConfig
 ): Promise<StepResult[]> {
-  const promo = state.validPromoCode;
+  // Promo attempt config (Theme 4a): a cart session may apply the seeded valid
+  // code (200 discount) or the invalid code (clean 400) per the §4.1 probs.
+  const promo: PromoConfig = {
+    validCode: state.validPromoCode,
+    invalidCode: cfg.invalidPromoCode,
+    attemptProb: cfg.eventProbs.promoAttempt,
+    invalidProb: cfg.eventProbs.promoInvalid,
+  };
   const returning = identity === "returning";
 
   switch (type) {
@@ -110,7 +135,7 @@ export async function dispatch(
       // Cart-bearing intents require auth; browse/bounce intents honour the identity split.
       const cartBearing = landingIntent === "cartAbandon" || landingIntent === "buy";
       const acct = (cartBearing || returning) ? drawOrSynth(state) : null;
-      const s = await runDirectLandingFlow(client, acct, landingIntent, promo);
+      const s = await runDirectLandingFlow(client, acct, landingIntent);
       if (landingIntent === "buy" && s.email) poolOrder(state, s, s.email, s.token);
       return s.steps;
     }
@@ -118,6 +143,13 @@ export async function dispatch(
     case "comparisonBrowse": {
       const acct = returning ? drawOrSynth(state) : null;
       return (await runComparisonBrowseFlow(client, acct)).steps;
+    }
+
+    case "categoryBrowse": {
+      // Read-only category-led discovery. Returning identity signs into a pooled
+      // account; guests browse with no token (identity per IDENTITY_SPLIT 80/20).
+      const acct = returning ? drawOrSynth(state) : null;
+      return (await runCategoryBrowse(client, acct)).steps;
     }
 
     case "multiItemCheckout": {
@@ -134,12 +166,30 @@ export async function dispatch(
       // account — never a synthesized one. If the pool is empty, degrade to a
       // guest browse (Stage 0 always seeds the pool, so this is a safety net).
       const acct = state.drawAccount();
-      if (!acct) return (await runGuestShop(client, "browse")).steps;
+      if (!acct) return guestDegrade(client);
       const r = Math.random();
       const intent: ConversionIntent =
         r < 0.55 ? "convertBuy" : r < 0.85 ? "convertAbandon" : "wallBounce";
       const s = await runCartWallConversion(client, acct, intent);
       if (intent === "convertBuy") poolOrder(state, s, acct.email, acct.token);
+      return s.steps;
+    }
+
+    case "stockOutCheckout": {
+      // Returning customer hits the insufficient-inventory 400 on a dedicated
+      // limited-stock product (created once in Stage 0). If the pool wasn't
+      // seeded (create-product 4xx → lowStockVariantId unset), degrade to a
+      // normal returning browse — never hard-fail.
+      const acct = drawOrSynth(state);
+      if (!state.lowStockVariantId) {
+        return (await runReturningFlow(client, acct, "browse", promo)).steps;
+      }
+      const s = await runStockOutCheckout(client, acct, {
+        variantId: state.lowStockVariantId,
+        productId: state.lowStockProductId,
+        stock: state.lowStockQty ?? 4,
+      });
+      if (s.lastOrderId) poolOrder(state, s, acct.email, acct.token);
       return s.steps;
     }
 
@@ -154,7 +204,7 @@ export async function dispatch(
 
     case "orderStatus": {
       const order = drawReturningOrder(state, false);
-      if (!order) return (await runGuestShop(client, "browse")).steps; // degrade
+      if (!order) return guestDegrade(client);
       const acct = poolAccountFor(state, order.ownerEmail) ?? synthAccount();
       return (
         await runOrderStatusFlow(client, acct, order, cfg.eventProbs.reorderDuringStatus)
@@ -163,7 +213,7 @@ export async function dispatch(
 
     case "repeatOrderCheck": {
       const order = drawReturningOrder(state, false);
-      if (!order) return (await runGuestShop(client, "browse")).steps; // degrade
+      if (!order) return guestDegrade(client);
       const acct = poolAccountFor(state, order.ownerEmail) ?? synthAccount();
       return (await runRepeatOrderStatusFlow(client, acct, order)).steps;
     }
@@ -184,7 +234,7 @@ export async function dispatch(
       // Stage 2a: fulfill a pooled order so it becomes returnable in F3.
       const order = state.drawForFulfill();
       if (!order) {
-        return (await runAdminFlow(client, cfg.adminEmail, cfg.adminPassword, LIGHT_NOISE)).steps;
+        return adminDegrade(client, cfg);
       }
       const { session, fulfilled } = await runAdminFulfillFlow(
         client,
@@ -203,7 +253,7 @@ export async function dispatch(
       // never open a return on the same order_id.
       const order = state.drawReturnable();
       if (!order) {
-        return (await runAdminFlow(client, cfg.adminEmail, cfg.adminPassword, LIGHT_NOISE)).steps;
+        return adminDegrade(client, cfg);
       }
       const { session, returnId, filed, refunded } = await runAdminRefundFlow(
         client,
@@ -224,12 +274,43 @@ export async function dispatch(
       return session.steps;
     }
 
+    case "adminReturnReject": {
+      // Stage 2b (Theme 4c): file then REJECT a return on a FULFILLED order,
+      // preferring one a customer inquired about so it links cross-role on
+      // order_id. drawRejectable() claims the order synchronously, so no order
+      // gets both a refund (F3) and a rejection. If no fulfilled order is
+      // available, degrade to a normal admin catalog session — mirroring F3's
+      // empty-pool fallback (the Stage-2 empty-ORDER-pool hard-fail in run.ts
+      // still guards the whole wave per CLAUDE.md hard constraint #3).
+      const order = state.drawRejectable();
+      if (!order) {
+        return adminDegrade(client, cfg);
+      }
+      const { session, returnId, filed, rejected } = await runAdminReturnRejectFlow(
+        client,
+        cfg.adminEmail,
+        cfg.adminPassword,
+        order.orderId
+      );
+      if (filed) {
+        state.addReturn({
+          orderId: order.orderId,
+          returnId: returnId ?? "unknown",
+          ownerEmail: order.ownerEmail,
+        });
+      }
+      if (rejected) {
+        state.markReturnRejected(order.orderId);
+      }
+      return session.steps;
+    }
+
     case "adminCancel": {
       // Stage 2b: cancel an UNFULFILLED order (reversal before shipping).
       // drawCancelable() claims the order synchronously.
       const order = state.drawCancelable();
       if (!order) {
-        return (await runAdminFlow(client, cfg.adminEmail, cfg.adminPassword, LIGHT_NOISE)).steps;
+        return adminDegrade(client, cfg);
       }
       const { session, canceled } = await runAdminCancelFlow(
         client,

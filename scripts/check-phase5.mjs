@@ -90,7 +90,6 @@ async function checkSessionSpread() {
 async function checkRoleSpread() {
   console.log("\n[3] user_role spread (guest / customer / admin)");
   try {
-    const total = (await search({ size: 0, query: GENERATED }))?.hits?.total?.value ?? 0;
     const r = await search({
       size: 0,
       query: GENERATED,
@@ -98,8 +97,21 @@ async function checkRoleSpread() {
     });
     const buckets = r?.aggregations?.roles?.buckets ?? [];
     const roleCounts = Object.fromEntries(buckets.map((b) => [b.key, b.doc_count]));
-    const withRole = buckets.reduce((s, b) => s + b.doc_count, 0);
-    const guest = total - withRole; // null user_role is not indexed → guest traffic
+
+    // Guest traffic carries no user_role. Count null-role docs directly with a
+    // must_not-exists query rather than (total − withRole): the default
+    // track_total_hits cap (10000) makes total unreliable once the accumulated
+    // index exceeds it, which would falsely report "no guest" traffic.
+    const guestRes = await search({
+      size: 0,
+      query: {
+        bool: {
+          must: [GENERATED],
+          must_not: [{ exists: { field: "user_role.keyword" } }],
+        },
+      },
+    });
+    const guest = guestRes?.hits?.total?.value ?? 0;
 
     if (guest > 0) ok(`guest (null role): ${guest} request(s)`);
     else fail("guest traffic", "no guest (null-role) requests found");

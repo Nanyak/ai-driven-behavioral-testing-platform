@@ -29,43 +29,54 @@ The first cut of this generator produced only three identity shapes (guest, a ne
 ```
 services/traffic-generator/
   src/
-    client.ts              # HTTP wrapper, header injection (no persona header), retry hooks
-    config.ts              # env loading, mix profile, weights, event probs, floors
-    state.ts               # RunState: account / order / return pools, fulfillment + refund/cancel linkage
-    ids.ts                 # session_id / trace_id / customer-email generators
-    taxonomy.ts            # session types, stage map, weighted allocation, identity assignment
-    noise.ts               # abandonment + retry-on-4xx helpers (LIGHT_NOISE, runSteps, maybeAbandon)
-    dispatch.ts            # runs one session per (type, identity); pools orders/returns
-    reporting.ts           # observed-vs-target distribution + acceptance-gate tables
-    util/
-      random.ts            # pick / chance / shuffleInPlace — single source for randomness
-    api/
+    http/
+      client.ts            # HTTP wrapper, header injection (no persona header), retry hooks
+      noise.ts             # abandonment + retry-on-4xx helpers (LIGHT_NOISE, runSteps, maybeAbandon)
       step.ts              # StepResult, recordStep, MISSING sentinel
+    config/
+      config.ts            # env loading, mix profile, weights, event probs, floors
+      taxonomy.ts          # session types, stage map, weighted allocation, identity assignment
+      ids.ts               # session_id / trace_id / customer-email generators
+    api/
       store-session.ts     # StoreSession — Store API methods, runtime ID resolution
       admin-session.ts     # AdminSession — Admin API methods
+      catalog-query.ts     # shared /store/products query/param + response-mapping helpers
+    orchestration/
+      run.ts               # staged orchestrator: seed -> buy -> post-purchase
+      dispatch.ts          # runs one session per (type, identity); pools orders/returns
+      state.ts             # RunState: account / order / return pools, fulfillment + refund/cancel linkage
+      reporting.ts         # observed-vs-target distribution + acceptance-gate tables
+    util/
+      random.ts            # pick / chance / shuffleInPlace — single source for randomness
     flows/
       guest.ts             # guest backbone — browse-only (bounce/browse); carts require auth
       returning.ts         # returning customer (login-only or JWT-reuse, no register)
       direct-landing.ts    # share-link / ad product landing (view_product first)
       comparison-browse.ts # researcher: 4–8 product views, search-first, no purchase
+      category-browse.ts   # category-led discovery: categories + sort + pagination, no purchase
+      conversion.ts        # cart-wall conversion: guest 401 → login → 200 (buy/abandon/bounce)
+      stockout.ts          # stock-out checkout: over-add a low-stock variant → 400, recover/abandon
       multi-item.ts        # bulk-add: 3–5 browse→add cycles then checkout
       account.ts           # order-status (D1) + repeat-check (D1b) + profile/address (D2)
       returns.ts           # customer return INQUIRY (read-only) against a real order
-      admin.ts             # admin catalog (F1) + fulfill (F2) + refund (F3) + support (F4)
+      admin.ts             # admin catalog (F1) + fulfill (F2) + refund (F3) + return-reject (F6) + cancel (F5) + support (F4)
+      promo.ts             # promo-code attempt helper (valid 200 / invalid 400, Theme 4a)
       edge.ts              # edge-case / error flows (G)
     llm/
       narrative.ts         # Haiku 4.5 narrative (kinds incl. returning) + offline fallback
     personas/
       customer-llm.ts      # register→login→checkout, LLM-varied ONLY (holdout)
-    run.ts                 # staged orchestrator: seed -> buy -> post-purchase
   package.json
   .env.example
 ```
 
-> Structure note: `api/` holds the Store/Admin API method classes (split out of
-> the former `actions.ts`); `taxonomy.ts` is the former `sampling.ts` plus the
-> identity-assignment logic; and the orchestrator delegates per-session work to
-> `dispatch.ts` and end-of-run reporting to `reporting.ts`. The LLM narrative is
+> Structure note: the source is layered by concern — `http/` (transport),
+> `config/` (env + taxonomy), `api/` (Store/Admin API method classes, split out of
+> the former `actions.ts`), `flows/` (per-situation scripts), and `orchestration/`
+> (the staged run). `config/taxonomy.ts` is the former `sampling.ts` plus the
+> identity-assignment logic; the orchestrator `orchestration/run.ts` delegates
+> per-session work to `orchestration/dispatch.ts` and end-of-run reporting to
+> `orchestration/reporting.ts`. The LLM narrative is
 > replayed directly by `personas/customer-llm.ts`; the old `llm/translate.ts`
 > generic replayer was unused and has been removed. The flow set was expanded with
 > four Shopee/Lazada-shaped leaves — `direct-landing.ts` (share-link product
@@ -95,6 +106,7 @@ at `N=300` (weights sum to ≈99, so count ≈ weight × 3).
 | | `bounce` | guest 90 / returning 10 | 15% | ~45 | view 1–2 products, exit |
 | | `browse` | guest 90 / returning 10 | 12% | ~36 | search/filter + 1–2 views, no cart |
 | | `comparisonBrowse` | guest 80 / returning 20 | 6% | ~18 | **4–8 `view_product`**, search-first 60% |
+| | `categoryBrowse` | guest 80 / returning 20 | — | — | category-led: `product-categories` → `?category_id[]=` → `?order=` → `?offset=` (sort + "load more") then 2–4 product views |
 | **B** | **Cart / checkout abandonment** (auth-required) | returning 100 | **19%** | ~57 | abandon |
 | | `cartAbandon` | returning 100 | 11% | ~33 | login → cart, items added, no checkout |
 | | `checkoutAbandon` | returning 100 | 8% | ~24 | checkout started, Baymard-weighted cut |
@@ -103,6 +115,7 @@ at `N=300` (weights sum to ≈99, so count ≈ weight × 3).
 | | `directLanding` | guest 70 / returning 30† | 7% | ~21 | **first step is `view_product`** |
 | | `multiItemCheckout` | returning 100 | 4% | ~12 | **3–5 browse→add cycles**, 3+ line items |
 | | `cartWallConversion` | returning (guest→login) | — | — | guest `create_cart` **401** → `login` → `create_cart` **200** → buy/abandon (`wallBounce` stops at the 401); the 401→login→200 pivot |
+| | `stockOutCheckout` | returning 100 | — | — | login → view a dedicated low-stock product → add `stock+1` → **400 insufficient inventory** on `line-items` → recover (add 1) / abandon (Theme 3) |
 | | `newCheckout` **[HOLDOUT]** | new | 2% | ~6 | LLM-only `register → login → checkout` |
 | **D** | **Account / post-purchase, no new order** | returning 100 | **11%** | ~33 | |
 | | `orderStatus` | returning 100 | 5% | ~15 | login → view orders → view order → maybe reorder |
@@ -110,9 +123,10 @@ at `N=300` (weights sum to ≈99, so count ≈ weight × 3).
 | | `profileMgmt` | returning 100 | 3% | ~9 | login → update profile/address |
 | **E** | **Return inquiry** (references a real order) | returning 100 | **3%** | ~9 | login → view orders → **view a fulfilled order** (read-only; storefront has no customer return endpoint, so this only flags the order for admin settlement) |
 | **F** | **Admin operations** | admin | **8%** | ~24 | |
-| | `adminCatalog` | admin | 2% | ~6 | list/view/update products |
+| | `adminCatalog` | admin | 2% | ~6 | list/view/update products + `chance(0.4)` **create product** (`POST /admin/products`) |
 | | `adminFulfill` | admin | 3% | ~9 | fulfill order-pool orders (Stage 2a — makes them returnable) |
 | | `adminRefund` | admin | 1.5% | ~5 | **return + refund** a fulfilled order — same `order_id` a customer inquired about (linkage) |
+| | `adminReturnReject` | admin | — | — | **reject** a requested return on a fulfilled order: `begin → request-items → request` → `POST /admin/returns/{id}/cancel` (decline, no refund) — the third reversal archetype (Theme 4c) |
 | | `adminCancel` | admin | 2% | ~6 | **cancel + refund** an UNFULFILLED order (reversal before shipping) |
 | | `adminSupport` | admin | 0.5% | ~1 | search customers by email |
 | **G** | **Edge / error / abuse** | mixed | **2%** | ~6 | intentional 4xx/5xx |
@@ -172,6 +186,7 @@ RunState {
   - **Stage 2b — Post-purchase & reversals (D1, E, F3, F5, F4).** Draw from `orderPool`:
     - **E (return inquiry)** picks a **fulfilled** order owned by the session's account, logs in, and views it (read-only). It flags the order `returnRequested` — the cross-role touch — but issues no return call (the storefront has none).
     - **F3 (return + refund)** runs the full admin return lifecycle on a **fulfilled** order, preferring one a customer inquired about: `POST /admin/returns` (+`location_id`) → `request-items` → `request` (return filed) → `receive` → `receive-items` → `receive/confirm` (refund settled). Same `order_id` the customer placed/inquired about — the cross-role linkage Phase 7 discovers.
+    - **F6 (return-reject)** files a return on a **fulfilled** order the same way (`begin → request-items → request`, state `requested`) but then **declines** it via `POST /admin/returns/{id}/cancel` (empty body on this 2.15.5 build — the per-item `{items}` body 400s) instead of receiving/refunding — the operator rejecting a return (Theme 4c, ADR 0003). Draws a fulfilled order via `drawRejectable()`, claimed synchronously so an order never gets both F3 and F6.
     - **F5 (cancel + refund)** cancels an **unfulfilled** order via `POST /admin/orders/{id}/cancel`, reversing the authorized payment — the "changed their mind before it shipped" reversal.
 
 Stages run sequentially; sessions *within* a wave keep bounded concurrency (e.g. 5). Stage 2 must hard-fail loudly if `orderPool` is empty (means Stage 1 produced no orders).
@@ -182,8 +197,8 @@ Stages run sequentially; sessions *within* a wave keep bounded concurrency (e.g.
 2. **ID helpers.** (Existing.) `session_id = sess-<source>-<uuid>` (source tag for *our* debugging only — Phase 7 must not parse it). `trace_id` = uuid per request.
 3. **State store (`state.ts`).** `RunState` with account / order / return pools and helpers to register, draw, and record.
 4. **Taxonomy (`taxonomy.ts`).** Session-type list + stage map, weighted pick over the §4 taxonomy, identity-split sampling, and per-type identity assignment (`identityFor`); floor top-up lives in `run.ts`.
-5. **API sessions (`api/`).** `api/store-session.ts` — `StoreSession`: `searchProducts`, `listCategories`/`filterProducts`, `updateProfile`, `addAddress`, `applyPromoCode`, `reorder`, `viewOrders`/`viewOrder` (the read-only return-inquiry surface), `loginExisting` (login **without** the register-first fallback — the coupling that makes returning customers impossible today). No customer return/refund methods — the storefront has none. `api/admin-session.ts` — `AdminSession`: `createPromotion`, `createFulfillment`, `resolveStockLocation`, the return lifecycle (`beginReturn`/`requestReturnItems`/`confirmReturnRequest`/`receiveReturn`/`receiveReturnItems`/`confirmReturnReceipt`), `cancelOrder`, `listReturns`, `getOrder`, `searchCustomer`. Both share `api/step.ts` (`StepResult`, `recordStep`, `MISSING`).
-6. **Scripted flows.** `flows/guest.ts` (browse/cart backbone), `flows/returning.ts` (login-only **or** JWT-reuse browse/buy), `flows/direct-landing.ts` (share-link `view_product`-first landing), `flows/comparison-browse.ts` (4–8 product-view researcher), `flows/multi-item.ts` (3–5 browse→add bulk checkout), `flows/account.ts` (order-status D1, repeat-check D1b, profile mgmt D2), `flows/returns.ts` (read-only customer return **inquiry** E), `flows/admin.ts` (catalog/fulfill/return+refund/cancel/support F1–F5), `flows/edge.ts` (error G).
+5. **API sessions (`api/`).** `api/store-session.ts` — `StoreSession`: `searchProducts`, `listCategories`/`filterProducts`, `updateProfile`, `addAddress`, `applyPromoCode`, `reorder`, `viewOrders`/`viewOrder` (the read-only return-inquiry surface), `loginExisting` (login **without** the register-first fallback — the coupling that makes returning customers impossible today). No customer return/refund methods — the storefront has none. `api/admin-session.ts` — `AdminSession`: `createPromotion`, `createFulfillment`, `resolveStockLocation`, the return lifecycle (`beginReturn`/`requestReturnItems`/`confirmReturnRequest`/`receiveReturn`/`receiveReturnItems`/`confirmReturnReceipt`), `cancelReturn` (reject a requested return — Theme 4c), `cancelOrder`, `listReturns`, `getOrder`, `searchCustomer`. Both share `http/step.ts` (`StepResult`, `recordStep`, `MISSING`).
+6. **Scripted flows.** `flows/guest.ts` (browse/cart backbone), `flows/returning.ts` (login-only **or** JWT-reuse browse/buy), `flows/direct-landing.ts` (share-link `view_product`-first landing), `flows/comparison-browse.ts` (4–8 product-view researcher), `flows/multi-item.ts` (3–5 browse→add bulk checkout), `flows/account.ts` (order-status D1, repeat-check D1b, profile mgmt D2), `flows/returns.ts` (read-only customer return **inquiry** E), `flows/admin.ts` (catalog/fulfill/return+refund/return-reject/cancel/support F1–F6), `flows/promo.ts` (valid/invalid promo-code attempt helper, Theme 4a), `flows/edge.ts` (error G).
 7. **LLM-varied traffic** (Haiku 4.5, `claude-haiku-4-5-20251001`):
    - `narrative.ts`: kinds `guest` | `returning` | `new-customer`. The `new-customer` prompt couples register+login+checkout (holdout only); `returning` must **not** register. Prompt template in plan §8.2.
    - `personas/customer-llm.ts`: realizes the **full register→login→checkout holdout**, replaying the narrative's pre-checkout browse actions and guaranteeing the checkout backbone. This sequence appears **only** here, never in `flows/`.

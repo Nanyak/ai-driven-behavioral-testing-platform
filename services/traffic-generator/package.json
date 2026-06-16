@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Phase 5 synthetic traffic generator for the AI-Driven Behavioral Testing Platform.",
   "scripts": {
-    "generate": "tsx src/run.ts",
+    "generate": "tsx src/orchestration/run.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

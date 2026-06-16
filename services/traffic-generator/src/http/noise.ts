@@ -1,5 +1,5 @@
 import type { ApiResponse } from "./client.js";
-import { chance } from "./util/random.js";
+import { chance } from "../util/random.js";
 
 export interface NoiseConfig {
   /** Cut the session short at a random pre-completion step. */

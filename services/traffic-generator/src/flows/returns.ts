@@ -1,6 +1,6 @@
 import { StoreSession } from "../api/store-session.js";
-import type { MedusaClient } from "../client.js";
-import type { PoolAccount, PoolOrder } from "../state.js";
+import type { MedusaClient } from "../http/client.js";
+import type { PoolAccount, PoolOrder } from "../orchestration/state.js";
 
 /**
  * Customer return INQUIRY against a REAL completed order (plan §4 E / §5 Stage

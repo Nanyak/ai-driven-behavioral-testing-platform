@@ -1,6 +1,6 @@
 import { StoreSession } from "../api/store-session.js";
-import type { MedusaClient } from "../client.js";
-import type { PoolAccount } from "../state.js";
+import type { MedusaClient } from "../http/client.js";
+import type { PoolAccount } from "../orchestration/state.js";
 import { chance } from "../util/random.js";
 
 export type DirectIntent = "bounce" | "browse" | "cartAbandon" | "buy";
@@ -17,8 +17,7 @@ export type DirectIntent = "bounce" | "browse" | "cartAbandon" | "buy";
 export async function runDirectLandingFlow(
   client: MedusaClient,
   account: PoolAccount | null,
-  intent: DirectIntent,
-  validPromoCode?: string
+  intent: DirectIntent
 ): Promise<StoreSession> {
   const session = new StoreSession(client);
   await session.loadRegions();
