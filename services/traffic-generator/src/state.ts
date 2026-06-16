@@ -8,6 +8,8 @@
  * cooperatively on a single thread, so no locking is required.
  */
 
+import { pick } from "./util/random.js";
+
 export interface PoolAccount {
   email: string;
   password: string;
@@ -39,15 +41,12 @@ export interface PoolReturn {
   ownerEmail: string;
 }
 
-function randomOf<T>(items: T[]): T | undefined {
-  if (items.length === 0) return undefined;
-  return items[Math.floor(Math.random() * items.length)];
-}
-
 export class RunState {
   accountPool: PoolAccount[] = [];
   orderPool: PoolOrder[] = [];
   returnPool: PoolReturn[] = [];
+  /** order_ids an admin has refunded — joined against returnPool for linkage. */
+  refundedOrderIds = new Set<string>();
   validPromoCode?: string;
 
   addAccount(account: PoolAccount): void {
@@ -56,7 +55,7 @@ export class RunState {
 
   /** A random pooled account (returning customers log into these). */
   drawAccount(): PoolAccount | undefined {
-    return randomOf(this.accountPool);
+    return pick(this.accountPool);
   }
 
   addOrder(order: PoolOrder): void {
@@ -68,7 +67,7 @@ export class RunState {
     const candidates = ownerEmail
       ? this.orderPool.filter((o) => o.ownerEmail === ownerEmail)
       : this.orderPool;
-    return randomOf(candidates);
+    return pick(candidates);
   }
 
   /** A random order that has not yet been returned (for return sessions). */
@@ -76,7 +75,7 @@ export class RunState {
     const candidates = this.orderPool.filter(
       (o) => !o.returned && (!ownerEmail || o.ownerEmail === ownerEmail)
     );
-    return randomOf(candidates);
+    return pick(candidates);
   }
 
   addReturn(entry: PoolReturn): void {
@@ -87,7 +86,20 @@ export class RunState {
 
   /** A pending return for the admin refund-processing flow to settle. */
   drawReturn(): PoolReturn | undefined {
-    return randomOf(this.returnPool);
+    return pick(this.returnPool);
+  }
+
+  /** Record that an admin refunded this order (for cross-role linkage). */
+  markRefunded(orderId: string): void {
+    this.refundedOrderIds.add(orderId);
+  }
+
+  /** order_ids that were both returned by a customer and refunded by an admin. */
+  get linkedRefundCount(): number {
+    const returned = new Set(this.returnPool.map((r) => r.orderId));
+    let n = 0;
+    for (const id of this.refundedOrderIds) if (returned.has(id)) n++;
+    return n;
   }
 
   get summary() {
@@ -95,6 +107,7 @@ export class RunState {
       accounts: this.accountPool.length,
       orders: this.orderPool.length,
       returns: this.returnPool.length,
+      refunds: this.refundedOrderIds.size,
       validPromo: this.validPromoCode ?? null,
     };
   }

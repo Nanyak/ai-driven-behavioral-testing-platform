@@ -1,6 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { TrafficConfig } from "../config.js";
-import { shuffleInPlace } from "../noise.js";
 
 /**
  * The constrained action vocabulary the LLM may choose from. Keeping the
@@ -162,5 +161,3 @@ export async function generateNarrative(
     return localNarrative(effectiveKind);
   }
 }
-
-export { shuffleInPlace };

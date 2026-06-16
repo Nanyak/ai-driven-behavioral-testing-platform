@@ -1,24 +1,11 @@
-import type { ApiResponse, MedusaClient } from "./client.js";
-import { newCustomerEmail } from "./ids.js";
-
-export interface StepResult {
-  action: string;
-  method: string;
-  path: string;
-  status: number;
-  ok: boolean;
-}
+import type { ApiResponse, MedusaClient } from "../client.js";
+import { newCustomerEmail } from "../ids.js";
+import { pick } from "../util/random.js";
+import { MISSING, recordStep, type StepResult } from "./step.js";
 
 interface ProductLite {
   id: string;
   variantId?: string;
-}
-
-function pick<T>(items: T[]): T | undefined {
-  if (items.length === 0) {
-    return undefined;
-  }
-  return items[Math.floor(Math.random() * items.length)];
 }
 
 export const DEFAULT_PASSWORD = "Password123!";
@@ -47,8 +34,7 @@ export class StoreSession {
   constructor(public readonly client: MedusaClient) {}
 
   private record(action: string, method: string, path: string, res: ApiResponse): ApiResponse {
-    this.steps.push({ action, method, path, status: res.status, ok: res.ok });
-    return res;
+    return recordStep(this.steps, action, method, path, res);
   }
 
   async ensureRegion(): Promise<void> {
@@ -98,11 +84,7 @@ export class StoreSession {
     await this.ensureProducts();
     const product = pick(this.products);
     if (!product) {
-      return this.record("view_product", "GET", "/store/products/{id}", {
-        status: 0,
-        ok: false,
-        body: null,
-      });
+      return this.record("view_product", "GET", "/store/products/{id}", MISSING);
     }
     const params = new URLSearchParams({ fields: PRODUCT_FIELDS });
     if (this.regionId) {
@@ -166,11 +148,7 @@ export class StoreSession {
     await this.ensureProducts();
     const variant = pick(this.products.filter((p) => p.variantId))?.variantId;
     if (!this.cartId || !variant) {
-      return this.record("add_item", "POST", "/store/carts/{id}/line-items", {
-        status: 0,
-        ok: false,
-        body: null,
-      });
+      return this.record("add_item", "POST", "/store/carts/{id}/line-items", MISSING);
     }
     const res = await this.client.request("POST", `/store/carts/${this.cartId}/line-items`, {
       body: { variant_id: variant, quantity: 1 },
@@ -185,11 +163,7 @@ export class StoreSession {
   async updateItem(): Promise<ApiResponse> {
     const item = pick(this.items);
     if (!this.cartId || !item) {
-      return this.record("update_item", "POST", "/store/carts/{id}/line-items/{lineId}", {
-        status: 0,
-        ok: false,
-        body: null,
-      });
+      return this.record("update_item", "POST", "/store/carts/{id}/line-items/{lineId}", MISSING);
     }
     const res = await this.client.request(
       "POST",
@@ -202,11 +176,7 @@ export class StoreSession {
   async removeItem(): Promise<ApiResponse> {
     const item = pick(this.items);
     if (!this.cartId || !item) {
-      return this.record("remove_item", "DELETE", "/store/carts/{id}/line-items/{lineId}", {
-        status: 0,
-        ok: false,
-        body: null,
-      });
+      return this.record("remove_item", "DELETE", "/store/carts/{id}/line-items/{lineId}", MISSING);
     }
     const res = await this.client.request(
       "DELETE",
@@ -217,17 +187,6 @@ export class StoreSession {
       this.items = this.items.filter((i) => i.id !== item.id);
     }
     return this.record("remove_item", "DELETE", "/store/carts/{id}/line-items/{lineId}", res);
-  }
-
-  async applyPromo(): Promise<ApiResponse> {
-    await this.ensureCart();
-    // The promo code is intentionally unlikely to exist — exercises a realistic
-    // "tried a code that didn't apply" path (may 200 with no discount or 400).
-    const res = await this.client.request("POST", `/store/carts/${this.cartId}`, {
-      body: { promo_codes: ["WELCOME10"] },
-      token: this.token,
-    });
-    return this.record("apply_promo", "POST", "/store/carts/{id}", res);
   }
 
   async setAddress(): Promise<ApiResponse> {
@@ -266,11 +225,7 @@ export class StoreSession {
     const options = await this.listShipping();
     const optionId = options.ok ? options.body?.shipping_options?.[0]?.id : undefined;
     if (!this.cartId || !optionId) {
-      return this.record("add_shipping", "POST", "/store/carts/{id}/shipping-methods", {
-        status: 0,
-        ok: false,
-        body: null,
-      });
+      return this.record("add_shipping", "POST", "/store/carts/{id}/shipping-methods", MISSING);
     }
     const res = await this.client.request(
       "POST",
@@ -313,7 +268,7 @@ export class StoreSession {
         "create_payment_session",
         "POST",
         "/store/payment-collections/{id}/payment-sessions",
-        { status: 0, ok: false, body: null }
+        MISSING
       );
     }
     const res = await this.client.request(
@@ -357,11 +312,7 @@ export class StoreSession {
 
   async viewOrder(): Promise<ApiResponse> {
     if (!this.lastOrderId) {
-      return this.record("view_order", "GET", "/store/orders/{id}", {
-        status: 0,
-        ok: false,
-        body: null,
-      });
+      return this.record("view_order", "GET", "/store/orders/{id}", MISSING);
     }
     const res = await this.client.request("GET", `/store/orders/${this.lastOrderId}`, {
       token: this.token,
@@ -417,7 +368,7 @@ export class StoreSession {
 
   async viewCart(): Promise<ApiResponse> {
     if (!this.cartId) {
-      return this.record("view_cart", "GET", "/store/carts/{id}", { status: 0, ok: false, body: null });
+      return this.record("view_cart", "GET", "/store/carts/{id}", MISSING);
     }
     const res = await this.client.request("GET", `/store/carts/${this.cartId}`, { token: this.token });
     return this.record("view_cart", "GET", "/store/carts/{id}", res);
@@ -517,11 +468,7 @@ export class StoreSession {
     this.record("view_order", "GET", "/store/orders/{id}", order);
     const items: any[] = order.ok ? order.body?.order?.items ?? [] : [];
     if (items.length === 0) {
-      const miss = this.record("request_return", "POST", "/store/returns", {
-        status: 0,
-        ok: false,
-        body: null,
-      });
+      const miss = this.record("request_return", "POST", "/store/returns", MISSING);
       return { res: miss };
     }
     const reasons = await this.getReturnReasons();
@@ -543,187 +490,12 @@ export class StoreSession {
   async reorder(variantId: string): Promise<ApiResponse> {
     await this.createCart();
     if (!this.cartId) {
-      return this.record("reorder", "POST", "/store/carts/{id}/line-items", {
-        status: 0,
-        ok: false,
-        body: null,
-      });
+      return this.record("reorder", "POST", "/store/carts/{id}/line-items", MISSING);
     }
     const res = await this.client.request("POST", `/store/carts/${this.cartId}/line-items`, {
       body: { variant_id: variantId, quantity: 1 },
       token: this.token,
     });
     return this.record("reorder", "POST", "/store/carts/{id}/line-items", res);
-  }
-}
-
-/**
- * Drives the Medusa Admin API for one operator session. Establishes the admin
- * role naturally via POST /auth/user/emailpass — the logging middleware records
- * actor_type "user" from the resulting JWT.
- */
-export class AdminSession {
-  token?: string;
-  productIds: string[] = [];
-  steps: StepResult[] = [];
-
-  constructor(
-    public readonly client: MedusaClient,
-    private readonly email: string,
-    private readonly password: string
-  ) {}
-
-  private record(action: string, method: string, path: string, res: ApiResponse): ApiResponse {
-    this.steps.push({ action, method, path, status: res.status, ok: res.ok });
-    return res;
-  }
-
-  async login(): Promise<ApiResponse> {
-    const res = await this.client.request("POST", "/auth/user/emailpass", {
-      body: { email: this.email, password: this.password },
-    });
-    if (res.ok && res.body?.token) {
-      this.token = res.body.token;
-    }
-    return this.record("admin_login", "POST", "/auth/user/emailpass", res);
-  }
-
-  async listProducts(): Promise<ApiResponse> {
-    const res = await this.client.request("GET", "/admin/products?limit=20", {
-      token: this.token,
-    });
-    if (res.ok && Array.isArray(res.body?.products)) {
-      this.productIds = res.body.products.map((p: any) => p.id);
-    }
-    return this.record("admin_list_products", "GET", "/admin/products", res);
-  }
-
-  async viewProduct(): Promise<ApiResponse> {
-    const id = pick(this.productIds);
-    if (!id) {
-      return this.record("admin_view_product", "GET", "/admin/products/{id}", {
-        status: 0,
-        ok: false,
-        body: null,
-      });
-    }
-    const res = await this.client.request("GET", `/admin/products/${id}`, { token: this.token });
-    return this.record("admin_view_product", "GET", "/admin/products/{id}", res);
-  }
-
-  async updateProduct(): Promise<ApiResponse> {
-    const id = pick(this.productIds);
-    if (!id) {
-      return this.record("admin_update_product", "POST", "/admin/products/{id}", {
-        status: 0,
-        ok: false,
-        body: null,
-      });
-    }
-    // Touch a metadata note — a benign admin edit that succeeds on any product.
-    const res = await this.client.request("POST", `/admin/products/${id}`, {
-      token: this.token,
-      body: { metadata: { reviewed_at: new Date().toISOString() } },
-    });
-    return this.record("admin_update_product", "POST", "/admin/products/{id}", res);
-  }
-
-  async listOrders(): Promise<ApiResponse> {
-    const res = await this.client.request("GET", "/admin/orders?limit=20", { token: this.token });
-    return this.record("admin_list_orders", "GET", "/admin/orders", res);
-  }
-
-  async listCustomers(): Promise<ApiResponse> {
-    const res = await this.client.request("GET", "/admin/customers?limit=20", {
-      token: this.token,
-    });
-    return this.record("admin_list_customers", "GET", "/admin/customers", res);
-  }
-
-  // --- Stage-0 / Stage-2 additions (plan §6.5) — VERIFY shapes against live 2.15.5 ---
-
-  /**
-   * Seed a valid percentage promotion so deal-seeker conversions can actually
-   * succeed (plan §5 Stage 0). VERIFY: the Medusa 2.x promotions create body
-   * (`application_method`) is version-sensitive.
-   */
-  async createPromotion(code: string, currencyCode = "usd"): Promise<ApiResponse> {
-    const res = await this.client.request("POST", "/admin/promotions", {
-      token: this.token,
-      body: {
-        code,
-        type: "standard",
-        status: "active",
-        application_method: {
-          type: "percentage",
-          value: 10,
-          target_type: "order",
-          allocation: "across",
-          currency_code: currencyCode,
-        },
-      },
-    });
-    return this.record("admin_create_promotion", "POST", "/admin/promotions", res);
-  }
-
-  async getOrder(orderId: string): Promise<ApiResponse> {
-    const res = await this.client.request("GET", `/admin/orders/${orderId}`, {
-      token: this.token,
-    });
-    return this.record("admin_view_order", "GET", "/admin/orders/{id}", res);
-  }
-
-  async listReturns(): Promise<ApiResponse> {
-    const res = await this.client.request("GET", "/admin/returns?limit=20", {
-      token: this.token,
-    });
-    return this.record("admin_list_returns", "GET", "/admin/returns", res);
-  }
-
-  /**
-   * Fulfill a real completed order (plan §5 Stage 2 F2). VERIFY:
-   * `POST /admin/orders/{id}/fulfillments` item shape varies across 2.x.
-   */
-  async createFulfillment(orderId: string): Promise<ApiResponse> {
-    const order = await this.getOrder(orderId);
-    const items: any[] = order.ok ? order.body?.order?.items ?? [] : [];
-    const res = await this.client.request("POST", `/admin/orders/${orderId}/fulfillments`, {
-      token: this.token,
-      body: { items: items.slice(0, 1).map((i: any) => ({ id: i.id, quantity: 1 })) },
-    });
-    return this.record("admin_create_fulfillment", "POST", "/admin/orders/{id}/fulfillments", res);
-  }
-
-  /**
-   * Process a refund against the SAME order_id the customer filed a return on
-   * (plan §5 Stage 2 F3) — the cross-role linkage Phase 7 joins on. VERIFY: the
-   * admin return-receive + refund sequence is the most version-sensitive path in
-   * 2.x; each call degrades to a logged 4xx if the shape is off.
-   */
-  async processRefund(orderId: string, returnId?: string): Promise<ApiResponse> {
-    // Touch the order so an admin event references this order_id even if the
-    // refund call shape is wrong (keeps the linkage joinable on order_id).
-    await this.getOrder(orderId);
-    if (returnId) {
-      const recv = await this.client.request("POST", `/admin/returns/${returnId}/receive`, {
-        token: this.token,
-        body: { items: [] },
-      });
-      this.record("admin_receive_return", "POST", "/admin/returns/{id}/receive", recv);
-    }
-    const res = await this.client.request("POST", `/admin/orders/${orderId}/refunds`, {
-      token: this.token,
-      body: { amount: 1, reason: "return" },
-    });
-    return this.record("admin_refund", "POST", "/admin/orders/{id}/refunds", res);
-  }
-
-  async searchCustomer(query: string): Promise<ApiResponse> {
-    const res = await this.client.request(
-      "GET",
-      `/admin/customers?q=${encodeURIComponent(query)}&limit=10`,
-      { token: this.token }
-    );
-    return this.record("admin_search_customer", "GET", "/admin/customers", res);
   }
 }

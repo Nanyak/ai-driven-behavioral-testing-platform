@@ -98,3 +98,60 @@ npm run check:phase0
 ```
 
 The command checks that the expected scaffold, documentation, environment template, and workspace files exist.
+
+## Running lean & disk hygiene
+
+The full Compose stack (`compose:up` + `elk:up`) starts ten containers — including
+the storefront, dashboard, and Kibana, which are **not needed** for traffic
+generation or the Phase 5/6 checks. Running everything at once is memory-heavy and
+has wedged Docker Desktop on Windows. Prefer the slim set:
+
+```bash
+npm run stack:core      # postgres, redis, medusa, elasticsearch, logstash, filebeat (only)
+# ... generate traffic, run checks ...
+npm run stack:down      # stop & remove the containers when you're done
+npm run stack:reset     # same, but also delete volumes (fresh DB + empty ES) — use to reclaim space
+```
+
+Always tear the stack down at the end of a session rather than leaving it idling.
+
+### Avoiding the WSL2 / Docker disk-bloat trap
+
+Docker Desktop's virtual disk grows with every `--build` and with Elasticsearch's
+data volume. On **Windows/WSL2** that disk (`%LOCALAPPDATA%\Docker\wsl\disk\docker_data.vhdx`)
+**never returns freed space to the host** — it can fill `C:` and hang the daemon.
+Prevent it:
+
+1. **Cap the disk** — Docker Desktop → Settings → Resources → Advanced →
+   *Virtual disk limit* → ~40–48 GB. Turns a machine-killer into a recoverable
+   "no space" error.
+2. **Prune regularly** — `npm run stack:reclaim` (build cache + dangling images),
+   the usual silent hogs after repeated rebuilds.
+3. **Run lean + tear down** — see `stack:core` / `stack:down` above.
+
+To reclaim a disk that has already bloated, the reliable route is Docker Desktop →
+**Troubleshoot → Clean / Purge data** (deletes and recreates the data disk). Note
+that `docker system prune` and `diskpart compact vdisk` do **not** shrink the
+`.vhdx` on their own, and `wsl --unregister docker-desktop` leaves the separate
+`docker_data.vhdx` behind. Data here is reproducible (images re-pull, volumes
+reseed via `medusa:setup` / a fresh traffic run), so purging is low-risk.
+
+### Localhost vs IPv4 on Windows
+
+Node `fetch` (and sometimes curl) may resolve `localhost` to IPv6 `::1` and fail
+against a service that only binds IPv4, surfacing as an intermittent connection
+error or a generator preflight that "can't reach Medusa". Force IPv4 when this
+happens:
+
+```bash
+MEDUSA_BACKEND_URL=http://127.0.0.1:9000 npm run traffic:generate
+ELASTICSEARCH_URL=http://127.0.0.1:9200 npm run ingest:run
+```
+
+### macOS
+
+Docker Desktop on macOS keeps its data in a single `Docker.raw`
+(`~/Library/Containers/com.docker.docker/Data/vms/0/`). It reclaims freed space far
+better than WSL2, so the never-shrinks trap is unlikely — but the same habits
+(disk-size cap, `stack:reclaim`, tear-down) still apply. The Troubleshoot →
+Clean / Purge data button works the same cross-platform.

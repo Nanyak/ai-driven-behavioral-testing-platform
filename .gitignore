@@ -38,8 +38,10 @@ out/
 uploads/
 reports/*
 generated-tests/*
+data/sessions/*
 !reports/.gitkeep
 !generated-tests/.gitkeep
+!data/sessions/.gitkeep
 
 # Editor and OS files
 .DS_Store

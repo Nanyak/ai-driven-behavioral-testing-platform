@@ -43,6 +43,7 @@ npm run check:phase2   # structured logging middleware
 npm run check:phase3   # Elasticsearch ingestion
 npm run check:phase4   # log schema + Kibana
 npm run check:phase5   # traffic generator acceptance gates
+npm run check:phase6   # log ingestion output (session flows + goldens)
 
 # Traffic generator TypeScript must always compile clean:
 cd services/traffic-generator && npx tsc --noEmit

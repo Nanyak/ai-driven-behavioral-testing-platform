@@ -31,26 +31,39 @@ services/traffic-generator/
   src/
     client.ts            # HTTP client wrapper, header injection, retry hooks
     config.ts            # env loading, mix profile, weights, event probs, floors
-    state.ts             # RunState: account / order / return pools, valid promo  [NEW]
+    state.ts             # RunState: account / order / return pools, refund linkage
     ids.ts               # session_id / trace_id generators
-    actions.ts           # StoreSession + AdminSession API methods
-    sampling.ts          # weighted sampling + identity-split helpers            [NEW]
+    taxonomy.ts          # session types, stage map, weighted allocation, identity assignment
+    dispatch.ts          # runs one session per (type, identity); pools orders/returns
+    reporting.ts         # observed-vs-target distribution + acceptance-gate tables
+    util/
+      random.ts          # pick / chance / shuffleInPlace — single source for randomness
+    api/
+      step.ts            # StepResult, recordStep, MISSING sentinel
+      store-session.ts   # StoreSession — Store API methods
+      admin-session.ts   # AdminSession — Admin API methods
     flows/
       guest.ts           # scripted guest backbone (browse/cart/checkout)
       admin.ts           # scripted admin backbone (+ promo seed, fulfill, refund)
       edge.ts            # edge-case / error flows
-      returning.ts       # returning-customer browse/buy (login-only, no register) [NEW]
-      account.ts         # order-status + profile/address management (no purchase) [NEW]
-      returns.ts         # customer return request against a real order            [NEW]
+      returning.ts       # returning-customer browse/buy (login-only, no register)
+      account.ts         # order-status + profile/address management (no purchase)
+      returns.ts         # customer return request against a real order
     llm/
       narrative.ts       # Claude call -> session narrative (kinds incl. returning)
-      translate.ts       # narrative -> concrete API call sequence
     personas/
       customer-llm.ts    # register→login→checkout, LLM-varied ONLY (holdout)
     run.ts               # staged orchestrator: seed -> buy -> post-purchase
   package.json
   .env.example
 ```
+
+> Structure note: `api/` holds the Store/Admin API method classes (split out of
+> the former `actions.ts`); `taxonomy.ts` is the former `sampling.ts` plus the
+> identity-assignment logic; and the orchestrator delegates per-session work to
+> `dispatch.ts` and end-of-run reporting to `reporting.ts`. The LLM narrative is
+> replayed directly by `personas/customer-llm.ts`; the old `llm/translate.ts`
+> generic replayer was unused and has been removed.
 
 ## 3. Identities
 
@@ -139,15 +152,14 @@ Stages run sequentially; sessions *within* a stage keep bounded concurrency (e.g
 1. **Client + config.** (Existing.) Inject `x-session-id`, `x-trace-id`, `x-publishable-api-key`. Surface 4xx/5xx without throwing. Config gains `MIX_PROFILE`, `TRAFFIC_TOTAL_SESSIONS`, `ACCOUNT_POOL_SIZE`, a `weights` block (§4), an `eventProbs` block (§4.1), and `floors` (§7).
 2. **ID helpers.** (Existing.) `session_id = sess-<source>-<uuid>` (source tag for *our* debugging only — Phase 7 must not parse it). `trace_id` = uuid per request.
 3. **State store (`state.ts`).** `RunState` with account / order / return pools and helpers to register, draw, and record.
-4. **Sampling (`sampling.ts`).** Weighted pick over the §4 taxonomy + identity-split sampling; floor top-up.
-5. **Actions (`actions.ts`).** Add to `StoreSession`: `searchProducts`, `listCategories`/`filterProducts`, `getReturnReasons`, `requestReturn` (`POST /store/returns`), `updateProfile`, `addAddress`, `applyValidPromo`/`applyInvalidPromo`, `reorder`, `loginExisting` (login **without** the register-first fallback — the coupling that makes returning customers impossible today). Add to `AdminSession`: `createPromotion`, `createFulfillment`, `listReturns`/`refund`, `getOrder`, `searchCustomer`.
+4. **Taxonomy (`taxonomy.ts`).** Session-type list + stage map, weighted pick over the §4 taxonomy, identity-split sampling, and per-type identity assignment (`identityFor`); floor top-up lives in `run.ts`.
+5. **API sessions (`api/`).** `api/store-session.ts` — `StoreSession`: `searchProducts`, `listCategories`/`filterProducts`, `getReturnReasons`, `requestReturn` (`POST /store/returns`), `updateProfile`, `addAddress`, `applyPromoCode`, `reorder`, `loginExisting` (login **without** the register-first fallback — the coupling that makes returning customers impossible today). `api/admin-session.ts` — `AdminSession`: `createPromotion`, `createFulfillment`, `listReturns`/`processRefund`, `getOrder`, `searchCustomer`. Both share `api/step.ts` (`StepResult`, `recordStep`, `MISSING`).
 6. **Scripted flows.** `flows/guest.ts` (existing backbone), `flows/returning.ts` (login-only browse/buy), `flows/account.ts` (order-status + profile mgmt), `flows/returns.ts` (return request), `flows/edge.ts` (existing).
 7. **LLM-varied traffic** (Haiku 4.5, `claude-haiku-4-5-20251001`):
    - `narrative.ts`: kinds `guest` | `returning` | `new-customer`. The `new-customer` prompt couples register+login+checkout (holdout only); `returning` must **not** register. Prompt template in plan §8.2.
-   - `translate.ts`: maps narrative tokens to concrete client calls, resolving IDs at runtime; `login` uses pool credentials, never self-registers.
-   - `personas/customer-llm.ts`: realizes the **full register→login→checkout holdout**. This sequence appears **only** here, never in `flows/`.
+   - `personas/customer-llm.ts`: realizes the **full register→login→checkout holdout**, replaying the narrative's pre-checkout browse actions and guaranteeing the checkout backbone. This sequence appears **only** here, never in `flows/`.
 8. **Noise injection** (plan §8.3): abandonment (cut at a realistic step per §4.1), retry-on-4xx, contamination (one out-of-role call), shuffling. (Existing `noise.ts`.)
-9. **Staged orchestrator (`run.ts`).** Build the weighted mix, run Stage 0 → 1 → 2 with bounded concurrency, apply floor top-up, log an observed-vs-target summary table plus the holdout and cross-role linkage counts.
+9. **Staged orchestrator (`run.ts`).** Build the weighted mix, run Stage 0 → 1 → 2 with bounded concurrency, apply floor top-up. Per-session work is delegated to `dispatch.ts` (which pools resulting orders/returns and records refund linkage on `RunState`); the observed-vs-target summary table plus the holdout and cross-role linkage counts are rendered by `reporting.ts`.
 
 ## Model / cost
 

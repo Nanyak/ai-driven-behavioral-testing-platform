@@ -1,6 +1,7 @@
-import { AdminSession } from "../actions.js";
+import { AdminSession } from "../api/admin-session.js";
 import type { MedusaClient } from "../client.js";
-import { chance, maybeAbandon, runSteps, type NoiseConfig } from "../noise.js";
+import { maybeAbandon, runSteps, type NoiseConfig } from "../noise.js";
+import { chance } from "../util/random.js";
 
 /**
  * Scripted admin backbone (plan §8.5):

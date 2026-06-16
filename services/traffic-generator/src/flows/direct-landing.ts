@@ -1,7 +1,7 @@
-import { StoreSession } from "../actions.js";
+import { StoreSession } from "../api/store-session.js";
 import type { MedusaClient } from "../client.js";
 import type { PoolAccount } from "../state.js";
-import { chance } from "../noise.js";
+import { chance } from "../util/random.js";
 
 export type DirectIntent = "bounce" | "browse" | "cartAbandon" | "buy";
 

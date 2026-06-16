@@ -1,7 +1,7 @@
-import { StoreSession } from "../actions.js";
+import { StoreSession } from "../api/store-session.js";
 import type { MedusaClient } from "../client.js";
 import type { PoolAccount, PoolOrder } from "../state.js";
-import { chance } from "../noise.js";
+import { chance } from "../util/random.js";
 
 /**
  * Order-status / track-order flow (plan §4 D1). Returning identity: login →

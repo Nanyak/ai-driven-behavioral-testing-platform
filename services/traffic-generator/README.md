@@ -38,10 +38,18 @@ src/
   config.ts                  env loading; mix profile, weights, event probs, floors
   ids.ts                     session_id / trace_id / customer-email helpers
   client.ts                  HTTP wrapper, header injection (no persona header)
-  state.ts                   RunState: account / order / return pools, valid promo
-  sampling.ts                weighted allocation + identity-split + stage map
-  actions.ts                 StoreSession / AdminSession — runtime ID resolution
-  noise.ts                   abandonment, retry, contamination, shuffling
+  state.ts                   RunState: account / order / return pools, refund linkage
+  taxonomy.ts                session types, stage map, weighted allocation, identity assignment
+  noise.ts                   abandonment + retry-on-4xx helpers (LIGHT_NOISE, runSteps, maybeAbandon)
+  dispatch.ts                runs one session per (type, identity) and pools resulting orders/returns
+  reporting.ts               observed-vs-target distribution + acceptance-gate tables
+  run.ts                     staged orchestrator: seed -> browse&buy -> post-purchase
+  util/
+    random.ts                pick / chance / shuffleInPlace — single source for randomness
+  api/
+    step.ts                  StepResult, recordStep, MISSING sentinel (shared by both sessions)
+    store-session.ts         StoreSession — Store API, runtime ID resolution
+    admin-session.ts         AdminSession — Admin API (role established via /auth/user)
   flows/guest.ts             guest shopper (bounce/browse/cart/checkout-abandon/buy)
   flows/returning.ts         returning customer (login-only or JWT-reuse, no register)
   flows/direct-landing.ts    share-link / ad product landing (view_product first)
@@ -52,10 +60,12 @@ src/
   flows/admin.ts             admin catalog (F1) + fulfill (F2) + refund (F3) + support (F4)
   flows/edge.ts              edge-case 4xx/5xx flows (G)
   llm/narrative.ts           Haiku 4.5 narrative (+ offline stochastic fallback)
-  llm/translate.ts           narrative -> concrete API calls
   personas/customer-llm.ts   HOLDOUT: registered-customer full checkout (C3)
-  run.ts                     staged orchestrator: seed -> browse&buy -> post-purchase
 ```
+
+The Store/Admin API methods live in `api/` (split out of the former monolithic
+`actions.ts`); the orchestrator `run.ts` delegates per-session work to
+`dispatch.ts` and the end-of-run tables to `reporting.ts`.
 
 ## Staged pipeline (plan §5)
 

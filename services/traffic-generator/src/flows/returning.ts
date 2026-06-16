@@ -1,7 +1,7 @@
-import { StoreSession } from "../actions.js";
+import { StoreSession } from "../api/store-session.js";
 import type { MedusaClient } from "../client.js";
 import type { PoolAccount } from "../state.js";
-import { chance } from "../noise.js";
+import { chance } from "../util/random.js";
 /** Full set of intents a returning (authenticated) session can take. */
 export type ReturningIntent = "bounce" | "browse" | "cartAbandon" | "checkoutAbandon" | "buy";
 
@@ -9,7 +9,7 @@ export type ReturningIntent = "bounce" | "browse" | "cartAbandon" | "checkoutAba
  * Checkout abandonment cut weighted toward the payment step (Baymard Institute
  * data: ~60% abandon at payment, ~25% at address, ~15% at shipping).
  */
-function baymarkCut(stepsLength: number): number {
+function baymardCut(stepsLength: number): number {
   const r = Math.random();
   if (r < 0.25) return 1;                                     // abandon at address
   if (r < 0.40) return 2;                                     // abandon at shipping
@@ -68,7 +68,7 @@ export async function runReturningFlow(
       () => session.createPaymentCollection(),
       () => session.createPaymentSession(),
     ];
-    const cut = baymarkCut(steps.length);
+    const cut = baymardCut(steps.length);
     for (const step of steps.slice(0, cut)) await step();
     return session;
   }

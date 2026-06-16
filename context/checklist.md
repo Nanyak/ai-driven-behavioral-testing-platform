@@ -153,7 +153,7 @@ Validation (require the live stack — re-pending under the staged build; the ES
 Staged situation taxonomy (plan §4–§7 — supersedes the flat mix above):
 
 - [x] Implement `state.ts` (`RunState`: account / order / return pools, valid promo).
-- [x] Implement `sampling.ts` (weighted allocation, identity split, stage map).
+- [x] Implement `taxonomy.ts` (weighted allocation, identity split, stage map, identity assignment).
 - [x] Add `MIX_PROFILE` (realistic / signal-rich / smoke), `TRAFFIC_TOTAL_SESSIONS`, `ACCOUNT_POOL_SIZE`, promo-code config.
 - [x] Decouple sign-in from sign-up: `loginExisting` (login-only) + Stage-0 signup-only sessions (register without checkout).
 - [x] Implement returning-customer flow (`flows/returning.ts`, login-only, not the holdout).
@@ -168,20 +168,27 @@ Staged situation taxonomy (plan §4–§7 — supersedes the flat mix above):
 
 ## Phase 6: Data Ingestion Service
 
-- [ ] Create `services/log-ingestion`.
-- [ ] Add Elasticsearch client configuration.
-- [ ] Query logs by time range.
-- [ ] Query logs by `source = medusa`.
-- [ ] Group logs by `session_id`.
-- [ ] Sort grouped logs by timestamp.
-- [ ] Normalize dynamic URL segments.
-- [ ] Remove noisy or irrelevant endpoints.
-- [ ] Convert logs into behavioral sequence records.
-- [ ] Store extracted session flows as JSON.
-- [ ] Extract candidate golden responses using the schema-extraction algorithm defined in Phase 8 (plan §11.1).
-- [ ] Store golden responses under `golden-responses/`.
-- [ ] Add a command to run ingestion from the terminal.
-- [ ] Verify at least 50 sessions can be processed.
+- [x] Create `services/log-ingestion`.
+- [x] Add Elasticsearch client configuration.
+- [x] Query logs by time range.
+- [x] Query logs by `source = medusa`.
+- [x] Group logs by `session_id`.
+- [x] Sort grouped logs by timestamp.
+- [x] Normalize dynamic URL segments.
+- [x] Remove noisy or irrelevant endpoints.
+- [x] Convert logs into behavioral sequence records.
+- [x] Store extracted session flows as JSON.
+- [x] Extract candidate golden responses using the schema-extraction algorithm defined in Phase 8 (plan §11.1).
+- [x] Store golden responses under `golden-responses/`.
+- [x] Add a command to run ingestion from the terminal.
+- [x] Verify at least 50 sessions can be processed.
+
+> Validated offline against the real Phase-5 log file (`logs/medusa-json.log`,
+> bodies-off): **104 session flows** from 106 buckets, all endpoints normalized,
+> noise removed, `role_observed` present, no persona field. `npm run check:phase6`
+> passes (9/9). Golden extraction is exercised by a bodies-on fixture (the
+> bodies-off prod log legitimately yields 0 goldens — ADR 0001). Re-runnable
+> against the live ELK stack with `npm run ingest:run` once Elasticsearch is up.
 
 ## Phase 7: Behavioral Modeling Engine
 

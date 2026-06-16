@@ -1,5 +1,14 @@
+# Bound container stdout logs so a long/repeated traffic run can't grow the
+# Docker data disk without limit (default json-file driver is unbounded).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   postgres:
+    logging: *default-logging
     image: postgres:15
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-medusa}
@@ -16,6 +25,7 @@ services:
       retries: 20
 
   redis:
+    logging: *default-logging
     image: redis:7
     ports:
       - "6379:6379"
@@ -28,6 +38,7 @@ services:
       retries: 20
 
   medusa:
+    logging: *default-logging
     build:
       context: ./apps/medusa
       dockerfile: Dockerfile.dev
@@ -98,6 +109,7 @@ services:
 
   elasticsearch:
     profiles: ["elk"]
+    logging: *default-logging
     image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
     environment:
       - discovery.type=single-node
@@ -129,6 +141,7 @@ services:
 
   logstash:
     profiles: ["elk"]
+    logging: *default-logging
     image: docker.elastic.co/logstash/logstash:8.13.4
     environment:
       - LS_JAVA_OPTS=-Xms256m -Xmx512m
@@ -142,6 +155,7 @@ services:
 
   filebeat:
     profiles: ["elk"]
+    logging: *default-logging
     image: docker.elastic.co/beats/filebeat:8.13.4
     user: root
     command: filebeat -e --strict.perms=false

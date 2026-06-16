@@ -1,4 +1,5 @@
 import type { ApiResponse } from "./client.js";
+import { chance } from "./util/random.js";
 
 export interface NoiseConfig {
   /** Cut the session short at a random pre-completion step. */
@@ -22,37 +23,6 @@ export const LIGHT_NOISE: NoiseConfig = {
   contaminateProb: 0,
   shuffle: true,
 };
-
-/** Heavy noise: the dedicated noise-injected session budget (plan §7). */
-export const HEAVY_NOISE: NoiseConfig = {
-  abandon: true,
-  abandonProb: 0.6,
-  retry: true,
-  contaminate: true,
-  contaminateProb: 0.5,
-  shuffle: true,
-};
-
-export const NO_NOISE: NoiseConfig = {
-  abandon: false,
-  abandonProb: 0,
-  retry: false,
-  contaminate: false,
-  contaminateProb: 0,
-  shuffle: false,
-};
-
-export function shuffleInPlace<T>(items: T[]): T[] {
-  for (let i = items.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [items[i], items[j]] = [items[j], items[i]];
-  }
-  return items;
-}
-
-export function chance(probability: number): boolean {
-  return Math.random() < probability;
-}
 
 type Step = () => Promise<ApiResponse>;
 

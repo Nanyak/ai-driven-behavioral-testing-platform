@@ -1,6 +1,6 @@
 import type { MedusaClient } from "../client.js";
-import { StoreSession } from "../actions.js";
-import { chance } from "../noise.js";
+import { StoreSession } from "../api/store-session.js";
+import { chance } from "../util/random.js";
 
 /**
  * Browse-only guest intents (plan §4 A). Cart-bearing intents are not available

@@ -49,15 +49,6 @@ export const STAGE_OF: Record<SessionType, 1 | 2> = {
   adminSupport: 2,
 };
 
-export function chance(probability: number): boolean {
-  return Math.random() < probability;
-}
-
-export function pick<T>(items: T[]): T | undefined {
-  if (items.length === 0) return undefined;
-  return items[Math.floor(Math.random() * items.length)];
-}
-
 /**
  * Allocate `total` sessions across the taxonomy proportional to weights, using
  * the largest-remainder method so rounding never loses/gains a session.
@@ -97,20 +88,35 @@ export function splitIdentity(split: Partial<Record<Identity, number>>): Identit
 }
 
 /**
- * Geometric-ish count with the given mean, clamped to [1, cap]. Used for
- * "products viewed per session" and similar (plan §4.1).
+ * Per-type identity split for the leaves where identity isn't fixed by type (plan §4).
+ * Cart-bearing leaves (cartAbandon, checkoutAbandon, multiItemCheckout) are always
+ * returning — the storefront requires auth to add to cart. directLanding guest identity
+ * applies only to bounce/browse intents; cart intents force auth in dispatch.
  */
-export function geometricCount(mean: number, cap: number): number {
-  const p = 1 / Math.max(1, mean);
-  let n = 1;
-  while (n < cap && Math.random() > p) n++;
-  return n;
-}
+const IDENTITY_SPLIT: Partial<Record<SessionType, Partial<Record<Identity, number>>>> = {
+  bounce: { guest: 90, returning: 10 },
+  browse: { guest: 90, returning: 10 },
+  cartAbandon: { returning: 100 },
+  checkoutAbandon: { returning: 100 },
+  directLanding: { guest: 70, returning: 30 },
+  comparisonBrowse: { guest: 80, returning: 20 },
+  multiItemCheckout: { returning: 100 },
+};
 
-export function shuffleInPlace<T>(items: T[]): T[] {
-  for (let i = items.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [items[i], items[j]] = [items[j], items[i]];
+/** Resolve the identity to drive a session of the given type. */
+export function identityFor(type: SessionType): Identity {
+  const split = IDENTITY_SPLIT[type];
+  if (split) return splitIdentity(split);
+  switch (type) {
+    case "returningCheckout":
+    case "orderStatus":
+    case "repeatOrderCheck":
+    case "profileMgmt":
+    case "returns":
+      return "returning";
+    case "newCheckout":
+      return "new";
+    default:
+      return "guest"; // admin / edge — identity is not a meaningful axis.
   }
-  return items;
 }

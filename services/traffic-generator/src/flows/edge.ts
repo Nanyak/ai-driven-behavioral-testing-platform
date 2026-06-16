@@ -1,7 +1,7 @@
 import type { MedusaClient } from "../client.js";
-import type { StepResult } from "../actions.js";
+import type { StepResult } from "../api/step.js";
 import { newCustomerEmail } from "../ids.js";
-import { shuffleInPlace } from "../noise.js";
+import { shuffleInPlace } from "../util/random.js";
 
 /**
  * Edge-case flow (plan §5 step 5 / §8.5). Deliberately triggers 4xx/5xx so
