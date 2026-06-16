@@ -34,9 +34,11 @@ services/behavior-engine/
 
 ## Emergent persona derivation
 
-Per discovered flow (a normalized step sequence), compute attributes from endpoint content:
+Per discovered flow (a normalized step sequence), compute attributes from step content:
 
-- `requires_auth` = sequence contains `/auth/customer/*` or `/store/customers`
+- `requires_auth` = sequence contains an explicit auth/identity endpoint
+  (`/auth/customer/*` or `/store/customers`) **OR** a *successful* (2xx) cart/checkout
+  mutation (`POST`/`PATCH`/`DELETE` on `/store/carts` or `/store/payment-collections`).
 - `is_admin` = sequence contains `/admin/*`
 - `has_errors` = sequence contains any 4xx/5xx step
 
@@ -49,6 +51,42 @@ Resolve persona:
 | neither | `guest_shopper` |
 
 `has_errors` is an **orthogonal overlay** (edge-case flag), not a competing persona. For a whole session that changes role mid-stream, resolve by the highest-privilege attribute reached: `is_admin` > `requires_auth` > guest. Tag output with `persona_source: "emergent_attributes"`.
+
+### Why the successful-cart-mutation signal is required (not optional)
+
+Guest checkout was removed: the `requireCustomerAuth` middleware 401s every cart and
+checkout mutation for non-customers (ADR 0003, plan §6.3). This breaks the original
+endpoint-only `requires_auth` rule in two ways, so the rule above folds the auth gate's
+*response status* into the signal:
+
+1. **Guests are browse-only.** A guest who pokes a cart endpoint gets a 4xx — so a
+   *successful* (2xx) cart mutation can only come from a customer JWT. That status is a
+   legitimate emergent signal: it is derived from endpoint + response code, never from
+   the held-out JWT `user_role`. (A guest's failed cart attempt carries `has_errors`
+   instead, which is correct.)
+2. **Token reuse hides the auth endpoint.** A large share of returning customers reuse a
+   live JWT and emit no `/auth/*` endpoint in the session (the browse calls are
+   unauthenticated; only the cart calls carry the token). The endpoint-only rule would
+   label these sessions guests, depressing registered_customer recall. Folding the
+   successful-cart-mutation signal into `requires_auth` recovers them.
+
+The *magnitude* of this effect — how many customers the endpoint-only rule misses and how
+much the cart signal lifts recall — is a **per-run measurement, not a spec constant.** It
+depends on the traffic mix and changes whenever traffic is regenerated, so it is reported
+in the validation artifact (§Validation), never hardcoded here. The validation step must
+emit **both** the endpoint-only baseline and the cart-signal classification so the signal's
+value is a measured delta rather than an assertion.
+
+> Premise check before trusting any of these numbers: the cart signal is only sound while
+> the `requireCustomerAuth` gate actually enforces (a guest cart mutation 4xx's, so a 2xx
+> cart implies a customer). If guest cart mutations ever return 2xx — e.g. the gate is
+> mis-registered — the signal misclassifies guests as customers and the measured delta will
+> show it. Confirm a guest `POST /store/carts` returns 401 against the live backend before
+> reading the classification report as meaningful.
+
+Implementation note for `attributes.ts`: a step counts toward the cart signal only when
+`200 ≤ status < 300`. Do **not** read `role_observed` or the `session_id` source tag here
+(the §guardrail) — the status code is part of the flow content, the JWT role is not.
 
 ## Mining steps
 
@@ -147,7 +185,7 @@ LLM, so LLM judgment cost scales with *new* behavior, not total behavior.
 
 ## LLM use (Opus 4.8, `claude-opus-4-8`) — judgment only, never classification
 
-- **Flow naming:** sequence → human name ("Guest abandons cart after applying promo").
+- **Flow naming:** sequence → human name ("Returning customer abandons cart after applying promo"; "Guest browses three products and leaves").
 - **Anomaly / contamination detection:** flag sessions with out-of-persona endpoints; judge contamination vs. legitimate guest→customer transfer.
 - **Assertion recommendation:** suggest which response fields matter for a flow's golden check (consumed in Phase 9).
 
@@ -159,23 +197,47 @@ The platform dashboard's human-in-the-loop review (the HITL Review Dashboard pha
 
 - This is a hard rule: making persona human-editable would reintroduce manual labeling and collapse the "discovered from sequences alone" claim — the HITL would silently become the labeler.
 - Persona is still useful in the UI as a **view dimension**, not a control: group/filter the review queue by persona, show per-persona coverage. That is display, not assignment.
-- A reviewer *can* shift a flow's persona, but only indirectly — by editing its **steps**. If an edit adds or removes an auth step (`/auth/customer/*`, `/store/customers`, `/admin/*`), the `requires_auth`/`is_admin` attributes recompute and persona re-derives. Persona always remains a function of flow content, even after a human edit; it is never a field the reviewer types.
+- A reviewer *can* shift a flow's persona, but only indirectly — by editing its **steps**. If an edit adds or removes a signal that feeds the attributes — an auth/identity step (`/auth/customer/*`, `/store/customers`, `/admin/*`) or a successful cart/checkout mutation — the `requires_auth`/`is_admin` attributes recompute and persona re-derives. Persona always remains a function of flow content, even after a human edit; it is never a field the reviewer types.
 
 ## Output contract: test candidate
 
+A guest example is browse-only — carts are auth-gated, so a real guest flow never
+reaches `/store/carts` with a 2xx (see "Auth-gated cart signal"):
+
 ```json
 {
-  "flow_name": "Guest shopper adds product to cart",
+  "flow_name": "Guest shopper browses catalog and views a product",
   "persona": "guest_shopper",
   "persona_source": "emergent_attributes",
   "attributes": { "requires_auth": false, "is_admin": false, "has_errors": false },
-  "priority": "high",
+  "priority": "medium",
   "support": 27,
+  "source_sessions": ["sess-...","sess-..."],
+  "steps": [
+    { "method": "GET", "endpoint": "/store/regions", "expected_status": 200 },
+    { "method": "GET", "endpoint": "/store/products", "expected_status": 200 },
+    { "method": "GET", "endpoint": "/store/products/{id}", "expected_status": 200 }
+  ]
+}
+```
+
+A returning-customer checkout that reused a live JWT has **no** `/auth/*` endpoint, yet
+its successful cart mutations set `requires_auth: true`:
+
+```json
+{
+  "flow_name": "Returning customer reorders without re-authenticating",
+  "persona": "registered_customer",
+  "persona_source": "emergent_attributes",
+  "attributes": { "requires_auth": true, "is_admin": false, "has_errors": false },
+  "priority": "high",
+  "support": 18,
   "source_sessions": ["sess-...","sess-..."],
   "steps": [
     { "method": "GET", "endpoint": "/store/products", "expected_status": 200 },
     { "method": "POST", "endpoint": "/store/carts", "expected_status": 200 },
-    { "method": "POST", "endpoint": "/store/carts/{id}/line-items", "expected_status": 200 }
+    { "method": "POST", "endpoint": "/store/carts/{id}/line-items", "expected_status": 200 },
+    { "method": "POST", "endpoint": "/store/carts/{id}/complete", "expected_status": 200 }
   ]
 }
 ```
@@ -184,7 +246,7 @@ The platform dashboard's human-in-the-loop review (the HITL Review Dashboard pha
 
 Write `data/validation/classification-report-<runId>.json` with:
 
-1. **Classification accuracy.** Compare each session's emergent persona against the highest-privilege `role_observed` ground truth; report precision/recall per persona and a confusion matrix.
+1. **Classification accuracy.** Compare each session's emergent persona against the highest-privilege `role_observed` ground truth; report precision/recall per persona and a confusion matrix. Emit this for **two rule variants on the same data** — the endpoint-only baseline and the endpoint+cart-signal rule — so the cart signal's contribution is a measured delta. This report is the single source of truth for all classification figures; the plan deliberately states no run-specific counts.
 2. **Holdout recovery.** Confirm PrefixSpan recovered the registered-customer checkout sequence and report its **support count** (e.g. "support 6"), not a yes/no.
 3. **Negative control.** Confirm no high-support flow corresponds to a sequence that was never injected (guard against hallucinated discovery).
 
@@ -197,7 +259,12 @@ explained rather than mistaken for a failure.
 
 - ≥5 test candidates produced from mined flows.
 - Registered-customer checkout discovered despite no scripted equivalent, with a reported support count.
-- Classification report shows per-persona precision/recall against ground truth.
+- Classification report shows per-persona precision/recall against ground truth, for
+  both the endpoint-only baseline and the cart-signal rule.
+- The cart signal is **net-positive**: it raises registered_customer recall versus the
+  endpoint-only baseline **without lowering overall macro-F1** (on the enforcing-gate
+  backend, guest cart mutations 4xx, so the signal should not steal guest recall). If
+  macro-F1 drops, the gate is not enforcing — stop and fix the gate, not the rule.
 - Negative control passes.
 - Per-persona output capped at 10 canonical flows.
 - At least one `has_errors` (edge-case) flow survives mining into the candidate set

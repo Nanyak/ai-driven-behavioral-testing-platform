@@ -34,7 +34,17 @@ type Step = () => Promise<ApiResponse>;
 export async function runSteps(steps: Step[], noise: NoiseConfig): Promise<void> {
   for (const step of steps) {
     const res = await step();
-    if (noise.retry && !res.ok && res.status >= 400 && res.status < 500) {
+    // Retry input-correction 4xx only. A 401/403 is an auth wall, not a
+    // correctable input error — blind-retrying it produces an unrealistic
+    // `POST /store/carts 401 ×N` storm (and a junk Phase 7 negative candidate).
+    if (
+      noise.retry &&
+      !res.ok &&
+      res.status >= 400 &&
+      res.status < 500 &&
+      res.status !== 401 &&
+      res.status !== 403
+    ) {
       await step();
     }
   }

@@ -13,6 +13,7 @@ import { runReturnInquiryFlow } from "./flows/returns.js";
 import { runDirectLandingFlow, type DirectIntent } from "./flows/direct-landing.js";
 import { runComparisonBrowseFlow } from "./flows/comparison-browse.js";
 import { runMultiItemFlow } from "./flows/multi-item.js";
+import { runCartWallConversion, type ConversionIntent } from "./flows/conversion.js";
 import {
   runAdminFlow,
   runAdminFulfillFlow,
@@ -124,6 +125,21 @@ export async function dispatch(
       const multiIntent = chance(0.35) ? "cartAbandon" : "buy";
       const s = await runMultiItemFlow(client, acct, multiIntent, promo);
       if (multiIntent === "buy" && s.email) poolOrder(state, s, s.email, s.token);
+      return s.steps;
+    }
+
+    case "cartWallConversion": {
+      // Guest hits the cart auth wall (401), signs into a REAL pooled account,
+      // and continues. loginExisting must succeed, so draw a registered pooled
+      // account — never a synthesized one. If the pool is empty, degrade to a
+      // guest browse (Stage 0 always seeds the pool, so this is a safety net).
+      const acct = state.drawAccount();
+      if (!acct) return (await runGuestShop(client, "browse")).steps;
+      const r = Math.random();
+      const intent: ConversionIntent =
+        r < 0.55 ? "convertBuy" : r < 0.85 ? "convertAbandon" : "wallBounce";
+      const s = await runCartWallConversion(client, acct, intent);
+      if (intent === "convertBuy") poolOrder(state, s, acct.email, acct.token);
       return s.steps;
     }
 

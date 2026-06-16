@@ -13,6 +13,7 @@ export const SESSION_TYPES: SessionType[] = [
   "directLanding",
   "comparisonBrowse",
   "multiItemCheckout",
+  "cartWallConversion",
   "orderStatus",
   "repeatOrderCheck",
   "profileMgmt",
@@ -38,6 +39,7 @@ export const STAGE_OF: Record<SessionType, 1 | 2> = {
   directLanding: 1,
   comparisonBrowse: 1,
   multiItemCheckout: 1,
+  cartWallConversion: 1,
   profileMgmt: 1,
   adminCatalog: 1,
   edge: 1,
@@ -111,6 +113,7 @@ export function identityFor(type: SessionType): Identity {
   if (split) return splitIdentity(split);
   switch (type) {
     case "returningCheckout":
+    case "cartWallConversion": // guest hits the wall, then logs into a pooled account
     case "orderStatus":
     case "repeatOrderCheck":
     case "profileMgmt":

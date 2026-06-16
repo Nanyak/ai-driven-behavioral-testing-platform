@@ -44,7 +44,7 @@ services/traffic-generator/
       store-session.ts     # StoreSession — Store API methods, runtime ID resolution
       admin-session.ts     # AdminSession — Admin API methods
     flows/
-      guest.ts             # guest backbone (bounce/browse/cart/checkout-abandon/buy)
+      guest.ts             # guest backbone — browse-only (bounce/browse); carts require auth
       returning.ts         # returning customer (login-only or JWT-reuse, no register)
       direct-landing.ts    # share-link / ad product landing (view_product first)
       comparison-browse.ts # researcher: 4–8 product views, search-first, no purchase
@@ -83,7 +83,7 @@ services/traffic-generator/
 
 Anchored to public e-commerce benchmarks: ~70% cart abandonment (Baymard), ~2–3% true conversion, returns ≈ 10–15% of orders. (The usual "guest checkout ≈ half" benchmark does **not** apply here: this storefront requires authentication before add-to-cart, so guest checkout is unreachable and every cart-bearing session is a returning customer.) Pure realism (2% conversion) starves mining, so purchase/return/refund weights are **elevated to a "signal-rich realistic" profile** — proportions stay realistic *relative to each other*, with floors (§7). All weights tunable in config (§6). Example counts shown for `N=300`.
 
-The taxonomy is realized as **18 session-type leaves** (the `SESSION_TYPES` array
+The taxonomy is realized as **19 session-type leaves** (the `SESSION_TYPES` array
 in `taxonomy.ts`); weights live in `config.ts` (`REALISTIC_WEIGHTS` /
 `SIGNAL_RICH_WEIGHTS`). Weights are relative and normalized to the configured
 total via largest-remainder allocation. Counts below are the `realistic` profile
@@ -102,6 +102,7 @@ at `N=300` (weights sum to ≈99, so count ≈ weight × 3).
 | | `returningCheckout` | returning 100 | 12% | ~36 | login/`resume_session` → cart → complete |
 | | `directLanding` | guest 70 / returning 30† | 7% | ~21 | **first step is `view_product`** |
 | | `multiItemCheckout` | returning 100 | 4% | ~12 | **3–5 browse→add cycles**, 3+ line items |
+| | `cartWallConversion` | returning (guest→login) | — | — | guest `create_cart` **401** → `login` → `create_cart` **200** → buy/abandon (`wallBounce` stops at the 401); the 401→login→200 pivot |
 | | `newCheckout` **[HOLDOUT]** | new | 2% | ~6 | LLM-only `register → login → checkout` |
 | **D** | **Account / post-purchase, no new order** | returning 100 | **11%** | ~33 | |
 | | `orderStatus` | returning 100 | 5% | ~15 | login → view orders → view order → maybe reorder |

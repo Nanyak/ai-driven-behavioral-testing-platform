@@ -533,8 +533,19 @@ export default defineMiddlewares({
       matcher: "/*",
       middlewares: [structuredRequestLogger]
     },
+    // Match string (not RegExp) matchers: Medusa's middleware loader coerces
+    // every matcher with String(matcher), so a RegExp becomes a literal path
+    // string Express can never match and the gate silently never runs. The
+    // methods-filtered path registers via app.post(matcher), a full-path match,
+    // so the trailing `*` is required to also cover sub-paths (/line-items,
+    // /shipping-methods, /complete, /payment-sessions).
     {
-      matcher: /^\/store\/(carts|payment-collections)/,
+      matcher: "/store/carts*",
+      method: ["POST", "PATCH", "DELETE"],
+      middlewares: [requireCustomerAuth]
+    },
+    {
+      matcher: "/store/payment-collections*",
       method: ["POST", "PATCH", "DELETE"],
       middlewares: [requireCustomerAuth]
     }

@@ -164,6 +164,7 @@ then topped up to the floors (plan §7). Example counts shown for `N=300`.
 | `directLanding`    | 1     | 70% guest†        | **first step is `view_product`**, no leading `browse_products` |
 | `returningCheckout`| 1     | returning         | `login` (or `resume_session`) → cart → complete               |
 | `multiItemCheckout`| 1     | returning         | login → **3–5 browse→add cycles**, cart has 3+ line items     |
+| `cartWallConversion`| 1    | returning (guest→login) | guest `create_cart` **401** → `login` → `create_cart` **200** → buy/abandon (`wallBounce` ends at the 401) |
 | `newCheckout`      | 1     | new               | HOLDOUT — LLM-varied `register → login → checkout`            |
 | `profileMgmt`      | 1     | returning         | login → view/update profile → maybe add address               |
 | `adminCatalog`     | 1     | admin             | list/view/update products                                      |

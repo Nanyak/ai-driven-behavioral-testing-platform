@@ -195,7 +195,7 @@ Staged situation taxonomy (plan §4–§7 — supersedes the flat mix above):
 - [ ] Create `services/behavior-engine`.
 - [ ] Load session flows from ingestion output.
 - [ ] Mine flows from the raw, unlabeled sequence stream (do not pre-label sessions by persona).
-- [ ] Derive deterministic flow attributes from endpoint content: `requires_auth` (contains `/auth/customer/*` or `/store/customers`), `is_admin` (contains `/admin/*`), `has_errors` (contains 4xx/5xx).
+- [ ] Derive deterministic flow attributes from step content: `requires_auth` (contains `/auth/customer/*` or `/store/customers`, **or** a successful 2xx cart/checkout mutation on `/store/carts`/`/store/payment-collections` — carts are auth-gated, ADR 0003), `is_admin` (contains `/admin/*`), `has_errors` (contains 4xx/5xx).
 - [ ] Resolve persona from attributes: `is_admin` → admin_operator; `requires_auth` and not admin → registered_customer; neither → guest_shopper; `has_errors` as an orthogonal edge-case overlay.
 - [ ] Resolve mid-session role changes by highest-privilege attribute reached (admin > customer > guest).
 - [ ] Keep JWT `user_role` only as held-out ground truth for validation, never as classifier input.

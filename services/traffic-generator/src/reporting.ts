@@ -101,6 +101,13 @@ export function printAcceptance(all: SessionResult[], state: RunState, floors: F
     (n, r) => n + (r.steps.some((s) => s.action === "apply_promo" && s.ok) ? 1 : 0),
     0
   );
+  // Guest→sign-in conversion pivot: a 401 on `POST /store/carts` (the auth wall)
+  // followed by a later 200 on `POST /store/carts` (after login) in the same
+  // session — the exact role_observed:[guest, customer] signal (Theme 1).
+  const conversionPivots = all.filter((r) => {
+    const wall = r.steps.findIndex((s) => s.action === "create_cart" && s.status === 401);
+    return wall !== -1 && r.steps.slice(wall + 1).some((s) => s.action === "create_cart" && s.ok);
+  }).length;
 
   const registerNoCheckout = all.filter(
     (r) =>
@@ -120,6 +127,7 @@ export function printAcceptance(all: SessionResult[], state: RunState, floors: F
   console.log(`  ${flag(linkedRefunds, floors.linkedRefunds)} cross-role linked refunds:     ${linkedRefunds} / ≥${floors.linkedRefunds}`);
   console.log(`  ${flag(canceledOrders, floors.canceledOrders)} orders canceled (admin):       ${canceledOrders} / ≥${floors.canceledOrders}`);
   console.log(`  ${flag(promoSuccess, floors.promoSuccess)} promo applications (ok):       ${promoSuccess} / ≥${floors.promoSuccess}`);
+  console.log(`  ${flag(conversionPivots, 1)} cart-wall conversions (401→login→200): ${conversionPivots} / ≥1`);
   console.log("\nIdentity decoupling (plan §1.4)");
   console.log(`  register-without-checkout sessions: ${registerNoCheckout}`);
   console.log(`  login-without-register sessions:    ${loginNoRegister}`);

@@ -127,19 +127,21 @@ Admin APIs:
 
 ### 6.3 User Personas
 
-`guest_shopper`:
+`guest_shopper` (browse-only — see note below):
 
 - Load regions.
 - Browse products.
 - View product details.
-- Create a cart.
-- Add, update, and remove line items.
-- Apply a promo code.
-- Select a shipping method.
-- Create a payment session.
-- Complete checkout as a guest.
-- View a specific order by ID.
-- Edge cases: call Store APIs without a publishable API key, add a non-existing product variant, complete checkout with an empty cart, send payloads with missing required fields.
+- Search and filter the catalog.
+- Edge cases: call Store APIs without a publishable API key, view a non-existing product, send payloads with missing required fields, hit a cart/checkout endpoint while unauthenticated (now 401).
+
+> **Guest checkout was removed.** The storefront requires authentication before
+> add-to-cart, and the `requireCustomerAuth` middleware 401s every cart/checkout
+> mutation (`POST/PATCH/DELETE` on `/store/carts` and `/store/payment-collections`)
+> for non-customers. Guests are therefore browse-only; every cart-bearing session
+> is a returning or new customer. See ADR 0003 and the Phase 5 plan. This is also
+> why the Phase 7 emergent rule treats a *successful* cart mutation as a customer
+> signal (§10.3).
 
 `registered_customer` (realized only via LLM-varied traffic — see §8.4):
 
@@ -289,17 +291,26 @@ This provides a defensible claim: the system rediscovered a flow it was not expl
 
 ### 8.5 Example Flows
 
-Guest flow (scripted backbone):
+Guest flow (scripted backbone — browse-only; carts require auth, see §6.3):
 
 ```text
+GET /store/regions
 GET /store/products
 GET /store/products/{id}
+GET /store/products?q=...      (search / filter)
+```
+
+Returning-customer flow (scripted backbone — login or live-JWT reuse, then buy):
+
+```text
+POST /auth/customer/emailpass   (omitted on ~55% token-reuse sessions)
+GET /store/products
 POST /store/carts
 POST /store/carts/{id}/line-items
 POST /store/carts/{id}/complete
 ```
 
-Customer flow (LLM-varied only — holdout):
+Customer flow (LLM-varied only — holdout; the only register→checkout sequence):
 
 ```text
 POST /store/customers
@@ -385,7 +396,10 @@ The AI engine analyzes grouped logs and produces test candidates.
 
 Personas are not assigned to sessions up front. Instead, flows are mined from the raw, unlabeled sequence stream, and persona is derived deterministically from the endpoint content of each discovered flow:
 
-- `requires_auth: true` if the sequence contains `/auth/customer/*` or `/store/customers`.
+- `requires_auth: true` if the sequence contains an explicit auth/identity endpoint
+  (`/auth/customer/*` or `/store/customers`) **or** a *successful* (2xx) cart or
+  checkout mutation (`POST`/`PATCH`/`DELETE` on `/store/carts` or
+  `/store/payment-collections`). See "Auth-gated cart signal" below.
 - `is_admin: true` if the sequence contains `/admin/*`.
 - `has_errors: true` if the sequence contains any `4xx` or `5xx` response.
 
@@ -396,11 +410,41 @@ Personas then fall out of these attributes:
 - not `requires_auth` and not `is_admin` -> **Guest Shopper**.
 - `has_errors` is an orthogonal overlay (an **Edge Case** flag), not a mutually exclusive persona; any flow may also carry it.
 
-For sessions that change role mid-stream — for example a guest who registers and then completes checkout (Medusa supports cart transfer) — persona is resolved by the highest-privilege attribute reached in the session (`is_admin` > `requires_auth` > guest).
+For sessions that change role mid-stream — for example a guest who browses and
+then signs in and completes checkout — persona is resolved by the highest-privilege
+attribute reached in the session (`is_admin` > `requires_auth` > guest).
 
-Why emergent rather than JWT-assigned: classifying sessions by the JWT `actor_type` before mining would let a skeptic argue the engine "discovered" nothing — the token simply told it the role. By separating authenticated from guest behavior from the sequences alone, the system demonstrates genuine discovery. The JWT `user_role` is retained, but only as a held-out ground-truth label used to **score** classification accuracy (see §10.6), never as an input to the classifier.
+**Auth-gated cart signal (why the explicit-endpoint rule alone is insufficient).**
+Guest checkout was removed: the `requireCustomerAuth` middleware 401s every cart
+and checkout mutation for non-customers (ADR 0003, §6.3). Two consequences for
+classification:
 
-Note that guest and registered-customer flows share most of their path (`browse -> cart -> line-items -> checkout`); the only behavioral discriminator is the presence of the authentication sub-flow. This is precisely why the distinction is sharp (a hard auth boundary) and why a deterministic attribute, not an LLM, is the correct classifier here.
+1. A *successful* cart/checkout mutation can only come from a customer JWT, so it
+   is itself a reliable customer signal — endpoint + status derived, never the
+   JWT `user_role`. A guest's cart attempt 4xx's and is correctly **not** a
+   customer signal (it carries `has_errors` instead).
+2. A large share of returning customers reuse a live JWT and emit no `/auth/*`
+   endpoint in the session (the cart calls carry the token but the browse calls do
+   not), so the explicit-endpoint rule alone would label them guests. Folding the
+   successful-cart-mutation signal into `requires_auth` recovers them. How many
+   customers this affects is a per-run measurement reported in the Phase 7
+   classification report (§10.6), not a constant fixed here — it moves with the
+   traffic mix. The cart signal is only valid while the gate enforces (guest cart
+   mutations 4xx); the report's endpoint-only-vs-cart-signal delta is what proves it.
+
+Why emergent rather than JWT-assigned: classifying sessions by the JWT `actor_type`
+before mining would let a skeptic argue the engine "discovered" nothing — the token
+simply told it the role. By separating authenticated from guest behavior from the
+sequences alone (endpoints **and** the response statuses that flow from the auth
+gate), the system demonstrates genuine discovery. The JWT `user_role` is retained
+only as a held-out ground-truth label used to **score** classification accuracy
+(see §10.6), never as an input to the classifier.
+
+Note that guest and registered-customer flows share their *browse* prefix
+(`regions -> products -> product detail`); the behavioral discriminator is whether
+the session ever crosses the auth gate — either by hitting an auth/identity endpoint
+or by successfully mutating a cart. That gate is a hard boundary, which is why a
+deterministic attribute, not an LLM, is the correct classifier here.
 
 ### 10.4 Expected Output
 
@@ -846,7 +890,7 @@ The project is considered successful when:
 | Risk | Impact | Mitigation |
 | --- | --- | --- |
 | Medusa setup is more complex than expected | Slower implementation | Start with minimal flows: products, carts, admin products |
-| Guest checkout requires payment/shipping setup | Checkout tests may be unstable | Use mock payment/shipping or keep cart flows as MVP |
+| Customer checkout requires payment/shipping setup | Checkout tests may be unstable | Use mock payment/shipping; carts are auth-gated, so checkout runs only for authenticated customers (guest checkout removed, ADR 0003) |
 | Responses contain many dynamic fields | False regression failures | Normalize responses and ignore dynamic fields |
 | Response bodies are too large for logs | Elasticsearch becomes heavy | Log reduced bodies or schema snapshots |
 | Tokens or passwords may be logged | Security risk | Mask sensitive fields before logging |

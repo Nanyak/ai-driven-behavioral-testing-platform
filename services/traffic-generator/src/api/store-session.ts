@@ -21,6 +21,8 @@ const PRODUCT_FIELDS =
  */
 export class StoreSession {
   regionId?: string;
+  /** First ISO-2 country of the cart's region — address country must be in-region. */
+  countryCode?: string;
   products: ProductLite[] = [];
   cartId?: string;
   items: { id: string; variantId: string }[] = [];
@@ -58,7 +60,13 @@ export class StoreSession {
   async loadRegions(): Promise<ApiResponse> {
     const res = await this.client.request("GET", "/store/regions");
     if (res.ok) {
-      this.regionId = res.body?.regions?.[0]?.id;
+      const region = res.body?.regions?.[0];
+      this.regionId = region?.id;
+      // The cart address country must be within the cart's region, or
+      // POST /store/carts/{id} 400s ("Country ... is not within region").
+      // Resolve it from the live region instead of hardcoding — the seed ships a
+      // single non-US (European) region, so a hardcoded "us" always failed.
+      this.countryCode = region?.countries?.[0]?.iso_2 ?? this.countryCode;
     }
     return this.record("load_regions", "GET", "/store/regions", res);
   }
@@ -194,10 +202,10 @@ export class StoreSession {
     const address = {
       first_name: "Behavior",
       last_name: "Shopper",
-      address_1: "1 Market Street",
-      city: "San Francisco",
-      postal_code: "94105",
-      country_code: "us",
+      address_1: "1 Main Street",
+      city: "Capital",
+      postal_code: "10000",
+      country_code: this.countryCode ?? "de", // in-region (seed region is European)
       phone: "5551234567",
     };
     const res = await this.client.request("POST", `/store/carts/${this.cartId}`, {

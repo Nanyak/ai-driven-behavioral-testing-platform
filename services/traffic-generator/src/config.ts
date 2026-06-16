@@ -66,6 +66,7 @@ export interface Weights {
   directLanding: number;     // C3 — share-link / ad product landing
   comparisonBrowse: number;  // A3 — high product-view research session
   multiItemCheckout: number; // C4 — multi-browse-add-checkout
+  cartWallConversion: number; // C5 — guest hits auth wall, signs in, converts (401→login→200)
   orderStatus: number;       // D1
   repeatOrderCheck: number;  // D1b — repeated status checks (post-purchase anxiety)
   profileMgmt: number;       // D2
@@ -139,6 +140,7 @@ const REALISTIC_WEIGHTS: Weights = {
   directLanding: 7,
   comparisonBrowse: 6,
   multiItemCheckout: 4,
+  cartWallConversion: 6,
   orderStatus: 5,
   repeatOrderCheck: 3,
   profileMgmt: 3,
@@ -157,6 +159,8 @@ const SIGNAL_RICH_WEIGHTS: Weights = {
   returningCheckout: 22, // absorbed former guestCheckout boost (12 → +10 from original returning)
   newCheckout: 4,
   multiItemCheckout: 7,
+  cartWallConversion: 10, // boost the 401→login→200 guest-conversion pivot for mining
+
   returns: 7,
   repeatOrderCheck: 5,
   adminFulfill: 6,
