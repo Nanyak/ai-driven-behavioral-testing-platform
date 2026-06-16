@@ -275,5 +275,5 @@ updates docs in the same change. Tasks name the file and the exact change. Tick 
 - [ ] **T4.11** *(stretch — deferred)* expired-promo via `POST /admin/campaigns` (past `ends_at`) + `campaign_id`. Not modeled: apply-time behavior was not verified live, and the spec is explicit not to model unverified behavior — left deferred per the rule. The required acceptance signals (invalid-promo 400, return-cancel 2xx) are realized without it.
 
 ## After all four PRs
-- [ ] Regenerate the **~1k** validation corpus (`TRAFFIC_TOTAL_SESSIONS=1000`, `MIX_PROFILE=signal-rich`) so Phase 7 sees the new flows, then re-ingest. This is the agreed validation pass.
-- [ ] Confirm the run summary shows non-zero realized counts for all four new types and the five end-to-end acceptance signals (conversion pivot, `insufficient_inventory`, create-product, return-cancel, invalid-promo).
+- [x] Regenerate the **~1k** validation corpus (`TRAFFIC_TOTAL_SESSIONS=1000`, `MIX_PROFILE=signal-rich`) so Phase 7 sees the new flows, then re-ingest. This is the agreed validation pass. *(Done: 1003 sessions in 180.9s; logs reached Elasticsearch — `check:phase5` 8/8.)*
+- [x] Confirm the run summary shows non-zero realized counts for all four new types and the five end-to-end acceptance signals (conversion pivot, `insufficient_inventory`, create-product, return-cancel, invalid-promo). *(Realized: categoryBrowse 76, stockOutCheckout 32, adminReturnReject 19, cartWallConversion 63. Signals: 57 conversion pivots, 32 stock-out 400s, create-product 2xx, return-cancel 19, 48 invalid-promo 400s.)*
