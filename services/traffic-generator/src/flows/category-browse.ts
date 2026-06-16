@@ -41,8 +41,9 @@ export async function runCategoryBrowse(
   }
 
   // ~20%: apply a category+sort combo (re-sort the category results).
-  if (chance(0.2)) {
-    await session.sortProducts(pick(SORT_ORDERS) ?? "title");
+  const sortOrder = pick(SORT_ORDERS);
+  if (sortOrder && chance(0.2)) {
+    await session.sortProducts(sortOrder);
   }
 
   // ~30%: paginate a second page ("load more").

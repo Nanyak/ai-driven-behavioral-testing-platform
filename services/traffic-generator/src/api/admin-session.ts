@@ -88,6 +88,7 @@ export class AdminSession {
     const res = await this.client.request("GET", "/admin/sales-channels?limit=1", {
       token: this.token,
     });
+    this.record("admin_list_sales_channels", "GET", "/admin/sales-channels", res);
     this.salesChannelId = res.ok ? res.body?.sales_channels?.[0]?.id : undefined;
     return this.salesChannelId;
   }
@@ -220,7 +221,7 @@ export class AdminSession {
    * it stays marked `// VERIFY against live backend` and degrades to a logged
    * non-2xx rather than crashing.
    */
-  async createPromotion(code: string, currencyCode = "usd"): Promise<ApiResponse> {
+  async createPromotion(code: string, currencyCode = "eur"): Promise<ApiResponse> {
     const res = await this.client.request("POST", "/admin/promotions", {
       token: this.token,
       body: {

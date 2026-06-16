@@ -35,6 +35,7 @@ export function mapProducts(res: ApiResponse): ProductLite[] {
   if (!res.ok || !Array.isArray(res.body?.products)) {
     return [];
   }
+  // `any`: Medusa product-list item — only the id and first variant id are read.
   return res.body.products.map((p: any) => ({
     id: p.id,
     variantId: p?.variants?.[0]?.id,

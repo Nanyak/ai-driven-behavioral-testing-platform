@@ -172,6 +172,7 @@ export class StoreSession {
       token: this.token,
     });
     if (res.ok && Array.isArray(res.body?.cart?.items)) {
+      // `any`: Medusa cart line item — only the line id and variant_id are read.
       this.items = res.body.cart.items.map((i: any) => ({ id: i.id, variantId: i.variant_id }));
     }
     return this.record("add_item", "POST", "/store/carts/{id}/line-items", res);
@@ -422,6 +423,7 @@ export class StoreSession {
   async listCategories(): Promise<ApiResponse> {
     const res = await this.client.request("GET", "/store/product-categories?limit=10");
     if (res.ok && Array.isArray(res.body?.product_categories)) {
+      // `any`: Medusa product-category — only the id is read.
       this.categories = res.body.product_categories.map((c: any) => c.id);
     }
     return this.record("list_categories", "GET", "/store/product-categories", res);
