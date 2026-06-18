@@ -26,7 +26,7 @@ Use **two sources of truth for two jobs**, and make the assertion oracle the Ope
 | --- | --- |
 | **What to test** (flow steps, order, persona, sample payloads) | Production logs → behavior engine (Phase 7). Unchanged. |
 | **Expected status + response schema** (the assertion oracle) | **OpenAPI spec**, **intersected** with observed responses from logs. |
-| Flow naming, anomaly/contamination, "which fields matter" | LLM (Opus 4.8). Unchanged. |
+| Flow naming, anomaly/contamination, "which fields matter" | LLM (Sonnet 4.6 default, `BEHAVIOR_LLM_MODEL`-configurable to Opus 4.8). Unchanged. |
 
 Specifically:
 
@@ -62,6 +62,7 @@ In production these are optional; with bodies off, generated tests fall back to 
 
 ## Status of related docs
 
+- **Refined by ADR 0004.** Middleware-injected responses (e.g. the `requireCustomerAuth` `401` gate) and supplemental fragments are merged into the spec via a deterministic overlay step, so the oracle covers errors **and** happy path. Error steps the overlay documents are now spec-sourced with provenance, rather than observed-only as stated above.
 - Phase 8 plan revised to make OAS the schema source, intersected with observed responses.
 - Phase 2 body-capture default relaxed: bodies are enrichment, not a hard requirement for the oracle.
 - Phase 6 golden extraction reframed as feeding the *observed half* of the intersection.

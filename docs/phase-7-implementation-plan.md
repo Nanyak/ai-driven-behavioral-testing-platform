@@ -11,20 +11,28 @@ Turn unlabeled session-flow records into ranked test candidates. This is the int
 
 ## Location
 
+Input is **repo-root `data/sessions/`** (PO-1) — `load.ts` resolves the newest
+`session-flows-*.json` there by default, mirroring the ingestion service's path
+resolution (ingestion *writes* to repo-root `data/sessions/`). It is **not** a
+service-local sessions dir. `data/candidates/` and `data/validation/` are
+service-local **output** dirs.
+
 ```
 services/behavior-engine/
   src/
-    load.ts              # read data/sessions/*.json
+    load.ts              # read repo-root data/sessions/*.json (newest by default)
     attributes.ts        # derive requires_auth / is_admin / has_errors per flow
     persona.ts           # resolve persona from attributes (emergent)
     ngram.ts             # n-gram mining (baseline)
     prefixspan.ts        # variable-length frequent sequence mining
     markov.ts            # transition probabilities (supporting signal)
-    signature.ts         # canonical flow signature (normalized step-sequence hash) — shared by dedup, gate, emit
+    signature.ts         # canonical flow signature (normalized step-sequence hash, consecutive dups collapsed) — shared by dedup, gate, emit
+    signature.test.ts    # golden/unit test locking the signature (PO-3)
     dedup.ts             # dedup + prefix clustering + per-persona cap (uses signature.ts)
     coverage.ts          # load already-covered signatures (generated tests + HITL approvals)
     rank.ts              # score and rank candidates
-    naming.ts            # LLM (Opus 4.8) flow naming + anomaly detection
+    naming.ts            # LLM (Sonnet 4.6, configurable) flow naming + anomaly detection
+    env.ts               # .env loader (service .env > repo-root .env) for the LLM key/model
     validate.ts          # classification precision/recall + holdout + control
     run.ts               # CLI entrypoint
   data/
@@ -77,12 +85,21 @@ in the validation artifact (§Validation), never hardcoded here. The validation 
 emit **both** the endpoint-only baseline and the cart-signal classification so the signal's
 value is a measured delta rather than an assertion.
 
-> Premise check before trusting any of these numbers: the cart signal is only sound while
-> the `requireCustomerAuth` gate actually enforces (a guest cart mutation 4xx's, so a 2xx
-> cart implies a customer). If guest cart mutations ever return 2xx — e.g. the gate is
-> mis-registered — the signal misclassifies guests as customers and the measured delta will
-> show it. Confirm a guest `POST /store/carts` returns 401 against the live backend before
-> reading the classification report as meaningful.
+> Premise (reworded, PO-2): a *genuinely unauthenticated* guest cart mutation 4xx's
+> (the `requireCustomerAuth` gate, ADR 0003), so a **2xx cart mutation implies a held
+> token — a customer signal**. The signal is sound only while that gate actually
+> enforces. If guest cart mutations ever return 2xx — e.g. the gate is mis-registered —
+> the signal misclassifies guests as customers and the measured delta will show it.
+> Before concluding the gate leaks, **confirm against the cartWall 401→200 path** that a
+> guest `POST /store/carts` returns 401 on the live backend. (Verified on the current
+> data: guest `POST /store/carts` returns 401; customer returns 200.)
+>
+> Ground-truth footnote (PO-2): `role_observed` itself **under-labels** token-reuse and
+> login-only sessions as guest — a returning customer reusing a live JWT emits no
+> `/auth/*` endpoint, so its only customer trace is the successful cart mutation. Some
+> guest→customer reclassifications under the cart-signal variant are therefore
+> **ground-truth gaps, not classifier errors**. The validation artifact must footnote
+> this so those reclassifications are read correctly (see §Validation).
 
 Implementation note for `attributes.ts`: a step counts toward the cart signal only when
 `200 ≤ status < 300`. Do **not** read `role_observed` or the `session_id` source tag here
@@ -134,9 +151,18 @@ Every "is this the same flow?" question in the pipeline uses **one** key: a stab
 hash of the **normalized step sequence** — the ordered list of `METHOD
 normalized_endpoint` tokens (dynamic segments already collapsed by ingestion, e.g.
 `/store/carts/{id}/line-items`). **Persona is not part of the key** — identity is the
-endpoint sequence, not its derived label. `signature.ts` is the single source of this
-function; `dedup.ts` (below), the cross-run skip gate, and Phase 9's `emit.ts` all
-call it rather than recomputing it (see ADR 0002).
+endpoint sequence, not its derived label. Status is not part of the key either.
+`signature.ts` is the single source of this function; `dedup.ts` (below), the cross-run
+skip gate, and Phase 9's `emit.ts` all call it rather than recomputing it (see ADR 0002).
+
+**Normalization — collapse consecutive duplicates (PO-3).** Before hashing, collapse
+runs of identical consecutive `METHOD normalized_endpoint` tokens to one. Status is
+already excluded from the key, so a `200`/`304` revalidation pair on the same endpoint
+is a no-op repeat that must not split an otherwise-identical flow into two signatures
+(it would otherwise affect a large share of sessions). This collapse lives **only** in
+`signature.ts` — the single source — so dedup, the skip gate, and Phase 9 emit all see
+the same canonical token list. `signature.ts` is built and locked **first**, with a
+golden/unit test (`signature.test.ts`).
 
 ## Dedup / clustering (before ranking, plan §12.1)
 
@@ -150,7 +176,18 @@ the separate skip gate below.
 
 ## Ranking
 
-Score each candidate by a weighted sum of: support, persona coverage, endpoint importance (checkout/auth weigh higher than browsing), error coverage, and business importance. Emit a sorted list. Keep weights in one config object so they are tunable and explainable.
+Score each candidate by a weighted sum of: **support**, **persona coverage**,
+**endpoint importance** (checkout/auth/admin weigh higher than browsing), and
+**error coverage**. **Business importance is merged into endpoint importance**
+(PO-7): "business importance" and "endpoint importance" were two names for the
+same idea — revenue/identity/state-changing endpoints matter more than reads — so
+they are one signal, not double-counted. Keep **all** weights in one config object
+with explicit defaults so ranking is tunable and explainable.
+
+**Deterministic ordering (PO-5).** Both PrefixSpan output and the final candidate
+ranking are pinned: by **support desc, then pattern length desc, then lexicographic
+signature** (the ranked list adds score desc as the primary key, falling back to
+that same chain on ties). The same input always yields the same ordered output.
 
 ## Cross-run skip gate (before LLM naming) — `coverage.ts` (ADR 0002)
 
@@ -183,13 +220,37 @@ On a clean checkout with no prior tests, the manifest is empty and every flow is
 treated as new (correct by construction). Only the flows surviving this gate reach the
 LLM, so LLM judgment cost scales with *new* behavior, not total behavior.
 
-## LLM use (Opus 4.8, `claude-opus-4-8`) — judgment only, never classification
+**Tolerance (PO-6 / BA-F8).** `coverage.ts` must treat a **missing** `generated-tests/`
+directory or a **missing** (or malformed) HITL store as an **empty manifest, never an
+error**. All filesystem access is best-effort and degrades to "nothing covered yet" —
+an empty manifest on a clean checkout means every flow is new, which is exactly the
+intended steady-state-vs-clean-checkout behavior.
+
+## LLM use (Sonnet 4.6, `claude-sonnet-4-6` by default) — judgment only, never classification
+
+The naming model is configurable via `BEHAVIOR_LLM_MODEL` (default
+`claude-sonnet-4-6`; set it to `claude-opus-4-8` for the most capable naming).
+The key and model are read from `services/behavior-engine/.env` (falling back to
+the repo-root `.env`), so `npm run mine` picks them up without exporting into the
+shell; with no key set, naming degrades to deterministic offline names and the
+deterministic classification pipeline is unaffected. Adaptive thinking
+(`thinking: {type: "adaptive"}`) is valid on Sonnet 4.6.
 
 - **Flow naming:** sequence → human name ("Returning customer abandons cart after applying promo"; "Guest browses three products and leaves").
 - **Anomaly / contamination detection:** flag sessions with out-of-persona endpoints; judge contamination vs. legitimate guest→customer transfer.
-- **Assertion recommendation:** suggest which response fields matter for a flow's golden check (consumed in Phase 9).
+- **Assertion recommendation (ADVISORY ONLY — BA-F1):** suggest which response
+  fields matter for a flow's golden check, emitted as **optional metadata**
+  (`assertion_hints`) on each candidate. This is explicitly **not** a Phase 8/9
+  oracle: ADR 0001 keeps the OpenAPI contract (intersected with observed
+  responses) as the assertion oracle. The hints are a hint for the human/Phase 9,
+  never a source of truth, and the output contract marks them `source:
+  advisory_llm` (or `advisory_fallback` when the LLM is unavailable). They must
+  not contradict ADR 0001.
 
-These are low-volume calls. Classification stays deterministic.
+These are low-volume calls. Classification stays deterministic. When
+`ANTHROPIC_API_KEY` is unset the engine degrades to deterministic local naming and
+empty advisory hints, so the pipeline runs end-to-end offline — naming is a
+convenience, not a gate.
 
 ## HITL scope: persona is a read-only derived label
 
@@ -246,9 +307,14 @@ its successful cart mutations set `requires_auth: true`:
 
 Write `data/validation/classification-report-<runId>.json` with:
 
-1. **Classification accuracy.** Compare each session's emergent persona against the highest-privilege `role_observed` ground truth; report precision/recall per persona and a confusion matrix. Emit this for **two rule variants on the same data** — the endpoint-only baseline and the endpoint+cart-signal rule — so the cart signal's contribution is a measured delta. This report is the single source of truth for all classification figures; the plan deliberately states no run-specific counts.
-2. **Holdout recovery.** Confirm PrefixSpan recovered the registered-customer checkout sequence and report its **support count** (e.g. "support 6"), not a yes/no.
-3. **Negative control.** Confirm no high-support flow corresponds to a sequence that was never injected (guard against hallucinated discovery).
+1. **Classification accuracy.** Compare each session's emergent persona against the highest-privilege `role_observed` ground truth; report precision/recall per persona and a confusion matrix. Emit this for **two rule variants on the same data** — the endpoint-only baseline and the endpoint+cart-signal rule — so the cart signal's contribution is a measured delta. This report is the single source of truth for all classification figures; the plan deliberately states no run-specific counts. The report **footnotes** that `role_observed` under-labels token-reuse/login-only sessions (PO-2), so some guest→customer reclassifications under the cart-signal variant are ground-truth gaps, not classifier errors.
+2. **Holdout recovery (BA-F2).** Confirm PrefixSpan recovered the registered-customer checkout backbone (`register → cart → line-items → complete`) and report its **support count**, not a yes/no. Acceptance is **support ≥ 6** — the Phase 5 holdout floor — reported as a count and comfortably above `minSupport = 3`.
+3. **Negative control (BA-F3 / PO-Q2) — a concrete fixture, not prose.** Assert that no high-support (≥ `minSupport`) mined flow contains a sequence the traffic generator provably never injects:
+   - a *successful* (2xx) `POST /store/returns` — store returns were removed by ADR 0003, so the only such steps in real logs are 4xx; the fixture asserts **zero** 2xx store-returns across the sessions; and
+   - an admin→customer-checkout chimera (`POST /admin/returns` followed by a customer `POST /store/carts/{id}/complete` in one mined flow). No session mixes an admin reversal with a customer checkout completion.
+   Pass condition: both fixtures have support 0 / below the floor. `validate.ts` checks this directly, not in prose.
+4. **Contamination resolution (BA-F6/F7).** Assert that every contaminated guest→higher-role session **that carries a content privilege-signal** (an auth endpoint, a 2xx cart mutation, or `/admin/*`) resolves to the **highest-privilege** persona. Sessions with no content signal are the ground-truth gaps from item 1's footnote — reported, not failed. Keep the n-gram-vs-PrefixSpan comparison in the run summary (BA-F6).
+5. **Reversal-archetype coverage.** The traffic generator injects **three** admin reversal archetypes (ADR 0003): return+refund (F3), order-cancel (F5), and return-reject (F6 — a requested return declined via `POST /admin/returns/{id}/cancel` with **no** refund). All three are admin-role and should mine as **distinct** admin flows; F6's distinguishing signature is the return-request prefix followed by `/admin/returns/{id}/cancel` with **no** receive/refund step. Note: F6 *is* an injected flow, so the `/admin/returns/{id}/cancel` sequence must **not** be added to the item-3 negative control's never-injected set.
 
 The run summary additionally reports `skipped_existing` — the count of ranked flows
 dropped by the cross-run skip gate because they already have a test or approval
@@ -258,15 +324,20 @@ explained rather than mistaken for a failure.
 ## Acceptance
 
 - ≥5 test candidates produced from mined flows.
-- Registered-customer checkout discovered despite no scripted equivalent, with a reported support count.
+- Registered-customer checkout discovered despite no scripted equivalent, with a
+  reported support count; acceptance is **support ≥ 6** (the Phase 5 holdout floor, BA-F2).
 - Classification report shows per-persona precision/recall against ground truth, for
   both the endpoint-only baseline and the cart-signal rule.
 - The cart signal is **net-positive**: it raises registered_customer recall versus the
   endpoint-only baseline **without lowering overall macro-F1** (on the enforcing-gate
   backend, guest cart mutations 4xx, so the signal should not steal guest recall). If
-  macro-F1 drops, the gate is not enforcing — stop and fix the gate, not the rule.
-- Negative control passes.
+  macro-F1 drops, **confirm against the cartWall 401→200 path that the gate enforces
+  before concluding the gate leaks** (PO-2) — the rule is correct while a guest
+  `POST /store/carts` returns 401.
+- Negative control passes (the concrete fixture in §Validation item 3).
 - Per-persona output capped at 10 canonical flows.
+- **At least one candidate per non-error persona** (`guest_shopper`,
+  `registered_customer`, `admin_operator`) is produced (BA-F5).
 - At least one `has_errors` (edge-case) flow survives mining into the candidate set
   on the realistic profile, confirming the absolute support floor (`minSupport = 3`)
   admits negative behavior. Report its support count in the run summary.

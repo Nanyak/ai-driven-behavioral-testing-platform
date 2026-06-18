@@ -39,9 +39,13 @@ uploads/
 reports/*
 generated-tests/*
 data/sessions/*
+services/behavior-engine/data/candidates/*
+services/behavior-engine/data/validation/*
 !reports/.gitkeep
 !generated-tests/.gitkeep
 !data/sessions/.gitkeep
+!services/behavior-engine/data/candidates/.gitkeep
+!services/behavior-engine/data/validation/.gitkeep
 
 # Editor and OS files
 .DS_Store

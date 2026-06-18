@@ -19,16 +19,16 @@ docs/
 
 1. **Overview.** One paragraph: what the platform does (AI-driven behavioral regression testing over Medusa via ELK), and the core claim (emergent persona discovery + golden-schema regression detection).
 2. **Architecture diagram.** Reuse/refresh the mermaid flowchart from plan §5 and the ERD under `docs/`.
-3. **Prerequisites.** Node version, package manager, Docker/Compose, `ANTHROPIC_API_KEY`, ports table (Medusa 9000, ES 9200, Kibana 5601, storefront 8000, dashboard 3000).
+3. **Prerequisites.** Node version, package manager, Docker/Compose, `ANTHROPIC_API_KEY`, ports table (Medusa 9000, ES 9200, Kibana 5601, storefront 8000, dashboard 5173).
 4. **Quickstart (happy path), in order:**
    - Start Medusa + Postgres + Redis — `npm run compose:up`
    - Start ELK — `npm run elk:up`
    - Create the Kibana `behavior-logs-*` data view (one-time)
    - Generate traffic — `npm run traffic:generate`
-   - Ingest logs — `npm run ingest`
-   - Run behavioral modeling — `npm run behavior:run`
-   - Generate tests — `npm run scripts:generate`
-   - Execute tests — `npm run test:all`
+   - Ingest logs — `npm run ingest:run`
+   - Run behavioral modeling — `npm run behavior:mine`
+   - Generate tests — `npm run scripts:generate` *(Phase 9 — script-generator service, not yet wired; follows the `service:verb` convention)*
+   - Execute tests — `npm run test:run` *(Phase 11 — test-runner service, not yet wired)*
    - Read the report — open `reports/report.html`
 5. **The AI claim, briefly.** Point readers to the Phase 7 validation report (emergent classification accuracy + holdout support count + negative control) so the "AI-driven" claim is backed by numbers, not assertion.
 
@@ -36,7 +36,7 @@ docs/
 
 - Component responsibilities (one line each): Medusa, logging middleware, ELK, traffic generator, ingestion, behavior engine, golden library, script generator, test runner, reporting.
 - Data contracts between stages (log doc → session-flow → candidate → spec → run result → report), each linking to the relevant phase plan.
-- Where the LLM is and isn't used (Haiku for traffic, Opus for naming/anomaly/assertions; **never** for classification).
+- Where the LLM is and isn't used (Haiku 4.5 for traffic, Sonnet 4.6 — `BEHAVIOR_LLM_MODEL`-configurable to Opus 4.8 — for naming/anomaly/assertions; **never** for classification).
 
 ## docs/limitations.md
 

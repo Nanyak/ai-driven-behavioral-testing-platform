@@ -120,9 +120,10 @@ The `medusa` service bind mounts `apps/medusa` for development, mounts the root 
 ## Acceptance Criteria
 
 - Medusa has request logging middleware configured for API routes.
-- Logs include event type, level, timestamp, method, raw endpoint, normalized endpoint, query parameters, selected headers, response code, response size, duration, remote IP, and user agent.
+- Logs include `event`, `level`, `timestamp`, `service`, `environment`, `request_id`, `method`, the normalized `endpoint` template, `status`, and `duration_ms`. The production-shaped log deliberately does **not** emit raw endpoint, query parameters, request headers, response size, remote IP, or user agent — see `apps/medusa/apps/backend/src/api/middlewares.ts`.
 - Logs include trace, session, `user_role`, and actor identity fields when available. Persona is intentionally **not** logged or read from headers — it is derived later as an emergent flow attribute in Phase 7 (plan §10.3).
 - Sensitive request and response values are masked.
 - Request and response bodies are disabled by default and can be enabled with `LOG_CAPTURE_BODIES=true`. Bodies are enrichment only — the golden oracle is the OpenAPI spec (ADR 0001), so the pipeline still functions with bodies off.
+- The `requireCustomerAuth` gate's `401` contract is **not** in Medusa's generated OAS (generators read routes/validators, not middleware). Its matchers/methods/error envelope are exported from a shared gate-config module that both this middleware (to enforce) and the Phase 8 overlay builder (to document) import, so the augmented spec covers the gate (ADR 0004).
 - Logs are emitted as JSON lines to stdout and a log file.
 - Phase 2 verification passes.

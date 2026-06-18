@@ -259,7 +259,7 @@ The behavior engine must recover signal from the combined, messy log stream rath
 
 ### 8.2 LLM-Varied Traffic
 
-For the LLM-varied portion, a Claude API call generates realistic session narratives that are then translated into API sequences. Model selection: use Claude Haiku 4.5 (`claude-haiku-4-5-20251001`) for bulk narrative generation given its low cost and latency, and reserve Claude Opus 4.8 (`claude-opus-4-8`) for the low-volume flow-naming, anomaly-detection, and assertion-recommendation calls described in §10.5. Expected MVP volume is roughly 20–40 narrative generations, well within a few cents of API spend. Example prompt:
+For the LLM-varied portion, a Claude API call generates realistic session narratives that are then translated into API sequences. Model selection: use Claude Haiku 4.5 (`claude-haiku-4-5-20251001`) for bulk narrative generation given its low cost and latency, and reserve Claude Sonnet 4.6 (`claude-sonnet-4-6`, the shipped default; configurable to Opus 4.8 via `BEHAVIOR_LLM_MODEL`) for the low-volume flow-naming, anomaly-detection, and assertion-recommendation calls described in §10.5. Expected MVP volume is roughly 20–40 narrative generations, well within a few cents of API spend. Example prompt:
 
 > You are a realistic e-commerce user interacting with a store API. Given the following available endpoints, generate a plausible sequence of 5 to 15 API calls a real user might make. Vary the order, skip optional steps sometimes, abandon carts, retry after failures, and occasionally browse without buying.
 
@@ -482,7 +482,7 @@ The mining and classification above are deterministic. The LLM is applied only t
 - **Anomaly / contamination detection**: flag sessions where out-of-persona endpoints appear (for example a guest session that hits a customer-auth endpoint) and judge whether it is contamination or a legitimate guest-to-customer transfer.
 - **Assertion recommendation**: suggest which response fields are meaningful to assert for a given flow's golden comparison.
 
-Model selection follows §8.2: Claude Opus 4.8 (`claude-opus-4-8`) for these low-volume judgment calls. These are MVP features, not future enhancements.
+Model selection follows §8.2: Claude Sonnet 4.6 (`claude-sonnet-4-6`, the shipped default; configurable to Opus 4.8 via `BEHAVIOR_LLM_MODEL`) for these low-volume judgment calls. These are MVP features, not future enhancements.
 
 ### 10.6 Classification and Discovery Validation
 
@@ -497,6 +497,8 @@ The holdout claim (§8.4) is reported as a measured result, not a binary:
 Golden responses are used as references during regression testing.
 
 > **Schema source (ADR 0001).** The authoritative assertion oracle is the **OpenAPI contract** (Store + Admin), not logged bodies: it is PII-free, authoritative on status codes, and lets production run bodies-off. The spec schema is **intersected with observed responses** from logs to tighten under-specified fields. The extraction algorithm below describes the *observed half* of that intersection (and the sole source when the spec lacks an operation). Generation stays log-driven; the OAS is the assertion oracle only. See `docs/adr/0001-assertion-oracle-openapi-contract.md` and the Phase 8 plan.
+>
+> **Spec covers errors + happy path (ADR 0004).** Medusa's generator reads routes/validators, not middleware, so middleware-injected responses (the `requireCustomerAuth` `401` gate) and supplemental fragments (ADR 0003) are added to the spec by a **deterministic overlay** (`build-oas.ts`) before `oas-source.ts` loads it. The oracle input is the *augmented* spec; the merge is status-presence check + schema union, **no LLM**.
 
 ### 11.1 Extraction Algorithm (observed half of the OAS intersection)
 
@@ -686,7 +688,7 @@ Behavioral platform:
 
 - TypeScript for traffic generation, ingestion, and script generation.
 - Python as an optional choice for advanced sequence mining or ML.
-- Claude API (Anthropic SDK): Haiku 4.5 (`claude-haiku-4-5-20251001`) for LLM-varied traffic generation; Opus 4.8 (`claude-opus-4-8`) for flow naming, anomaly/contamination detection, and assertion recommendation.
+- Claude API (Anthropic SDK): Haiku 4.5 (`claude-haiku-4-5-20251001`) for LLM-varied traffic generation; Sonnet 4.6 (`claude-sonnet-4-6`, the shipped default; configurable to Opus 4.8 via `BEHAVIOR_LLM_MODEL`) for flow naming, anomaly/contamination detection, and assertion recommendation.
 
 Test execution:
 
@@ -755,7 +757,7 @@ Tasks:
 - Create a simple platform dashboard in `apps/platform-dashboard`.
 - Show Medusa backend status, Store API availability, Admin API authentication availability, and links to the Medusa Admin and storefront.
 - Add dashboard placeholders for logs, traffic generation, behavior flows, generated tests, and reports.
-- Use `http://localhost:8000` for the storefront and `http://localhost:3000` for the dashboard.
+- Use `http://localhost:8000` for the storefront and `http://localhost:5173` for the dashboard.
 
 Deliverable:
 
@@ -817,6 +819,17 @@ Deliverable:
 
 - A list of behavior flows ready for test generation.
 
+> **Recommended milestone — thin end-to-end slice (after Phase 7).** Most demoable
+> value currently lands only at roadmap Phase 9 (execution + regression), ~90% through
+> the build. To de-risk the cross-service integration early and give a mid-project
+> value checkpoint, ship a **trivial vertical slice** the moment Phase 7 produces
+> candidates: hand-generate **one** guest-flow `.spec.ts` (or run the Phase 9
+> generator on a single candidate) and execute it against the live backend to a
+> green result. This exercises the full candidate → spec → runner → report path on
+> one flow before Phases 8–9 deepen it, surfacing wiring/contract problems while they
+> are cheap to fix. It is a checkpoint, not a separate deliverable — the real
+> generator (docs Phase 9) supersedes the hand-written spec.
+
 ### Phase 8: Script Generation (docs Phase 8 Golden Handling + Phase 9 Script Generator)
 
 Tasks:
@@ -873,7 +886,7 @@ The project is considered successful when:
 - A platform dashboard is available for project status, links, and future pipeline outputs.
 - At least three personas are supported: guest, customer, and admin.
 - The synthetic traffic generator produces logs.
-- Logs include `trace_id`, `session_id`, `persona`, endpoint, payload, and response code.
+- Logs include `trace_id`, `session_id`, `user_role`, `endpoint`, and `status` (request/response bodies are emitted only when `LOG_CAPTURE_BODIES=true`; **no** persona field — persona is emergent, §10.3).
 - Logs are stored in Elasticsearch and visible in Kibana.
 - Logs can be grouped by session.
 - At least five behavioral flows are discovered.

@@ -143,6 +143,7 @@ Do not assume any service is running. Use `npm run check:phaseN` or a direct
 | Medusa API endpoints + seed data | `docs/phase-1-implementation-plan.md` |
 | Storefront UI | `apps/storefront/` README |
 | Assertion oracle design | `docs/adr/0001-assertion-oracle-openapi-contract.md` |
+| OpenAPI spec augmentation — middleware-injected responses, overlay build, errors+happy-path | `docs/adr/0004-openapi-spec-augmentation-middleware-overlay.md` + `docs/phase-8-implementation-plan.md` |
 | Cross-run dedup / skip gate / flow signature | `docs/adr/0002-cross-run-flow-signature-skip-gate.md` |
 | Order reversals (return / refund / cancel) — admin-only, state-gated | `docs/adr/0003-admin-only-order-reversals.md` |
 | Overall architecture decisions | `docs/adr/` |

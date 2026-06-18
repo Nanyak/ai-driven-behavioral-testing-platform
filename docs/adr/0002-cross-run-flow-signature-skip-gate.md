@@ -16,7 +16,7 @@ LLM, emitted as a `.spec.ts`, and approved by a human in the HITL dashboard will
 **re-discovered, re-named by the LLM, and re-emitted** on the next run. There is no
 "have I already produced a test for this flow?" check across runs. Two costs follow:
 
-1. **Wasted LLM judgment.** Phase 7's `naming.ts` calls Opus 4.8 for flow naming,
+1. **Wasted LLM judgment.** Phase 7's `naming.ts` calls the judgment LLM (Sonnet 4.6 by default, `BEHAVIOR_LLM_MODEL`-configurable to Opus 4.8) for flow naming,
    anomaly/contamination detection, and assertion recommendation. Re-running it for
    a flow that already has a test spends tokens to reproduce a decision already made.
 2. **Suite churn and lost human decisions.** Re-emitting a `.spec.ts` for an
@@ -84,7 +84,7 @@ broken.
 
 This ADR keeps ADR 0001's line: the LLM is **judgment only, never the code generator**.
 Test `.spec.ts` files are produced by deterministic Handlebars templates
-(`script-generator/emit.ts`). We **considered and rejected** having Opus 4.8 write
+(`script-generator/emit.ts`). We **considered and rejected** having the LLM write
 each `.spec.ts` directly:
 
 - It makes the generated suite **non-reproducible** — the same flow yields different

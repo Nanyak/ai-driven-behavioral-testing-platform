@@ -32,8 +32,12 @@ Probing the live Medusa 2.15.5 build established the real constraints:
   unfulfilled order (reversing the authorized payment) but 400s on a fulfilled one
   ("All fulfillments must be canceled before canceling an order").
 
-These are two genuinely distinct real-world reversal archetypes: *changed my mind
-before it shipped* (cancel) vs *received it and sent it back* (return + refund).
+These are genuinely distinct real-world reversal archetypes: *changed my mind
+before it shipped* (cancel the order) vs *received it and sent it back* (return +
+refund). Phase 5 Theme 4c later added a **third** — *operator declines the return*
+(return-reject): a requested return cancelled via `POST /admin/returns/{id}/cancel`
+with **no refund issued** (verified live on 2.15.5 — empty body; the per-item
+`{items}` body 400s). This is admin-only too; the storefront gains no reversal.
 
 ## Decision
 
@@ -46,6 +50,11 @@ before it shipped* (cancel) vs *received it and sent it back* (return + refund).
    - **F3 return + refund** runs the full admin return lifecycle on a **fulfilled**
      order.
    - **F5 cancel** cancels an **unfulfilled** order.
+   - **F6 return-reject** (Theme 4c) files a return on a **fulfilled** order
+     (`begin → request-items → request`, state `requested`) then **declines** it via
+     `POST /admin/returns/{id}/cancel` — **no refund**. Distinct from F5: F5 cancels
+     the *order* (`POST /admin/orders/{id}/cancel`); F6 cancels the *return*. It is
+     **not** a customer/storefront refund — the operator rejects a return request.
 3. **Stage 2 runs in two ordered waves** so the state gates above are satisfiable:
    **2a** fulfills orders (F2); **2b** runs the read-only inquiry (E), the return
    path (F3) on fulfilled orders, and the cancel path (F5) on unfulfilled orders.
@@ -56,8 +65,9 @@ before it shipped* (cancel) vs *received it and sent it back* (return + refund).
 
 ## Consequences
 
-- Phase 7 mines two reversal archetypes (return-after-fulfillment, cancel-before-
-  fulfillment), both admin-role, linked to a customer-role order by `order_id`.
+- Phase 7 mines three reversal archetypes (return+refund after fulfillment,
+  order-cancel before fulfillment, and return-reject — a requested return declined
+  with no refund), all admin-role, linked to a customer-role order by `order_id`.
 - The generator must fulfill before it can return; the `adminFulfill` floor is
   auto-topped above the return floor (`adminRefund + 3`) so Stage 2b always has
   fulfilled orders.

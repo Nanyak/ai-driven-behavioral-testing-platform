@@ -47,9 +47,61 @@ generated-tests/
    - status code assertion from candidate `expected_status`
    - golden-schema assertion via the Phase 8 `compare` utility (imported into the test) for steps that have a stored golden
    - edge-case templates assert the expected 4xx/5xx
-6. **Sample payloads** come from the candidate's `request_payload` (captured from logs), making bodies realistic.
+6. **Request bodies** follow the payload policy in *Request building & data threading* (below): observed `request_payload` when present (bodies-on runs), else a minimal valid body synthesized from the OpenAPI request schema (Phase 8), else an empty body — **never a guessed body**.
 7. **Vendor the comparator.** Copy the Phase 8 golden comparator from the canonical `services/golden/src/` into `generated-tests/_golden/` on each generation run, so the suite is self-contained with no reach-back dependency on `services/`. Because the copy is regenerated every run, it never drifts from the source.
 8. **Playwright config**: base URL from env, sensible timeouts, JSON + HTML reporters wired (consumed in Phase 10/11).
+
+## Request building & data threading (the hard part)
+
+The example below chains cart → line-item, but a real customer checkout threads
+`region → cart → line-item → shipping → payment → complete`. The generator turns a
+mined step sequence into a dependency chain explicitly; this section is the contract
+for how each step's inputs are produced.
+
+### Payload synthesis (bodies-off safe)
+
+Production logs run **bodies-off** (ADR 0001), so `request_payload` is usually
+absent. Body resolution, in priority order:
+
+1. **Observed** — use the candidate's `request_payload` verbatim if present (bodies-on enrichment run).
+2. **Synthesized** — build a minimal body from the operation's OpenAPI **request** schema (the OAS is already loaded in Phase 8): include **required** fields only, fill ID-typed fields (`variant_id`, `region_id`, `option_id`, `provider_id`) with runtime-resolved values and other scalars with deterministic literals (`quantity: 1`).
+3. **Empty** — operations with no request body.
+
+A step whose body can be **neither** observed nor synthesized from the OAS (no
+schema, no log) emits a `test.fixme(...)` with a TODO rather than a guessed body —
+surfaced in the generation run summary, not silently shipped.
+
+### Step → request-builder resolution table
+
+| Step (method + endpoint) | Path/ID input | Body input | Resolved from |
+| --- | --- | --- | --- |
+| `GET /store/regions` | — | — | publishable key |
+| `POST /store/carts` | — | `region_id` | region from `GET /store/regions` |
+| `POST /store/carts/{id}/line-items` | cart id (prev resp) | `variant_id`, `quantity` | variant from `GET /store/products`; `quantity:1` |
+| `POST /store/carts/{id}/shipping-methods` | cart id | `option_id` | `GET /store/shipping-options?cart_id=` |
+| `POST /store/payment-collections` → `/payment-sessions` | cart id | `provider_id` | `GET /store/payment-providers` |
+| `POST /store/carts/{id}/complete` | cart id | — | — |
+| customer auth (`/auth/customer/emailpass[/register]`) | — | email/password | generated in-test, captured token |
+| `POST /admin/*` | per call (runtime IDs) | per OAS schema | admin fixture token |
+
+### Data threading
+
+The generator walks the canonical flow **in order**; for each step it emits, in
+sequence: (a) any resolve calls for inputs not already in scope, (b) the request,
+(c) the assertions — capturing into scope every ID a later step needs (cart id →
+shipping → payment → complete). A step that needs an input **no prior step produced
+and that no standalone GET can resolve** is a generation error reported in the run
+summary, not a silently broken `.spec.ts`.
+
+### Edge-case (4xx) derivation
+
+An edge candidate carries the **observed** failing status + endpoint from the logs
+(status is logged even bodies-off). The edge template reproduces the **logged**
+failure condition — it never invents a new malformation:
+
+- missing required field → the observed `400` (e.g. `line-items` with no `variant_id`);
+- unauthenticated cart mutation → the observed `401` from the auth gate;
+- when the malformed body itself isn't recoverable (bodies-off), assert the status from the reproducible **structural** condition (omit the auth header, or omit an OAS-required field) that deterministically yields it.
 
 ## Example emitted test (shape)
 
@@ -90,4 +142,6 @@ test("guest_shopper — create cart and add item", async ({ request }) => {
 - `generated-tests/` is self-contained: tests import the comparator from `_golden/`, not from `services/`.
 - Each test resolves its own IDs and tokens; no hardcoded seed IDs.
 - Each test has at least a status assertion; store/admin flows also carry golden-schema assertions.
-- Edge tests assert the expected error status.
+- Edge tests assert the expected error status, reproducing the **logged** failure condition (not an invented one).
+- No step ships a guessed body: every request body is observed, OAS-synthesized, empty, or a flagged `test.fixme`.
+- Multi-step flows thread runtime IDs through the chain; an unresolvable step input is a reported generation error, not a broken spec.

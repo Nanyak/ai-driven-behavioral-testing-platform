@@ -192,48 +192,50 @@ Staged situation taxonomy (plan §4–§7 — supersedes the flat mix above):
 
 ## Phase 7: Behavioral Modeling Engine
 
-- [ ] Create `services/behavior-engine`.
-- [ ] Load session flows from ingestion output.
-- [ ] Mine flows from the raw, unlabeled sequence stream (do not pre-label sessions by persona).
-- [ ] Derive deterministic flow attributes from step content: `requires_auth` (contains `/auth/customer/*` or `/store/customers`, **or** a successful 2xx cart/checkout mutation on `/store/carts`/`/store/payment-collections` — carts are auth-gated, ADR 0003), `is_admin` (contains `/admin/*`), `has_errors` (contains 4xx/5xx).
-- [ ] Resolve persona from attributes: `is_admin` → admin_operator; `requires_auth` and not admin → registered_customer; neither → guest_shopper; `has_errors` as an orthogonal edge-case overlay.
-- [ ] Resolve mid-session role changes by highest-privilege attribute reached (admin > customer > guest).
-- [ ] Keep JWT `user_role` only as held-out ground truth for validation, never as classifier input.
-- [ ] Add `persona_source: "emergent_attributes"` field to flow output.
-- [ ] Identify Guest Shopper flows.
-- [ ] Identify Registered Customer flows.
-- [ ] Identify Admin Operator flows.
-- [ ] Identify Edge Case User flows.
-- [ ] Count endpoint sequence frequency.
-- [ ] Implement simple n-gram sequence mining.
-- [ ] Implement PrefixSpan frequent sequential pattern mining.
-- [ ] Configure minimum support threshold for PrefixSpan.
-- [ ] Prune duplicate or subsumed flows.
-- [ ] Implement a single canonical flow-signature function (`signature.ts`): stable hash of the normalized `METHOD endpoint` step sequence, persona-independent (ADR 0002); reuse it in dedup, the skip gate, and Phase 9 emit.
-- [ ] Deduplicate flows with identical normalized step sequences (keep highest-support).
-- [ ] Cluster flows sharing a common prefix of three or more steps (keep longest representative).
-- [ ] Cap output at ten canonical flows per persona.
-- [ ] Implement the cross-run coverage manifest (`coverage.ts`): collect already-covered signatures from `generated-tests/**/*.spec.ts` and the HITL approval store (approved + discarded).
-- [ ] Apply the cross-run skip gate after ranking and before LLM naming: drop ranked flows whose signature is already covered (ADR 0002).
-- [ ] Report `skipped_existing` count in the run summary.
-- [ ] Compare n-gram output against PrefixSpan output.
-- [ ] Identify the top frequent flows.
-- [ ] Identify important error flows based on `4xx` and `5xx` responses.
-- [ ] Rank candidates by support, persona, business importance, and error coverage.
-- [ ] Produce test candidate JSON.
-- [ ] Verify at least five test candidates are generated from mined behavior flows.
-- [ ] Verify the Registered Customer checkout flow is discovered despite not being present in scripted sessions (holdout validation).
-- [ ] Score emergent persona classification against JWT `user_role` ground truth (report precision/recall per persona).
-- [ ] Report holdout recovery as a support count (Registered Customer checkout sequence support ≥ threshold), not a binary.
-- [ ] Add a negative control: confirm no un-injected flow is reported as high-support.
-- [ ] Use the LLM (Opus 4.8) for flow naming, anomaly/contamination detection, and assertion recommendation (not for classification).
+- [x] Create `services/behavior-engine`.
+- [x] Load session flows from ingestion output.
+- [x] Mine flows from the raw, unlabeled sequence stream (do not pre-label sessions by persona).
+- [x] Derive deterministic flow attributes from step content: `requires_auth` (contains `/auth/customer/*` or `/store/customers`, **or** a successful 2xx cart/checkout mutation on `/store/carts`/`/store/payment-collections` — carts are auth-gated, ADR 0003), `is_admin` (contains `/admin/*`), `has_errors` (contains 4xx/5xx).
+- [x] Resolve persona from attributes: `is_admin` → admin_operator; `requires_auth` and not admin → registered_customer; neither → guest_shopper; `has_errors` as an orthogonal edge-case overlay.
+- [x] Resolve mid-session role changes by highest-privilege attribute reached (admin > customer > guest).
+- [x] Keep JWT `user_role` only as held-out ground truth for validation, never as classifier input.
+- [x] Add `persona_source: "emergent_attributes"` field to flow output.
+- [x] Identify Guest Shopper flows.
+- [x] Identify Registered Customer flows.
+- [x] Identify Admin Operator flows.
+- [x] Identify Edge Case User flows.
+- [x] Count endpoint sequence frequency.
+- [x] Implement simple n-gram sequence mining.
+- [x] Implement PrefixSpan frequent sequential pattern mining.
+- [x] Configure minimum support threshold for PrefixSpan.
+- [x] Prune duplicate or subsumed flows.
+- [x] Implement a single canonical flow-signature function (`signature.ts`): stable hash of the normalized `METHOD endpoint` step sequence, persona-independent (ADR 0002), consecutive duplicates collapsed (PO-3); reuse it in dedup, the skip gate, and Phase 9 emit. Golden test in `signature.test.ts`.
+- [x] Deduplicate flows with identical normalized step sequences (keep highest-support).
+- [x] Cluster flows sharing a common prefix of three or more steps (keep longest representative).
+- [x] Cap output at ten canonical flows per persona.
+- [x] Implement the cross-run coverage manifest (`coverage.ts`): collect already-covered signatures from `generated-tests/**/*.spec.ts` and the HITL approval store (approved + discarded); a missing dir/store is an empty manifest, never an error (PO-6).
+- [x] Apply the cross-run skip gate after ranking and before LLM naming: drop ranked flows whose signature is already covered (ADR 0002).
+- [x] Report `skipped_existing` count in the run summary.
+- [x] Compare n-gram output against PrefixSpan output.
+- [x] Identify the top frequent flows.
+- [x] Identify important error flows based on `4xx` and `5xx` responses.
+- [x] Rank candidates by support, persona, endpoint/business importance (merged, PO-7), and error coverage; deterministic ordering (PO-5).
+- [x] Produce test candidate JSON.
+- [x] Verify at least five test candidates are generated from mined behavior flows.
+- [x] Verify the Registered Customer checkout flow is discovered despite not being present in scripted sessions (holdout validation).
+- [x] Score emergent persona classification against JWT `user_role` ground truth (report precision/recall per persona, both rule variants).
+- [x] Report holdout recovery as a support count (Registered Customer checkout sequence support ≥ 6, the Phase 5 holdout floor), not a binary.
+- [x] Add a negative control: concrete fixture confirming no un-injected flow (successful `POST /store/returns`, admin→customer-checkout chimera) is reported as high-support.
+- [x] Use the LLM (Sonnet 4.6 by default, `BEHAVIOR_LLM_MODEL` configurable; key/model loaded from `services/behavior-engine/.env`) for flow naming, anomaly/contamination detection, and assertion recommendation — advisory only, never classification (ADR 0001).
 
 ## Phase 8: Golden Response Handling
 
 - [ ] Define the golden response JSON format (endpoint, expected_status, expected_schema, ignore_fields, schema_source, oas_operation_id, oas_ref, oas_version, captured_at, source_sessions).
 - [ ] Define the global ignore-fields list (id, created_at, updated_at, deleted_at, metadata, token, cart_id, order_id, trace_id, session_id).
-- [ ] Load the OpenAPI spec and resolve `$ref` into typed per-(operation, status) schemas — the authoritative oracle (ADR 0001).
-- [ ] Source `expected_status` from the spec for happy-path steps; use the observed status for edge/error steps.
+- [ ] Build the augmented spec (`build-oas.ts`, ADR 0004): overlay middleware-injected responses (gate `401`) and supplemental fragments (ADR 0003) onto the read-only base Medusa OAS; deterministic union on status collisions, no LLM.
+- [ ] Extract the shared gate-config module (matchers/methods/`GateUnauthorized`) imported by both `middlewares.ts` (enforce) and `build-oas.ts` (document) so enforcement and spec cannot drift.
+- [ ] Load the augmented OpenAPI spec and resolve `$ref` into typed per-(operation, status) schemas — the authoritative oracle (ADR 0001 / ADR 0004).
+- [ ] Source `expected_status` from the spec for happy-path steps and for error steps the overlay documents (with provenance); fall back to the observed status only where the spec has no entry.
 - [ ] Implement schema extraction: walk observed response JSON tree and classify leaf types (observed half of the intersection).
 - [ ] Intersect the OAS skeleton with observed schemas to tighten under-specified fields; stamp `schema_source` (`openapi` / `openapi+observed` / `observed`).
 - [ ] Stamp OAS provenance on spec-sourced goldens (`oas_operation_id`, `oas_ref`, `oas_version`) for traceability and drift detection.
