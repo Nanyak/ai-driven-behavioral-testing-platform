@@ -44,6 +44,7 @@ npm run check:phase3   # Elasticsearch ingestion
 npm run check:phase4   # log schema + Kibana
 npm run check:phase5   # traffic generator acceptance gates
 npm run check:phase6   # log ingestion output (session flows + goldens)
+npm run check:phase8   # golden response handling (OAS overlay + oracle utilities)
 
 # Traffic generator TypeScript must always compile clean:
 cd services/traffic-generator && npx tsc --noEmit
@@ -145,7 +146,8 @@ Do not assume any service is running. Use `npm run check:phaseN` or a direct
 | Assertion oracle design | `docs/adr/0001-assertion-oracle-openapi-contract.md` |
 | OpenAPI spec augmentation — middleware-injected responses, overlay build, errors+happy-path | `docs/adr/0004-openapi-spec-augmentation-middleware-overlay.md` + `docs/phase-8-implementation-plan.md` |
 | Cross-run dedup / skip gate / flow signature | `docs/adr/0002-cross-run-flow-signature-skip-gate.md` |
-| Order reversals (return / refund / cancel) — admin-only, state-gated | `docs/adr/0003-admin-only-order-reversals.md` |
+| Order reversals (return / refund / cancel) — admin-operated by storefront policy, state-gated | `docs/adr/0003-admin-only-order-reversals.md` |
+| Agent layer — orchestration / flow ranking / drift triage / log-pattern mining (agents propose, deterministic core disposes; log-scoped, non-blocking) | `docs/adr/0005-agentic-orchestration-layer-over-deterministic-core.md` + `docs/phase-16-implementation-plan.md` |
 | Overall architecture decisions | `docs/adr/` |
 
 ## 8. Hard constraints (never break these)

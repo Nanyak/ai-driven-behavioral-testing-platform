@@ -1,4 +1,4 @@
-# ADR 0003 — Order reversals (return / refund / cancel) are admin-only and order-state-gated
+# ADR 0003 — Order reversals (return / refund / cancel) are admin-operated by storefront policy, and order-state-gated
 
 - **Status:** Accepted
 - **Date:** 2026-06-16
@@ -6,13 +6,18 @@
 
 ## Context
 
-The storefront exposes **no customer-facing order reversal**. The order page is
+The storefront exposes **no customer-facing order reversal — a deliberate
+product/storefront policy, not a Medusa API limitation.** The order page is
 read-only (native order view + Shopee-style stage badges + "Buy again") — see the
 order-action decision recorded in project memory and `apps/storefront/src/utils/orderStatus.ts`.
-Medusa's store API has no customer order-cancel endpoint, and `POST /store/returns`
-requires a return shipping `option_id` the seed does not provide, so a customer
-return call always 400s. Order lifecycle is handled by an operator in the Medusa
-admin (`/app`).
+
+Medusa's store API **does** expose `POST /store/returns` (a customer creates a
+return *request* that the admin then receives and processes) and `/store/return-reasons`;
+it has **no** customer order-*cancel* endpoint. This project chooses not to surface
+`/store/returns` in the storefront and does not seed the return-shipping `option_id`
+it needs, so a customer return call is intentionally dead (400s). Order lifecycle is
+handled by an operator in the Medusa admin (`/app`). The constraint is therefore a
+policy choice — Medusa would permit the customer call if we surfaced and seeded it.
 
 The Phase 5 traffic generator originally modelled returns as a **customer**
 `POST /store/returns` call (flow E) settled by an admin refund (F3). With the
@@ -74,7 +79,9 @@ with **no refund issued** (verified live on 2.15.5 — empty body; the per-item
 - These admin endpoints are version-sensitive across Medusa 2.x minors. They are
   marked `// VERIFY against live backend` and degrade to a logged non-2xx rather
   than crashing.
-- If a future requirement needs a customer-initiated return, it requires BOTH a
-  seeded return shipping option (for `POST /store/returns`) AND an admin widget
-  that surfaces it — and, being outside Medusa's published OpenAPI, a supplemental
-  OAS fragment merged in Phase 8 (the assertion oracle is the OpenAPI contract, ADR 0001).
+- Reversing this policy (customer-initiated returns) is a **storefront change, not a
+  spec change**: `POST /store/returns` is already in Medusa's published OpenAPI — and
+  therefore already in the Phase 8 augmented base, so **no supplemental OAS fragment is
+  needed** (the assertion oracle is the OpenAPI contract, ADR 0001). It would require a
+  seeded return shipping `option_id` and a storefront surface that calls it, not a new
+  contract.

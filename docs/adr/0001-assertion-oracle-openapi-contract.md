@@ -62,7 +62,7 @@ In production these are optional; with bodies off, generated tests fall back to 
 
 ## Status of related docs
 
-- **Refined by ADR 0004.** Middleware-injected responses (e.g. the `requireCustomerAuth` `401` gate) and supplemental fragments are merged into the spec via a deterministic overlay step, so the oracle covers errors **and** happy path. Error steps the overlay documents are now spec-sourced with provenance, rather than observed-only as stated above.
+- **Refined by ADR 0004.** Middleware-injected responses (e.g. the `requireCustomerAuth` `401` gate) are merged into the spec via a deterministic overlay step, so the oracle covers errors **and** happy path. Error steps the overlay documents are now spec-sourced with provenance, rather than observed-only as stated above. (ADR 0004's 2026-06-19 amendment drops the once-planned ADR 0003 supplemental fragment — the real Medusa admin base already documents the reversal surface.)
 - Phase 8 plan revised to make OAS the schema source, intersected with observed responses.
 - Phase 2 body-capture default relaxed: bodies are enrichment, not a hard requirement for the oracle.
 - Phase 6 golden extraction reframed as feeding the *observed half* of the intersection.

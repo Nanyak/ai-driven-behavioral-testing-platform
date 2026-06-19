@@ -498,7 +498,7 @@ Golden responses are used as references during regression testing.
 
 > **Schema source (ADR 0001).** The authoritative assertion oracle is the **OpenAPI contract** (Store + Admin), not logged bodies: it is PII-free, authoritative on status codes, and lets production run bodies-off. The spec schema is **intersected with observed responses** from logs to tighten under-specified fields. The extraction algorithm below describes the *observed half* of that intersection (and the sole source when the spec lacks an operation). Generation stays log-driven; the OAS is the assertion oracle only. See `docs/adr/0001-assertion-oracle-openapi-contract.md` and the Phase 8 plan.
 >
-> **Spec covers errors + happy path (ADR 0004).** Medusa's generator reads routes/validators, not middleware, so middleware-injected responses (the `requireCustomerAuth` `401` gate) and supplemental fragments (ADR 0003) are added to the spec by a **deterministic overlay** (`build-oas.ts`) before `oas-source.ts` loads it. The oracle input is the *augmented* spec; the merge is status-presence check + schema union, **no LLM**.
+> **Spec covers errors + happy path (ADR 0004).** Medusa's generator reads routes/validators, not middleware, so the middleware-injected `requireCustomerAuth` `401` gate is added to the spec by a **deterministic overlay** (`build-oas.ts`) before `oas-source.ts` loads it. (No ADR 0003 fragment is injected — the real Medusa admin base already documents the full reversal surface.) The oracle input is the *augmented* spec; the merge is status-presence check + schema union, **no LLM**.
 
 ### 11.1 Extraction Algorithm (observed half of the OAS intersection)
 

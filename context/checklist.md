@@ -230,26 +230,70 @@ Staged situation taxonomy (plan §4–§7 — supersedes the flat mix above):
 
 ## Phase 8: Golden Response Handling
 
-- [ ] Define the golden response JSON format (endpoint, expected_status, expected_schema, ignore_fields, schema_source, oas_operation_id, oas_ref, oas_version, captured_at, source_sessions).
-- [ ] Define the global ignore-fields list (id, created_at, updated_at, deleted_at, metadata, token, cart_id, order_id, trace_id, session_id).
-- [ ] Build the augmented spec (`build-oas.ts`, ADR 0004): overlay middleware-injected responses (gate `401`) and supplemental fragments (ADR 0003) onto the read-only base Medusa OAS; deterministic union on status collisions, no LLM.
-- [ ] Extract the shared gate-config module (matchers/methods/`GateUnauthorized`) imported by both `middlewares.ts` (enforce) and `build-oas.ts` (document) so enforcement and spec cannot drift.
-- [ ] Load the augmented OpenAPI spec and resolve `$ref` into typed per-(operation, status) schemas — the authoritative oracle (ADR 0001 / ADR 0004).
-- [ ] Source `expected_status` from the spec for happy-path steps and for error steps the overlay documents (with provenance); fall back to the observed status only where the spec has no entry.
-- [ ] Implement schema extraction: walk observed response JSON tree and classify leaf types (observed half of the intersection).
-- [ ] Intersect the OAS skeleton with observed schemas to tighten under-specified fields; stamp `schema_source` (`openapi` / `openapi+observed` / `observed`).
-- [ ] Stamp OAS provenance on spec-sourced goldens (`oas_operation_id`, `oas_ref`, `oas_version`) for traceability and drift detection.
-- [ ] Confirm a valid spec-only golden is produced with bodies off (oracle works without logged bodies).
-- [ ] Implement merge logic for optional fields across multiple sessions of the same endpoint.
-- [ ] Normalize response bodies before comparison (strip ignored fields).
-- [ ] Add schema comparison utility.
-- [ ] Add golden response comparison utility.
-- [ ] Implement versioning: store golden responses with a `captured_at` timestamp; require explicit refresh to update baseline.
-- [ ] Test comparison with a matching response.
-- [ ] Test comparison with a changed response code.
-- [ ] Test comparison with a changed response schema (new field added, field removed, type changed).
-- [ ] Confirm dynamic fields do not cause false failures.
-- [ ] Confirm an intentional schema change is detected as a regression.
+- [x] Define the golden response JSON format (endpoint, expected_status, expected_schema, ignore_fields, schema_source, oas_operation_id, oas_ref, oas_version, captured_at, source_sessions).
+- [x] Define the global ignore-fields list (id, created_at, updated_at, deleted_at, metadata, token, cart_id, order_id, trace_id, session_id).
+- [x] Build the augmented spec (`build-oas.ts`, ADR 0004): overlay the middleware-injected gate `401` onto the read-only base Medusa OAS; deterministic union on status collisions, no LLM. (No ADR 0003 admin-reversal fragment is injected — the real Medusa admin base already documents the full reversal surface, so there is nothing supplemental to add; the admin-only policy lives in ADR 0003 + storefront/gate, not in spec annotations.)
+- [x] Extract the shared gate-config module (matchers/methods/`GateUnauthorized`) imported by both `middlewares.ts` (enforce) and `build-oas.ts` (document) so enforcement and spec cannot drift.
+- [x] Load the augmented OpenAPI spec and resolve `$ref` into typed per-(operation, status) schemas — the authoritative oracle (ADR 0001 / ADR 0004).
+- [x] Source `expected_status` from the spec for happy-path steps and for error steps the overlay documents (with provenance); fall back to the observed status only where the spec has no entry.
+- [x] Implement schema extraction: walk observed response JSON tree and classify leaf types (observed half of the intersection).
+- [x] Intersect the OAS skeleton with observed schemas to tighten under-specified fields; stamp `schema_source` (`openapi` / `openapi+observed` / `observed`).
+- [x] Stamp OAS provenance on spec-sourced goldens (`oas_operation_id`, `oas_ref`, `oas_version`) for traceability and drift detection.
+- [x] Confirm a valid spec-only golden is produced with bodies off (oracle works without logged bodies).
+- [x] Implement merge logic for optional fields across multiple sessions of the same endpoint.
+- [x] Normalize response bodies before comparison (strip ignored fields).
+- [x] Add schema comparison utility.
+- [x] Add golden response comparison utility.
+- [x] Implement versioning: store golden responses with a `captured_at` timestamp; require explicit refresh to update baseline.
+- [x] Test comparison with a matching response.
+- [x] Test comparison with a changed response code.
+- [x] Test comparison with a changed response schema (new field added, field removed, type changed).
+- [x] Confirm dynamic fields do not cause false failures.
+- [x] Confirm an intentional schema change is detected as a regression.
+
+> Implemented as a new `services/golden` library (mirrors behavior-engine's
+> setup: ESM, ESNext/Bundler tsconfig, strict, tsx). The shared gate-contract
+> module (`apps/medusa/apps/backend/src/api/gate-contract.ts`) is now imported
+> by both `middlewares.ts` (enforce) and `services/golden/openapi/build-oas.ts`
+> (document) — `middlewares.ts` was refactored surgically to import the
+> matchers/methods/envelope instead of inline literals; behavior unchanged.
+> Backend `tsc --noEmit` (`apps/medusa/apps/backend`) passes clean after the
+> refactor (full Medusa-app typecheck, run directly — confirmed exit 0).
+>
+> The base OAS (`openapi/base/{store,admin}.json`) is the **real, published
+> Medusa v2 OpenAPI spec** — not a fixture. Medusa publishes Store/Admin as a
+> split spec (root `openapi.yaml` + external `$ref`s to per-schema YAML
+> files); `openapi/fetch-base-oas.ts` bundles each into one self-contained
+> JSON via a pinned `@redocly/cli bundle` (this is the only networked step in
+> the package — `build-oas.ts` and `check:phase8` are fully offline against
+> the committed `base/`). Committed: Store — 923,509 bytes, 63 paths, 109
+> schemas; Admin — 4,592,454 bytes, 255 paths, 468 schemas; both report
+> `info.version: "2.0.0"` (the spec's own version, independent of the
+> `@medusajs/medusa` npm package version).
+>
+> Because the real spec already documents a `401` on every gated cart/
+> payment-collection operation (Medusa's own shared `unauthorized` response),
+> the ADR 0004 overlay exercises the `oneOf` **union** collision path on all
+> 16 real gated ops — never a fresh add. The pure-add branch is still real
+> overlay logic, so it stays covered via a small synthetic in-memory
+> `OasDocument` in `build-oas.test.ts`, kept in a clearly labeled section
+> separate from the real-data assertions. Real data also required handling
+> response-level `$ref`s into shared `components/responses/*` (not inlined
+> per-operation, must not be mutated in place) and `allOf` composition
+> (`StoreProductListResponse`) — see `services/golden/README.md` for detail.
+>
+> `npm run check:phase8` passes 10/10: tsc clean, all 9 `services/golden`
+> test files (56 checks) pass, the overlay's union (not overwrite) is
+> confirmed on three representative gated ops plus GET-is-untouched, the
+> rebuild is byte-identical, and `$ref` resolution is confirmed for
+> `POST /store/carts` (-> `StoreCartResponse` -> `{ cart: $ref StoreCart }`)
+> and `GET /store/products` (-> `StoreProductListResponse`, `allOf`) against
+> the real augmented spec. End-to-end wiring that reads Phase 6
+> `GoldenCandidate` output and writes files into `golden-responses/` is
+> deferred to whichever later phase runs ingestion + golden generation
+> together (Phase 9/11 consume `compare.ts` directly); this phase ships and
+> unit-tests the algorithm in full, including an in-process end-to-end test
+> (`golden-production.test.ts`).
 
 ## Phase 9: Script Generator
 
@@ -362,6 +406,21 @@ Optional (time-permitting):
 
 - [ ] Edit flow steps or assertions in the UI (persona re-derives from edited steps).
 - [ ] Gate which tests the runner executes based on approval state.
+
+## Phase 16: Agentic Orchestration & Judgment Layer
+
+> Post-MVP enhancement (ADR 0005). Agents **propose** (rank/plan/triage/advise/deep-mine logs); deterministic code **disposes** (verify/detect/gate). Strictly log-scoped and non-blocking — `AGENT_LAYER=off` is a no-op for correctness. No live-app exploration, no invented flows, no agent on the oracle/gate path.
+
+- [ ] Deterministic pipeline DAG (`dag.ts`) + read-only agent tools (`tools.ts`) over `flowSignature`, `checkOasDrift`, support counts, `tsc`/`--list`, Phase 11 results.
+- [ ] Orchestrator (planner, not plumber): decides budget/refresh-vs-hold/ordering at decision points only; static DAG is the fallback. Never auto-refreshes goldens (ADR 0001).
+- [ ] Flow-Ranker: risk/value ordering of mined flows → **frozen** Phase 9 selection input; fallback = support-count.
+- [ ] Flow-Verifier (advisory): coherence note; signature round-trip stays authoritative.
+- [ ] Code-Verifier (advisory, **NOT a gate**): semantic smells; `tsc` + round-trip + execution remain the gate.
+- [ ] Drift-Triage: interpret `checkOasDrift` → refresh/hold recommendation; never decides staleness itself.
+- [ ] Log-Pattern-Miner (optional, in-scope): surface latent **observed** workflows; hard observed-transition guard rejects unobserved steps/transitions; recombined candidates labeled `synthetic_source` + spec-only goldens + kept out of the observed baseline; never fabricates a flow no session performed.
+- [ ] Per-agent deterministic fallback (mirrors `naming.ts`); pipeline completes with the LLM unreachable.
+- [ ] Meta-eval harness + `scripts/check-phase16.mjs`; root scripts `agent:run`, `check:phase16`.
+- [ ] Acceptance: non-blocking (`AGENT_LAYER=off` reproduces baseline), fence held (no agent writes goldens/verdicts), Log-Pattern-Miner boundary tests pass.
 
 ## MVP Completion Checklist
 

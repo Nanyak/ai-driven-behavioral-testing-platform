@@ -7,6 +7,12 @@ import {
   type MedusaRequest,
   type MedusaResponse
 } from "@medusajs/framework/http"
+import {
+  GATE_MATCHERS,
+  GATE_METHODS,
+  GATE_UNAUTHORIZED_BODY,
+  GATE_UNAUTHORIZED_STATUS
+} from "./gate-contract"
 
 const SENSITIVE_KEY_PATTERN =
   /password|passwd|pwd|token|secret|authorization|cookie|api[-_]?key|session|csrf|jwt|credential|phone|email|address|pan|card|payment|account|paper|document|ssn|tin/i
@@ -521,10 +527,7 @@ function requireCustomerAuth(
     return next()
   }
 
-  res.status(401).json({
-    type: "unauthorized",
-    message: "Cart and checkout operations require a customer account. Please sign in."
-  })
+  res.status(GATE_UNAUTHORIZED_STATUS).json(GATE_UNAUTHORIZED_BODY)
 }
 
 export default defineMiddlewares({
@@ -539,14 +542,18 @@ export default defineMiddlewares({
     // methods-filtered path registers via app.post(matcher), a full-path match,
     // so the trailing `*` is required to also cover sub-paths (/line-items,
     // /shipping-methods, /complete, /payment-sessions).
+    //
+    // Matchers/methods/envelope come from gate-contract.ts (ADR 0004 decision
+    // #3) — the same module build-oas.ts imports to document this gate in the
+    // augmented OpenAPI spec, so enforcement and documentation cannot drift.
     {
-      matcher: "/store/carts*",
-      method: ["POST", "PATCH", "DELETE"],
+      matcher: GATE_MATCHERS[0],
+      method: [...GATE_METHODS],
       middlewares: [requireCustomerAuth]
     },
     {
-      matcher: "/store/payment-collections*",
-      method: ["POST", "PATCH", "DELETE"],
+      matcher: GATE_MATCHERS[1],
+      method: [...GATE_METHODS],
       middlewares: [requireCustomerAuth]
     }
   ]

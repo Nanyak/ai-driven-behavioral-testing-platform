@@ -5,6 +5,19 @@
 - **Affects:** Phase 2 (logging + gate middleware), Phase 8 (assertion oracle), Phase 9 (script generation)
 - **Amends:** ADR 0001 (assertion oracle) — error-step statuses are no longer observed-only where the overlay documents them.
 
+> **Amendment (2026-06-19):** The overlay no longer injects the ADR 0003
+> admin-reversal supplemental fragment. Two reasons: (1) the real Medusa admin
+> base spec (now bundled into `openapi/base/admin.json`) already documents the
+> full reversal surface — `/admin/returns/*`, `/admin/payments/{id}/refund`,
+> `/admin/orders/{id}/cancel`, etc. (22 operations) — so there is **nothing
+> supplemental to add**; the fragment only re-stamped descriptive text onto
+> operations that already exist. (2) PO direction: the augmented OpenAPI spec
+> must carry no `ADR 0003` annotation text. The admin-only reversal **policy**
+> is unchanged and remains enforced by the storefront/gate and recorded in ADR
+> 0003; it was never dependent on spec annotations. Decision §4.2 and the
+> consequence bullet that reference the supplemental fragment are superseded by
+> this note; the gate-`401` overlay (the substance of this ADR) is unaffected.
+
 ## Context
 
 The assertion oracle is the OpenAPI contract (ADR 0001), and the suite must

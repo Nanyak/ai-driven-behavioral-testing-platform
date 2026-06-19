@@ -41,11 +41,13 @@ generated-tests/*
 data/sessions/*
 services/behavior-engine/data/candidates/*
 services/behavior-engine/data/validation/*
+services/golden/openapi/augmented/*
 !reports/.gitkeep
 !generated-tests/.gitkeep
 !data/sessions/.gitkeep
 !services/behavior-engine/data/candidates/.gitkeep
 !services/behavior-engine/data/validation/.gitkeep
+!services/golden/openapi/augmented/.gitkeep
 
 # Editor and OS files
 .DS_Store
