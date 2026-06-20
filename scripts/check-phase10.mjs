@@ -38,7 +38,22 @@ const CONFIG_PATH = resolve(GENERATED_TESTS_DIR, "playwright.config.ts");
 const FIXTURE = resolve(SERVICE, "fixtures", "sample-playwright-report.json");
 const REPORTS_DIR = resolve(ROOT, "reports", "playwright");
 const PERSONA_PROJECTS = ["guest", "customer", "admin", "edge"];
-const MEDUSA_HEALTH = (process.env.MEDUSA_BASE_URL ?? "http://localhost:9000") + "/health";
+
+/** Read the canonical repo-root .env (mirrors traffic-generator config.ts) for the backend URL. */
+function loadEnv() {
+  const path = resolve(ROOT, ".env");
+  if (!existsSync(path)) return {};
+  const vars = {};
+  for (const line of readFileSync(path, "utf8").split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq === -1) continue;
+    vars[trimmed.slice(0, eq).trim()] = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, "");
+  }
+  return vars;
+}
+const MEDUSA_HEALTH = (process.env.MEDUSA_BACKEND_URL ?? loadEnv().MEDUSA_BACKEND_URL ?? "http://localhost:9000") + "/health";
 
 let passed = 0;
 let failed = 0;

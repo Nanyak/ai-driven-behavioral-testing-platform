@@ -8,7 +8,7 @@
  * (`run.ts`), not here.
  */
 import type { Candidate } from "./load.js";
-import type { AuthRequirement, BodyPlan, FlowPlan, ResolveCall, StepPlan } from "./resolve.js";
+import type { AuthRequirement, BodyPlan, FlowPlan, ResolveCall, StepPlan, SynthesizedBody } from "./resolve.js";
 
 export interface EmitResult {
   source: string;
@@ -29,23 +29,39 @@ function authHeaderExpr(auth: AuthRequirement): string {
   }
 }
 
-function pathExpr(plan: StepPlan): string {
+function urlExpr(plan: StepPlan): string {
   let template = plan.path.template;
   for (const [param, varName] of Object.entries(plan.path.params)) {
     template = template.replace(`{${param}}`, `\${scope.${varName}}`);
   }
-  return `\`${template}\``;
+  const query = Object.entries(plan.query);
+  if (query.length === 0) return `\`${template}\``;
+  const qs = query
+    .map(([key, field]) => {
+      const value =
+        field.kind === "runtime"
+          ? `\${scope.${field.ref}}`
+          : field.kind === "raw"
+            ? `\${${field.expr}}`
+            : encodeURIComponent(String(field.value));
+      return `${encodeURIComponent(key)}=${value}`;
+    })
+    .join("&");
+  return `\`${template}?${qs}\``;
 }
 
 function bodyLiteral(value: string | number | boolean): string {
   return typeof value === "string" ? JSON.stringify(value) : String(value);
 }
 
-function synthesizedFieldsExpr(fields: Record<string, { kind: "literal"; value: string | number | boolean } | { kind: "runtime"; ref: string }>): string {
-  const entries = Object.entries(fields).map(([key, field]) => {
-    const value = field.kind === "runtime" ? `scope.${field.ref}` : bodyLiteral(field.value);
-    return `      ${JSON.stringify(key)}: ${value},`;
-  });
+function fieldExpr(field: SynthesizedBody[string]): string {
+  if (field.kind === "runtime") return `scope.${field.ref}`;
+  if (field.kind === "raw") return field.expr;
+  return bodyLiteral(field.value);
+}
+
+function synthesizedFieldsExpr(fields: SynthesizedBody): string {
+  const entries = Object.entries(fields).map(([key, field]) => `      ${JSON.stringify(key)}: ${fieldExpr(field)},`);
   return `{\n${entries.join("\n")}\n    }`;
 }
 
@@ -118,7 +134,7 @@ function renderStep(plan: StepPlan, index: number, golden: boolean): { code: str
   if (body !== null) {
     optionsParts.push(`data: ${body}`);
   }
-  const requestArgs = `${pathExpr(plan)}, { ${optionsParts.join(", ")} }`;
+  const requestArgs = `${urlExpr(plan)}, { ${optionsParts.join(", ")} }`;
 
   inner.push(`    const ${respVar} = await request.${method}(${requestArgs});`);
   inner.push(
@@ -182,14 +198,33 @@ export function emitSpec({ candidate, plan, folder, golden }: EmitOptions): Emit
     needsAdminViaFixture ? `import { adminToken } from "../fixtures/auth.js";` : null,
   ].filter((l): l is string => l !== null);
 
+  // A flow may carry its own customer register/login step. When it does, that
+  // step creates the account + token (with the shared `email`/`password`
+  // consts) and the setup must NOT auto-register, or it would double-register a
+  // duplicate email. A flow with a login step but no register step still needs
+  // the account created up front. A flow that only consumes a customer token
+  // (no auth step of its own) registers in setup as before.
+  const hasRegisterStep = plan.steps.some(
+    (s) => s.step.method === "POST" && s.step.endpoint === "/auth/customer/emailpass/register"
+  );
+  const hasLoginStep = plan.steps.some(
+    (s) => s.step.method === "POST" && s.step.endpoint === "/auth/customer/emailpass"
+  );
+  const needsCustomerCreds = needsCustomer || hasRegisterStep || hasLoginStep;
+  const autoRegister = (needsCustomer || hasLoginStep) && !hasRegisterStep;
+
   const setupLines: string[] = [
-    `  const publishableKey = process.env.MEDUSA_PUBLISHABLE_KEY!;`,
+    `  const publishableKey = process.env.MEDUSA_PUBLISHABLE_API_KEY!;`,
     `  const scope: Record<string, string> = {};`,
   ];
-  if (needsCustomer) {
+  if (needsCustomerCreds) {
     setupLines.push(
       `  const email = \`script-gen-\${Date.now()}-\${Math.floor(Math.random() * 1e6)}@example.com\`;`,
-      `  const password = "TestPassword123!";`,
+      `  const password = "TestPassword123!";`
+    );
+  }
+  if (autoRegister) {
+    setupLines.push(
       `  const registerResp = await request.post("/auth/customer/emailpass/register", {`,
       `    headers: { "x-publishable-api-key": publishableKey },`,
       `    data: { email, password },`,

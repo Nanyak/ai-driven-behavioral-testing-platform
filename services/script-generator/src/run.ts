@@ -187,7 +187,7 @@ export default defineConfig({
     ["html", { outputFolder: process.env.PLAYWRIGHT_HTML_OUTPUT ?? "../reports/playwright/html", open: "never" }],
   ],
   use: {
-    baseURL: process.env.MEDUSA_BASE_URL ?? "http://localhost:9000",
+    baseURL: process.env.MEDUSA_BACKEND_URL ?? "http://localhost:9000",
     extraHTTPHeaders: { "content-type": "application/json" },
   },
 });

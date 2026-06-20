@@ -14,14 +14,14 @@ services/test-runner/
     cli.ts               # subcommands: all / guest / customer / admin / edge
   package.json
 generated-tests/
-  playwright.config.ts   # defines projects per persona folder
+  playwright.config.ts   # one project per suite folder (3 personas + edge error-path track)
 reports/
   playwright/            # raw Playwright HTML + JSON output
 ```
 
 ## Implementation steps
 
-1. **Playwright projects.** In `playwright.config.ts`, define one project per persona folder (`guest`, `customer`, `admin`, `edge`) so they can be run independently via `--project`.
+1. **Playwright projects.** In `playwright.config.ts`, define one project per suite folder (`guest`, `customer`, `admin`, `edge`) so they can be run independently via `--project`. Note: `guest`/`customer`/`admin` are personas; `edge` is the error-path track (not a persona) — see Phase 9 plan step 3.
 2. **Runner wrapper (`run.ts`).** Shell out to `playwright test` with the chosen project(s); pass base URL and credentials via env; force JSON + HTML reporters.
 3. **CLI subcommands:**
    - `npm run test:all`
@@ -46,9 +46,20 @@ Consequence for Phase 11: the Phase 11 plan's required-field "Include source `tr
 
 Per-step results (the `persona → flow → step` keying this plan asks for) come from Phase 9 wrapping each emitted request+assertions block in `test.step("<METHOD endpoint>", ...)`. Playwright's JSON reporter then carries a `steps[]` array per test result, each step titled `"<METHOD> <endpoint>"`. `collect.ts` matches those titles (`/^(GET|POST|...)\s+(\/\S+)$/`), reads each step's `error.message` (a failing `expect(resp.status()).toBe(n)` embeds `Expected: <n>` / `Received: <n>`, which we parse into expected-vs-actual status), and attaches the `golden-diff` JSON attachment lifted from the test result. A step with no `error` is `passed`.
 
+## Known findings from the first live run
+
+Running `npm run test:all` against local Medusa surfaced four distinct failure
+classes (these are *findings*, not test-runner bugs):
+
+- **A. Auth-credential synthesis (fixed in Phase 9).** In-flow `/auth/*/emailpass` login steps were emitting empty/junk bodies → `401`. Fixed by threading real credentials (see Phase 9 plan, "Payload synthesis" step 2).
+- **B. Missing required query params (fixed in Phase 9).** `GET /store/shipping-options` / `GET /store/payment-providers` were emitted without their OAS-required `cart_id` / `region_id` → `400`. Fixed by OAS-driven required-query synthesis (see Phase 9 plan, "Required query params").
+- **C. Customer-account gate (open finding — SUT policy, NOT fixed).** The system-under-test enforces a custom middleware (`apps/medusa/apps/backend/src/api/gate-contract.ts`): *"Require an authenticated customer JWT for all cart and checkout mutations."* Guest cart creation/mutation returns `401`, and a freshly-registered customer token has no `customer_id` until a `POST /store/customers` profile is created, so even customer-auth cart bootstraps are gated. Consequence: every mined **guest cart flow** and any cart/order flow that does not perform the full register→create-customer handshake fails at `POST /store/carts`. This is the platform **correctly flagging that the test corpus contains flows the current SUT policy forbids** — a real drift signal for HITL review (Phase 16), not something to paper over with a hacked assertion. Resolution belongs to a corpus regenerate against current traffic and/or a fuller customer-auth bootstrap, deferred by decision.
+
+Net live result after A+B: failures dropped from 19→12 and are now **monocausal** (all Class C); admin suite is fully green.
+
 ## Key decisions
 
-- **Persona = Playwright project** → trivial scoped runs and per-persona pass/fail counts. The four projects (`guest`, `customer`, `admin`, `edge`) are defined in the **generated** `generated-tests/playwright.config.ts` by the Phase 9 generator (`script-generator/src/run.ts: writeConfigAndFixtures`), not by hand-editing — a regeneration would clobber a hand edit. The runner selects one with `--project <persona>` (or all projects for `all`).
+- **Suite = Playwright project** → trivial scoped runs and per-suite pass/fail counts. The four projects (`guest`, `customer`, `admin`, `edge`) are defined in the **generated** `generated-tests/playwright.config.ts` by the Phase 9 generator (`script-generator/src/run.ts: writeConfigAndFixtures`), not by hand-editing — a regeneration would clobber a hand edit. Three projects map to a persona; `edge` is the error-path track (not a persona). The runner selects one with `--project <suite>` (or all projects for `all`).
 - **JSON is the contract** between execution and reporting; HTML is for humans. Both land under `reports/playwright/` (the generated config's reporter output paths read `PLAYWRIGHT_JSON_OUTPUT` / `PLAYWRIGHT_HTML_OUTPUT`, which `run.ts` sets); the normalized run result is written alongside as `reports/playwright/normalized.json`.
 - **Provenance travels with the test**, not reconstructed later.
 - **`trace_id` is optional and never invented** — see the provenance section above.

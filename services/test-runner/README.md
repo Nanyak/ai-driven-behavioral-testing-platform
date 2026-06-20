@@ -116,8 +116,9 @@ npm run check:phase10                            # full gate, see below
 ```
 
 `npm run check:phase10` (`scripts/check-phase10.mjs`) verifies: test-runner
-`tsc --noEmit` clean, the generated config defines all four persona projects,
-`playwright test --list --project <persona>` works for each, `collect.ts`
+`tsc --noEmit` clean, the generated config defines all four suite projects
+(guest/customer/admin personas + edge error-path track),
+`playwright test --list --project <suite>` works for each, `collect.ts`
 correctly normalizes a committed sample Playwright JSON fixture
 (`fixtures/sample-playwright-report.json` — totals, expected/actual status,
 golden-diff lift, source_sessions lift, trace_id omission), and a **live**

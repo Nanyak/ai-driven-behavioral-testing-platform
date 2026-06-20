@@ -19,10 +19,12 @@ export interface OasSpecs {
   admin: OasDocument;
 }
 
-/** One synthesized request-body field: a literal, or a reference to a captured runtime value. */
+/** One synthesized request-body field: a literal, a reference to a captured runtime value, or a raw emitted expression. */
 export type BodyFieldValue =
   | { kind: "literal"; value: string | number | boolean }
-  | { kind: "runtime"; ref: string };
+  | { kind: "runtime"; ref: string }
+  /** Raw JS expression emitted verbatim into the spec (e.g. an in-scope `email` const or a `process.env.*` read). */
+  | { kind: "raw"; expr: string };
 
 export type SynthesizedBody = Record<string, BodyFieldValue>;
 
@@ -55,6 +57,8 @@ export interface StepPlan {
   step: CandidateStep;
   resolveCalls: ResolveCall[];
   path: PathPlan;
+  /** Required query params synthesized from the OAS (e.g. `cart_id`, `region_id`), filled from runtime scope. */
+  query: SynthesizedBody;
   body: BodyPlan;
   auth: AuthRequirement;
   /** Variable names this step's response binds into scope for later steps, e.g. { cartId: "cart.id" }. */
@@ -125,6 +129,8 @@ type ResolveStep = { bindTo: string; method: string; endpoint: string; extract: 
  */
 function standaloneResolverFor(varName: string, auth: AuthRequirement): ResolveStep[] | null {
   switch (varName) {
+    case "regionId":
+      return [{ bindTo: varName, method: "GET", endpoint: "/store/regions", extract: "regions[0].id" }];
     case "productId":
       return [{ bindTo: varName, method: "GET", endpoint: "/store/products", extract: "products[0].id" }];
     case "orderId":
@@ -288,8 +294,49 @@ function synthesizeBody(
 }
 
 /**
+ * Auth-login endpoints are NOT documented in the store/admin OAS, so the schema
+ * synthesizer yields an empty body and the login is sent with no credentials ->
+ * 401. These three endpoints need REAL credentials, threaded deterministically:
+ *   - admin login reads the same env the shared fixture uses;
+ *   - customer register/login reuse the in-scope generated `email`/`password`
+ *     consts the emit setup declares, so a later login matches the registration.
+ * Returns null for non-auth endpoints (fall through to OAS body synthesis).
+ */
+function authCredentialBody(method: string, endpoint: string): BodyPlan | null {
+  if (method !== "POST") return null;
+  if (endpoint === "/auth/user/emailpass") {
+    return {
+      kind: "synthesized",
+      fields: {
+        email: { kind: "raw", expr: 'process.env.MEDUSA_ADMIN_EMAIL ?? "admin@medusa-test.com"' },
+        password: { kind: "raw", expr: 'process.env.MEDUSA_ADMIN_PASSWORD ?? "supersecret"' },
+      },
+    };
+  }
+  if (endpoint === "/auth/customer/emailpass" || endpoint === "/auth/customer/emailpass/register") {
+    return {
+      kind: "synthesized",
+      fields: { email: { kind: "raw", expr: "email" }, password: { kind: "raw", expr: "password" } },
+    };
+  }
+  return null;
+}
+
+/** Names of REQUIRED `in: query` params the OAS documents for `(method, endpoint)`. */
+function requiredQueryParamsFor(specs: OasSpecs, method: string, endpoint: string): string[] {
+  for (const doc of [specs.store, specs.admin]) {
+    const operation = doc.paths[endpoint]?.[method.toLowerCase() as OasMethod];
+    const params = (operation as { parameters?: { name: string; in?: string; required?: boolean }[] } | undefined)?.parameters;
+    if (!params) continue;
+    const required = params.filter((p) => p.in === "query" && p.required).map((p) => p.name);
+    if (required.length > 0) return required;
+  }
+  return [];
+}
+
+/**
  * Build the full step-by-step plan for one candidate's flow, in order:
- * for each step, emit resolve calls for any path inputs not already in
+ * for each step, emit resolve calls for any path/query inputs not already in
  * scope, then the body plan, capturing every ID a later step might need.
  */
 export function buildFlowPlan(
@@ -303,46 +350,76 @@ export function buildFlowPlan(
 
   for (const step of steps) {
     const auth = authFor(step.endpoint, flowRequiresAuth);
-    const params = pathParamNames(step.endpoint);
     const resolveCalls: ResolveCall[] = [];
-    const pathParams: Record<string, string> = {};
-    let stepFailed = false;
 
-    for (const param of params) {
-      const varName = scopeVarForParam(param, step.endpoint);
-      if (scope.has(varName)) {
-        pathParams[param] = varName;
-        continue;
-      }
-      const resolverChain = standaloneResolverFor(varName, auth);
-      if (!resolverChain) {
-        errors.push(
-          `${step.method} ${step.endpoint}: path param "{${param}}" needs "${varName}", which no prior step produced and no standalone GET can resolve`
-        );
-        stepFailed = true;
-        continue;
-      }
-      for (const call of resolverChain) {
+    // Ensure a scope variable is available, emitting (chained) resolve calls if
+    // not. Returns false when no prior step or standalone GET can produce it.
+    const ensure = (varName: string): boolean => {
+      if (scope.has(varName)) return true;
+      const chain = standaloneResolverFor(varName, auth);
+      if (!chain) return false;
+      for (const call of chain) {
         if (scope.has(call.bindTo)) continue; // a chained prerequisite already resolved earlier in this flow
         resolveCalls.push({ ...call, auth });
         scope.add(call.bindTo);
       }
-      pathParams[param] = varName;
+      return true;
+    };
+
+    const pathParams: Record<string, string> = {};
+    let stepFailed = false;
+
+    for (const param of pathParamNames(step.endpoint)) {
+      const varName = scopeVarForParam(param, step.endpoint);
+      if (ensure(varName)) {
+        pathParams[param] = varName;
+      } else {
+        errors.push(
+          `${step.method} ${step.endpoint}: path param "{${param}}" needs "${varName}", which no prior step produced and no standalone GET can resolve`
+        );
+        stepFailed = true;
+      }
     }
 
     if (stepFailed) {
       continue;
     }
 
-    // Body resolution: observed -> synthesized -> empty -> unresolvable (priority order).
-    // A step whose OWN logged expected_status is already a 4xx/5xx reproduces that
-    // failure structurally (an omitted OAS-required field), per the plan's edge-case
-    // derivation rule — never invents a new malformation.
+    // Required query params (OAS-driven): fill ID-typed ones (cart_id, region_id,
+    // ...) from runtime scope, resolving via a standalone GET/bootstrap when not
+    // already in scope. A step whose OWN expected_status is a 4xx/5xx omits an
+    // unresolvable required query param — that omission is the reproducible
+    // structural condition the edge-case rule calls for, not a guessed value.
+    const query: SynthesizedBody = {};
+    for (const name of requiredQueryParamsFor(specs, step.method, step.endpoint)) {
+      const scopeVar = ID_FIELD_TO_SCOPE[name];
+      if (!scopeVar) continue; // non-ID required query param: leave as-is (don't guess a value)
+      if (ensure(scopeVar)) {
+        query[name] = { kind: "runtime", ref: scopeVar };
+      } else if (step.expected_status < 400) {
+        errors.push(
+          `${step.method} ${step.endpoint}: required query "${name}" needs "${scopeVar}", which no prior step or standalone GET can resolve`
+        );
+        stepFailed = true;
+      }
+    }
+
+    if (stepFailed) {
+      continue;
+    }
+
+    // Body resolution: observed -> auth-credentials -> OAS-synthesized -> empty
+    // -> unresolvable (priority order). A step whose OWN logged expected_status
+    // is already a 4xx/5xx reproduces that failure structurally (an omitted
+    // OAS-required field), per the plan's edge-case rule — never invents a new
+    // malformation.
     let body: BodyPlan;
     if (step.request_payload !== undefined) {
       body = { kind: "observed", payload: step.request_payload };
     } else {
-      body = synthesizeBody(specs, step.method, step.endpoint, scope, step.expected_status >= 400);
+      body =
+        authCredentialBody(step.method, step.endpoint) ??
+        synthesizeBody(specs, step.method, step.endpoint, scope, step.expected_status >= 400);
     }
 
     const captures = captureRulesFor(step.method, step.endpoint);
@@ -354,6 +431,7 @@ export function buildFlowPlan(
       step,
       resolveCalls,
       path: { template: step.endpoint, params: pathParams },
+      query,
       body,
       auth,
       captures,

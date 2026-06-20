@@ -33,7 +33,7 @@ generated-tests/
 
 1. **Load candidates** from `services/behavior-engine/data/candidates/`.
 2. **Defensive dedup** (candidates are already deduped in Phase 7, but re-apply): identical step sequences → highest support; common-prefix ≥3 → longest representative; cap 10 per persona. Use the **same canonical flow signature** as Phase 7 (`behavior-engine/src/signature.ts`, ADR 0002) — do not define a second "same flow?" key here.
-3. **Per-flow generation.** One `.spec.ts` per canonical flow, grouped into `guest/ customer/ admin/ edge/` folders by emergent persona.
+3. **Per-flow generation.** One `.spec.ts` per canonical flow, grouped into four **suite** folders: `guest/ customer/ admin/` map to the emergent persona (`guest_shopper`, `registered_customer`, `admin_operator`), and `edge/` is an **error-path track**, not a persona — any flow with `attributes.has_errors` routes there regardless of persona (its true persona is preserved in the test annotation). Persona and track are orthogonal axes; `edge/` is the one bucket keyed on outcome rather than identity.
    - **Filename is derived from the flow signature**, not a sequential index: `<persona>/<short-hash>.spec.ts` where `<short-hash>` is a truncation of the signature. This makes regeneration **idempotent** — re-emitting a flow that already exists writes the same path, so it is a no-op rather than a duplicate or a blind overwrite, and filename collisions are meaningful (same signature = same flow).
    - **Stamp the flow signature into each test** as a Playwright annotation / header comment (e.g. `test.info().annotations` or a `// flow-signature: <hash>` header). This makes the generated-tests corpus **self-describing**, so the Phase 7 cross-run skip gate (`coverage.ts`, ADR 0002) can rebuild its coverage manifest by reading signatures back out of the emitted `.spec.ts` files.
    - **Stamp full provenance, not just the signature** (added for Phase 10). Each spec also pushes `persona`, `flow_name`, and `source_sessions` as `test.info().annotations`, with the `source_sessions` array JSON-stringified into the annotation `description` (an annotation description is a single string). Provenance thus **travels with the test**: Phase 10's `collect.ts` lifts persona/flow/source-sessions straight out of the Playwright JSON reporter rather than reconstructing them from the candidates file. There is **no** `trace_id` annotation — candidates carry `source_sessions` but no trace id, and one is never invented (see the Phase 10 plan). `session_id` provenance is a debugging/reporting tag only, never a Phase 7 classifier signal (CLAUDE.md §8.2).
@@ -66,12 +66,26 @@ Production logs run **bodies-off** (ADR 0001), so `request_payload` is usually
 absent. Body resolution, in priority order:
 
 1. **Observed** — use the candidate's `request_payload` verbatim if present (bodies-on enrichment run).
-2. **Synthesized** — build a minimal body from the operation's OpenAPI **request** schema (the OAS is already loaded in Phase 8): include **required** fields only, fill ID-typed fields (`variant_id`, `region_id`, `option_id`, `provider_id`) with runtime-resolved values and other scalars with deterministic literals (`quantity: 1`).
-3. **Empty** — operations with no request body.
+2. **Auth credentials** — the `/auth/*/emailpass[/register]` login endpoints are **not** in the store/admin OAS, so schema synthesis would yield an empty (credential-less) body and the login would `401`. These emit **real, threaded** credentials instead: admin login (`POST /auth/user/emailpass`) reads the same `MEDUSA_ADMIN_EMAIL`/`MEDUSA_ADMIN_PASSWORD` env the shared fixture uses; customer register/login (`POST /auth/customer/emailpass[/register]`) reuse the in-test generated `email`/`password` consts, so a later login matches the registration. The emit setup declares those consts whenever the flow carries any customer-auth step and auto-registers **only** when the flow has no register step of its own (avoiding a duplicate-email double-register).
+3. **Synthesized** — build a minimal body from the operation's OpenAPI **request** schema (the OAS is already loaded in Phase 8): include **required** fields only, fill ID-typed fields (`variant_id`, `region_id`, `option_id`, `provider_id`) with runtime-resolved values and other scalars with deterministic literals (`quantity: 1`).
+4. **Empty** — operations with no request body.
 
 A step whose body can be **neither** observed nor synthesized from the OAS (no
 schema, no log) emits a `test.fixme(...)` with a TODO rather than a guessed body —
 surfaced in the generation run summary, not silently shipped.
+
+### Required query params (OAS-driven)
+
+Some GETs require a query param the OAS marks `required` (`GET /store/shipping-options`
+needs `cart_id`; `GET /store/payment-providers` needs `region_id`). The generator
+reads the operation's `in: query, required: true` parameters and fills **ID-typed**
+ones (`cart_id`, `region_id`, …) from runtime scope, resolving a missing value via a
+standalone GET/bootstrap the same way path-param IDs are resolved (a `regionId` comes
+from `GET /store/regions`; a `cartId` from the region→cart bootstrap). A required
+ID-typed query param that no prior step or standalone GET can produce is a reported
+generation error (→ `test.fixme`), never a request shipped with the param omitted —
+unless the step's own `expected_status` is already a 4xx (then the omission *is* the
+reproduced edge condition). Non-ID required query params are left untouched (no guessed value).
 
 ### Step → request-builder resolution table
 

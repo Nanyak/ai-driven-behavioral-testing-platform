@@ -8,14 +8,17 @@
  * Persona == Playwright project (Phase 9 generated playwright.config.ts):
  * `guest | customer | admin | edge`. `all` runs every project.
  *
- * Env contract (must match what the generated specs + fixtures/auth.ts read):
- *   MEDUSA_BASE_URL, MEDUSA_PUBLISHABLE_KEY,
+ * Env contract — the CANONICAL repo-wide names (root .env / .env.example,
+ * services/traffic-generator/src/config/config.ts), which the generated specs +
+ * fixtures/auth.ts also read:
+ *   MEDUSA_BACKEND_URL, MEDUSA_PUBLISHABLE_API_KEY,
  *   MEDUSA_ADMIN_EMAIL, MEDUSA_ADMIN_PASSWORD.
- * These are inherited from the parent process env; this module only fills in
- * sane defaults so a bare `npm run test:guest` still points at local Medusa.
+ * Loaded from the repo-root + service .env files (precedence: process.env >
+ * service .env > repo-root .env), mirroring config.ts, so a bare
+ * `npm run test:guest` picks up the same key the rest of the stack uses.
  */
 import { spawnSync } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -49,14 +52,37 @@ export interface RunResult {
   stderr: string;
 }
 
-/** Build the env the generated suite + fixtures read, layering defaults under the real env. */
+/** Parse a `.env` file into key/value pairs (mirrors traffic-generator config.ts). */
+function parseEnvFile(path: string): Record<string, string> {
+  if (!existsSync(path)) return {};
+  const vars: Record<string, string> = {};
+  for (const line of readFileSync(path, "utf8").split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    const value = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, "");
+    vars[key] = value;
+  }
+  return vars;
+}
+
+/** Resolved .env values (precedence: process.env > service .env > repo-root .env). */
+const fileEnv: Record<string, string> = {
+  ...parseEnvFile(resolvePath(REPO_ROOT, ".env")),
+  ...parseEnvFile(resolvePath(SERVICE_ROOT, ".env")),
+};
+const fromEnv = (key: string, fallback: string): string => process.env[key] ?? fileEnv[key] ?? fallback;
+
+/** Build the env the generated suite + fixtures read, layering .env under the real env. */
 function runEnv(): NodeJS.ProcessEnv {
   return {
     ...process.env,
-    MEDUSA_BASE_URL: process.env.MEDUSA_BASE_URL ?? "http://localhost:9000",
-    MEDUSA_PUBLISHABLE_KEY: process.env.MEDUSA_PUBLISHABLE_KEY ?? "",
-    MEDUSA_ADMIN_EMAIL: process.env.MEDUSA_ADMIN_EMAIL ?? "admin@medusa-test.com",
-    MEDUSA_ADMIN_PASSWORD: process.env.MEDUSA_ADMIN_PASSWORD ?? "supersecret",
+    MEDUSA_BACKEND_URL: fromEnv("MEDUSA_BACKEND_URL", "http://localhost:9000"),
+    MEDUSA_PUBLISHABLE_API_KEY: fromEnv("MEDUSA_PUBLISHABLE_API_KEY", ""),
+    MEDUSA_ADMIN_EMAIL: fromEnv("MEDUSA_ADMIN_EMAIL", "admin@medusa-test.com"),
+    MEDUSA_ADMIN_PASSWORD: fromEnv("MEDUSA_ADMIN_PASSWORD", "supersecret"),
     // Force reporter output locations (the generated config honors these).
     PLAYWRIGHT_JSON_OUTPUT: resolvePath(REPORTS_DIR, "results.json"),
     PLAYWRIGHT_HTML_OUTPUT: resolvePath(REPORTS_DIR, "html"),
