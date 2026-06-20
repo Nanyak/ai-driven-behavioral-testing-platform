@@ -34,13 +34,24 @@ reports/
 
 ## Carrying provenance into results
 
-Each generated test embeds the originating `flow_name`, `persona`, `source_sessions`, and a representative `trace_id` (as Playwright `test.info().annotations`). `collect.ts` lifts these into the run result so the Phase 11 report can cite where each test came from.
+Each generated test embeds the originating `flow_name`, `persona`, and `source_sessions` as Playwright `test.info().annotations` (stamped by Phase 9's `emit.ts`; the `source_sessions` array is JSON-stringified into the annotation `description`). `collect.ts` lifts these into the run result so the Phase 11 report can cite where each test came from. Provenance **travels with the test** — it is read back out of the Playwright JSON reporter, never reconstructed from the candidates file.
+
+### `trace_id` is OPTIONAL and absent today (audit decision)
+
+`trace_id` does **not** exist upstream. Behavior-engine candidates carry `source_sessions` (an array of `session_id`s) but **no** `trace_id`, and a candidate step is only `{ method, endpoint, expected_status }`. The normalized result type therefore makes `trace_id?: string | null` — it is emitted **only** if an annotation ever supplies one and is **never invented**. On the current corpus no spec stamps a `trace_id` annotation, so the field is simply omitted from every normalized test.
+
+Consequence for Phase 11: the Phase 11 plan's required-field "Include source `trace_id`" (and the checklist item of the same name) must be read as **"include `trace_id` when present; otherwise omit"** — `source_session_id`/`source_sessions` is the always-present provenance key, `trace_id` is best-effort. The Phase 11 report builder must not require a `trace_id` on every failure.
+
+### Step granularity via `test.step()`
+
+Per-step results (the `persona → flow → step` keying this plan asks for) come from Phase 9 wrapping each emitted request+assertions block in `test.step("<METHOD endpoint>", ...)`. Playwright's JSON reporter then carries a `steps[]` array per test result, each step titled `"<METHOD> <endpoint>"`. `collect.ts` matches those titles (`/^(GET|POST|...)\s+(\/\S+)$/`), reads each step's `error.message` (a failing `expect(resp.status()).toBe(n)` embeds `Expected: <n>` / `Received: <n>`, which we parse into expected-vs-actual status), and attaches the `golden-diff` JSON attachment lifted from the test result. A step with no `error` is `passed`.
 
 ## Key decisions
 
-- **Persona = Playwright project** → trivial scoped runs and per-persona pass/fail counts.
-- **JSON is the contract** between execution and reporting; HTML is for humans.
+- **Persona = Playwright project** → trivial scoped runs and per-persona pass/fail counts. The four projects (`guest`, `customer`, `admin`, `edge`) are defined in the **generated** `generated-tests/playwright.config.ts` by the Phase 9 generator (`script-generator/src/run.ts: writeConfigAndFixtures`), not by hand-editing — a regeneration would clobber a hand edit. The runner selects one with `--project <persona>` (or all projects for `all`).
+- **JSON is the contract** between execution and reporting; HTML is for humans. Both land under `reports/playwright/` (the generated config's reporter output paths read `PLAYWRIGHT_JSON_OUTPUT` / `PLAYWRIGHT_HTML_OUTPUT`, which `run.ts` sets); the normalized run result is written alongside as `reports/playwright/normalized.json`.
 - **Provenance travels with the test**, not reconstructed later.
+- **`trace_id` is optional and never invented** — see the provenance section above.
 
 ## Validation / acceptance
 

@@ -47,6 +47,7 @@ npm run check:phase6   # log ingestion output (session flows + goldens)
 npm run check:phase7   # behavioral modeling (candidates, emergent personas, holdout + negative control)
 npm run check:phase8   # golden response handling (OAS overlay + oracle utilities)
 npm run check:phase9   # script generator (flow_signature stamps, runtime ID resolution, generated-tests/ validity)
+npm run check:phase10  # test execution (per-persona Playwright projects, collect.ts normalization, live run when Medusa up / graceful skip when down)
 
 # Traffic generator TypeScript must always compile clean:
 cd services/traffic-generator && npx tsc --noEmit
@@ -67,7 +68,7 @@ services/
   log-ingestion/       Elasticsearch ingestion service (Phase 3)
   behavior-engine/     Behavioral modeling (Phase 7)
   script-generator/    Playwright test generation (Phase 9)
-  test-runner/         Test execution + reporting (Phase 11)
+  test-runner/         Test execution (Phase 10) + reporting (Phase 11)
 context/             Project-level specs and checklists
 docs/                Phase plans + ADRs
 scripts/             Root-level automation (check-phaseN, setup)
@@ -142,7 +143,8 @@ Do not assume any service is running. Use `npm run check:phaseN` or a direct
 | Persona classification logic | `docs/phase-7-implementation-plan.md` |
 | Behavioral modeling / sequence mining | `docs/phase-7-implementation-plan.md` + `docs/phase-8-implementation-plan.md` |
 | Playwright test generation | `docs/phase-9-implementation-plan.md` + `services/script-generator/README.md` |
-| Test execution + reporting | `docs/phase-11-implementation-plan.md` |
+| Test execution / per-persona runs / normalized run result (Phase 11 input) | `docs/phase-10-implementation-plan.md` + `services/test-runner/README.md` |
+| Reporting | `docs/phase-11-implementation-plan.md` |
 | Medusa API endpoints + seed data | `docs/phase-1-implementation-plan.md` |
 | Storefront UI | `apps/storefront/` README |
 | Assertion oracle design | `docs/adr/0001-assertion-oracle-openapi-contract.md` |

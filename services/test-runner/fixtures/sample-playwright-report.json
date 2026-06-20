@@ -1,0 +1,106 @@
+{
+  "config": { "version": "1.49.1" },
+  "suites": [
+    {
+      "title": "customer",
+      "file": "customer/0f4a847541cd.spec.ts",
+      "specs": [
+        {
+          "title": "registered_customer — Customer Creates Cart and Adds Item",
+          "ok": false,
+          "tests": [
+            {
+              "projectName": "customer",
+              "status": "failed",
+              "annotations": [
+                { "type": "flow_signature", "description": "0f4a847541cd464be70586c8f8e58ece09b5a157cdaa30b574e202d3f4157a9c" },
+                { "type": "persona", "description": "registered_customer" },
+                { "type": "flow_name", "description": "Customer Creates Cart and Adds Item" },
+                { "type": "source_sessions", "description": "[\"sess-newCheckout-aaa\",\"sess-newCheckout-bbb\"]" }
+              ],
+              "results": [
+                {
+                  "status": "failed",
+                  "duration": 142,
+                  "attachments": [
+                    {
+                      "name": "golden-diff",
+                      "contentType": "application/json",
+                      "body": "W3sia2luZCI6InVuZXhwZWN0ZWRfZmllbGQiLCJwYXRoIjoiZXJyb3IiLCJhY3R1YWwiOiJzdHJpbmcifV0="
+                    }
+                  ],
+                  "steps": [
+                    { "title": "POST /store/carts", "duration": 40 },
+                    {
+                      "title": "POST /store/carts/{id}/line-items",
+                      "duration": 55,
+                      "error": { "message": "Error: expect(received).toBe(expected)\n\nExpected: 200\nReceived: 500" }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "guest",
+      "file": "guest/44ad861b5274.spec.ts",
+      "specs": [
+        {
+          "title": "guest_shopper — guest shopper hits an error path",
+          "ok": true,
+          "tests": [
+            {
+              "projectName": "guest",
+              "status": "passed",
+              "annotations": [
+                { "type": "flow_signature", "description": "44ad861b52744bc529ec0d5b1d06acd24c77dcfcbf53ba8aa955130cf267b5c5" },
+                { "type": "persona", "description": "guest_shopper" },
+                { "type": "flow_name", "description": "guest shopper hits an error path" },
+                { "type": "source_sessions", "description": "[\"sess-returningCheckout-ccc\"]" }
+              ],
+              "results": [
+                {
+                  "status": "passed",
+                  "duration": 88,
+                  "attachments": [],
+                  "steps": [
+                    { "title": "POST /store/carts/{id}/promotions", "duration": 30 },
+                    { "title": "GET /store/payment-providers", "duration": 12 }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "customer",
+      "file": "customer/9474bcd92458.spec.ts",
+      "specs": [
+        {
+          "title": "registered_customer — Customer Initiates Payment Session",
+          "ok": true,
+          "tests": [
+            {
+              "projectName": "customer",
+              "status": "skipped",
+              "annotations": [
+                { "type": "flow_signature", "description": "9474bcd92458aaaa1111bbbb2222cccc3333dddd4444eeee5555ffff66667777" },
+                { "type": "persona", "description": "registered_customer" },
+                { "type": "flow_name", "description": "Customer Initiates Payment Session" },
+                { "type": "source_sessions", "description": "[\"sess-newCheckout-ddd\"]" }
+              ],
+              "results": [
+                { "status": "skipped", "duration": 0, "attachments": [], "steps": [] }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

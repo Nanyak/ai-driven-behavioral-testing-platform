@@ -329,16 +329,22 @@ static validation (`tsc`, `playwright test --list`) is confirmed here.
 
 ## Phase 10: Test Execution
 
-- [ ] Create `services/test-runner`.
-- [ ] Add command for running generated Playwright tests.
-- [ ] Add command for running only guest tests.
-- [ ] Add command for running only customer tests.
-- [ ] Add command for running only admin tests.
-- [ ] Add command for running only edge-case tests.
-- [ ] Capture Playwright JSON output.
-- [ ] Capture Playwright HTML report.
-- [ ] Confirm generated tests run against Medusa.
-- [ ] Confirm failed assertions are reported clearly.
+- [x] Create `services/test-runner`.
+- [x] Add command for running generated Playwright tests. (`npm run test:all`)
+- [x] Add command for running only guest tests. (`npm run test:guest` → `--project guest`)
+- [x] Add command for running only customer tests. (`npm run test:customer`)
+- [x] Add command for running only admin tests. (`npm run test:admin`)
+- [x] Add command for running only edge-case tests. (`npm run test:edge`)
+- [x] Capture Playwright JSON output. (`reports/playwright/results.json`)
+- [x] Capture Playwright HTML report. (`reports/playwright/html/`)
+- [x] Confirm generated tests run against Medusa. (`npm run check:phase10` runs `test:edge` live when `:9000/health` is up; gracefully skipped when down)
+- [x] Confirm failed assertions are reported clearly. (`failure.ts` prints expected-vs-actual status + a readable golden diff, not a raw object dump)
+
+`collect.ts` normalizes the Playwright JSON into a persona→flow→step run result
+(`reports/playwright/normalized.json`) that is Phase 11's input — capturing
+persona, flow, endpoint, expected/actual status, golden diff, duration, and
+source session ids. `trace_id` is **optional** (absent upstream — never
+invented; see the Phase 11 note below). Verify: `npm run check:phase10`.
 
 ## Phase 11: Reporting
 
@@ -351,8 +357,8 @@ static validation (`tsc`, `playwright test --list`) is confirmed here.
 - [ ] Include endpoint-level failures.
 - [ ] Include expected vs actual status code.
 - [ ] Include golden response diff.
-- [ ] Include source `session_id`.
-- [ ] Include source `trace_id`.
+- [ ] Include source `session_id`. (carried as `source_sessions` on the Phase 10 normalized result — always present)
+- [ ] Include source `trace_id`. **Note (Phase 10 audit):** `trace_id` does not exist upstream — candidates carry `source_sessions` but no trace id, and steps are only method/endpoint/expected_status. The Phase 10 normalized result types it `trace_id?: string | null` and **omits it when absent (never invents one)**. Read this item as "include `trace_id` when present; otherwise omit"; the report builder must not require it on every failure.
 - [ ] Generate `reports/report.json`.
 - [ ] Generate `reports/report.html`.
 - [ ] Verify the report can be opened locally.

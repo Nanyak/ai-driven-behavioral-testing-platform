@@ -82,7 +82,17 @@ function renderCaptures(captures: Record<string, string>, respVar: string): stri
   return lines.join("\n");
 }
 
-/** Render one step (resolve calls + request + assertions) or a `test.fixme` block. */
+/**
+ * Render one step (resolve calls + request + assertions) or a `test.fixme`
+ * block. Non-fixme steps are wrapped in `test.step("<METHOD endpoint>", ...)`
+ * so the Playwright JSON reporter carries per-step results (Phase 10 keys
+ * results persona→flow→step off these step titles). The flow-level `scope`,
+ * `publishableKey`, and any captured ids are declared OUTSIDE the steps (in
+ * the test body), so they thread across step boundaries unchanged.
+ *
+ * `test.fixme(...)` must stay at the TEST level (it skips the whole test), so a
+ * fixme step is emitted unwrapped, exactly as before.
+ */
 function renderStep(plan: StepPlan, index: number, golden: boolean): { code: string; fixme: boolean } {
   if (plan.body.kind === "unresolvable") {
     const reason = plan.body.reason.replace(/`/g, "'");
@@ -97,8 +107,8 @@ function renderStep(plan: StepPlan, index: number, golden: boolean): { code: str
     };
   }
 
-  const lines: string[] = [];
-  plan.resolveCalls.forEach((call, i) => lines.push(renderResolveCall(call, index * 10 + i)));
+  const inner: string[] = [];
+  plan.resolveCalls.forEach((call, i) => inner.push(indentStepLine(renderResolveCall(call, index * 10 + i))));
 
   const headers = authHeaderExpr(plan.auth);
   const body = bodyExpr(plan.body);
@@ -110,21 +120,36 @@ function renderStep(plan: StepPlan, index: number, golden: boolean): { code: str
   }
   const requestArgs = `${pathExpr(plan)}, { ${optionsParts.join(", ")} }`;
 
-  lines.push(`  const ${respVar} = await request.${method}(${requestArgs});`);
-  lines.push(
-    `  expect(${respVar}.status(), ${JSON.stringify(`${plan.step.method} ${plan.step.endpoint}`)}).toBe(${plan.step.expected_status});`
+  inner.push(`    const ${respVar} = await request.${method}(${requestArgs});`);
+  inner.push(
+    `    expect(${respVar}.status(), ${JSON.stringify(`${plan.step.method} ${plan.step.endpoint}`)}).toBe(${plan.step.expected_status});`
   );
 
   if (golden) {
-    lines.push(
-      `  await assertGolden(${JSON.stringify(`${plan.step.method} ${plan.step.endpoint}`)}, ${respVar}.status(), await safeJson(${respVar}));`
+    inner.push(
+      `    await assertGolden(${JSON.stringify(`${plan.step.method} ${plan.step.endpoint}`)}, ${respVar}.status(), await safeJson(${respVar}));`
     );
   }
 
   const captureLines = renderCaptures(plan.captures, respVar);
-  if (captureLines) lines.push(captureLines);
+  if (captureLines) inner.push(indentStepLine(captureLines));
 
-  return { code: lines.join("\n"), fixme: false };
+  const stepTitle = `${plan.step.method} ${plan.step.endpoint}`;
+  const code = [
+    `  await test.step(${JSON.stringify(stepTitle)}, async () => {`,
+    ...inner,
+    `  });`,
+  ].join("\n");
+
+  return { code, fixme: false };
+}
+
+/** Re-indent a multi-line snippet rendered at 2-space depth to sit at 4-space (inside a `test.step`). */
+function indentStepLine(snippet: string): string {
+  return snippet
+    .split("\n")
+    .map((line) => (line.startsWith("  ") ? `  ${line}` : line))
+    .join("\n");
 }
 
 /** Whether a flow plan needs a customer token (so the test must register/login in-test). */
@@ -209,7 +234,23 @@ export function emitSpec({ candidate, plan, folder, golden }: EmitOptions): Emit
   const body = [...setupLines, "", ...(errorBlock ? [errorBlock] : stepBlocks)].join("\n");
 
   const testTitle = `${candidate.persona} — ${candidate.flow_name}`;
-  const annotationLine = `  test.info().annotations.push({ type: "flow_signature", description: ${JSON.stringify(candidate.signature)} });`;
+
+  // Provenance travels WITH the test (Phase 10 plan key decision): each spec
+  // stamps flow_signature + persona + flow_name + source_sessions as Playwright
+  // annotations, so collect.ts (Phase 10) lifts them straight out of the JSON
+  // reporter rather than reconstructing them from the candidates file. The
+  // source_sessions array is JSON-stringified into the annotation `description`
+  // (an annotation description is a single string). session_id provenance is a
+  // debugging/reporting tag only — never a Phase 7 classifier signal
+  // (CLAUDE.md §8.2).
+  const annotationLines = [
+    `  test.info().annotations.push({ type: "flow_signature", description: ${JSON.stringify(candidate.signature)} });`,
+    `  test.info().annotations.push({ type: "persona", description: ${JSON.stringify(candidate.persona)} });`,
+    `  test.info().annotations.push({ type: "flow_name", description: ${JSON.stringify(candidate.flow_name)} });`,
+    `  test.info().annotations.push({ type: "source_sessions", description: ${JSON.stringify(
+      JSON.stringify(candidate.source_sessions)
+    )} });`,
+  ].join("\n");
 
   const source = [
     `// flow_signature: ${candidate.signature}`,
@@ -219,7 +260,7 @@ export function emitSpec({ candidate, plan, folder, golden }: EmitOptions): Emit
     `import { extractPath, safeJson } from "../_golden/util.js";`,
     "",
     `test(${JSON.stringify(testTitle)}, async ({ request }) => {`,
-    annotationLine,
+    annotationLines,
     body,
     `});`,
     "",
