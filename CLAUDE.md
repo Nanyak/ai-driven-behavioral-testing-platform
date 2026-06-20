@@ -44,7 +44,9 @@ npm run check:phase3   # Elasticsearch ingestion
 npm run check:phase4   # log schema + Kibana
 npm run check:phase5   # traffic generator acceptance gates
 npm run check:phase6   # log ingestion output (session flows + goldens)
+npm run check:phase7   # behavioral modeling (candidates, emergent personas, holdout + negative control)
 npm run check:phase8   # golden response handling (OAS overlay + oracle utilities)
+npm run check:phase9   # script generator (flow_signature stamps, runtime ID resolution, generated-tests/ validity)
 
 # Traffic generator TypeScript must always compile clean:
 cd services/traffic-generator && npx tsc --noEmit
@@ -139,7 +141,7 @@ Do not assume any service is running. Use `npm run check:phaseN` or a direct
 | Log schema / Elasticsearch field names | `docs/phase-2-implementation-plan.md` + `docs/phase-3-implementation-plan.md` |
 | Persona classification logic | `docs/phase-7-implementation-plan.md` |
 | Behavioral modeling / sequence mining | `docs/phase-7-implementation-plan.md` + `docs/phase-8-implementation-plan.md` |
-| Playwright test generation | `docs/phase-9-implementation-plan.md` |
+| Playwright test generation | `docs/phase-9-implementation-plan.md` + `services/script-generator/README.md` |
 | Test execution + reporting | `docs/phase-11-implementation-plan.md` |
 | Medusa API endpoints + seed data | `docs/phase-1-implementation-plan.md` |
 | Storefront UI | `apps/storefront/` README |

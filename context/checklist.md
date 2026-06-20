@@ -297,28 +297,35 @@ Staged situation taxonomy (plan §4–§7 — supersedes the flat mix above):
 
 ## Phase 9: Script Generator
 
-- [ ] Create `services/script-generator`.
-- [ ] Read test candidates from the behavior engine.
-- [ ] Deduplicate candidates: remove identical step sequences, keep highest-support representative.
-- [ ] Cluster candidates by common prefix (three or more steps); keep longest representative per cluster.
-- [ ] Cap at ten canonical tests per persona.
-- [ ] Generate Playwright `.spec.ts` files.
-- [ ] Generate one test per selected behavior flow.
-- [ ] Add Playwright project configuration.
-- [ ] Add base URL configuration.
-- [ ] Add publishable API key handling.
-- [ ] Add admin authentication handling.
-- [ ] Resolve product IDs at runtime.
-- [ ] Resolve variant IDs at runtime.
-- [ ] Resolve cart IDs at runtime.
-- [ ] Resolve customer/admin tokens at runtime.
-- [ ] Add status code assertions.
-- [ ] Add schema or golden response assertions.
-- [ ] Derive each test filename from the canonical flow signature (`<persona>/<short-hash>.spec.ts`) so regeneration is idempotent (ADR 0002).
-- [ ] Stamp the flow signature into each generated test (annotation / header comment) so the corpus is self-describing for the Phase 7 skip gate.
-- [ ] Reuse the Phase 7 `signature.ts` in the defensive dedup re-pass (no second "same flow?" key).
-- [ ] Write generated tests to `generated-tests/`.
-- [ ] Verify generated tests are syntactically valid.
+- [x] Create `services/script-generator`.
+- [x] Read test candidates from the behavior engine (newest `test-candidates-*.json` by filename timestamp).
+- [x] Deduplicate candidates: remove identical step sequences, keep highest-support representative.
+- [x] Cluster candidates by common prefix (three or more steps); keep longest representative per cluster.
+- [x] Cap at ten canonical tests per persona.
+- [x] Generate Playwright `.spec.ts` files.
+- [x] Generate one test per selected behavior flow.
+- [x] Add Playwright project configuration (`generated-tests/playwright.config.ts`).
+- [x] Add base URL configuration (`MEDUSA_BASE_URL` env, default `localhost:9000`).
+- [x] Add publishable API key handling (`x-publishable-api-key` header, store calls).
+- [x] Add admin authentication handling (`fixtures/auth.ts` shared login; skipped when a flow already logs in itself).
+- [x] Resolve product IDs at runtime (no hardcoded seed IDs anywhere in emitted specs).
+- [x] Resolve variant IDs at runtime.
+- [x] Resolve cart IDs at runtime (including a `GET /store/regions` → `POST /store/carts` bootstrap chain for flow fragments that start mid-sequence).
+- [x] Resolve customer/admin tokens at runtime.
+- [x] Add status code assertions.
+- [x] Add schema or golden response assertions (`assertGolden`, no-ops gracefully — `golden-responses/` is empty by design until bodies-on data exists).
+- [x] Derive each test filename from the canonical flow signature (`<persona>/<short-hash>.spec.ts`) so regeneration is idempotent (ADR 0002).
+- [x] Stamp the flow signature into each generated test (annotation / header comment) so the corpus is self-describing for the Phase 7 skip gate.
+- [x] Reuse the Phase 7 `signature.ts` in the defensive dedup re-pass (no second "same flow?" key).
+- [x] Write generated tests to `generated-tests/`.
+- [x] Verify generated tests are syntactically valid (`tsc --noEmit` + `playwright test --list`, both clean — `npm run check:phase9`).
+
+Note: 3 of 30 generated specs land on a genuine generation error (`POST
+/store/payment-collections/{id}/payment-sessions` with no prior
+payment-collection creation step in the mined fragment) — reported in the run
+summary and emitted as `test.fixme`, not silently dropped. No live-backend
+run of the generated suite has been performed yet (Phase 11's job); only
+static validation (`tsc`, `playwright test --list`) is confirmed here.
 
 ## Phase 10: Test Execution
 
