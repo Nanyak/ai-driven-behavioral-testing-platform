@@ -530,6 +530,35 @@ function requireCustomerAuth(
   res.status(GATE_UNAUTHORIZED_STATUS).json(GATE_UNAUTHORIZED_BODY)
 }
 
+/**
+ * Phase 12 regression-demo fault injector (reversible, OFF by default).
+ *
+ * Does nothing unless `REGRESSION_DEMO` is set, so production/CI behavior is
+ * unchanged unless the demo explicitly opts in (docs/phase-12-implementation-plan.md
+ * §"Reversible injection"). Scenario A (response-code regression): when
+ * `REGRESSION_DEMO=carts_complete_500`, make checkout completion return 500
+ * instead of its documented 200, so the frozen golden baseline flags a
+ * regression on `POST /store/carts/{id}/complete`. Registered AFTER
+ * `requireCustomerAuth` so only an authenticated customer reaches the fault —
+ * the failure is a behavioral regression, not an auth rejection. Unset the env
+ * var to flip the report red -> green live, no redeploy.
+ */
+function regressionDemoFault(
+  req: MedusaRequest,
+  res: MedusaResponse,
+  next: MedusaNextFunction
+) {
+  if (process.env.REGRESSION_DEMO === "carts_complete_500" && req.path.endsWith("/complete")) {
+    res.status(500).json({
+      type: "regression_demo",
+      message: "Injected fault (Phase 12): POST /store/carts/{id}/complete forced to 500."
+    })
+    return
+  }
+
+  next()
+}
+
 export default defineMiddlewares({
   routes: [
     {
@@ -555,6 +584,15 @@ export default defineMiddlewares({
       matcher: GATE_MATCHERS[1],
       method: [...GATE_METHODS],
       middlewares: [requireCustomerAuth]
+    },
+    // Phase 12 regression-demo fault injector — OFF unless REGRESSION_DEMO is
+    // set. Placed AFTER the gate so it only fires for authenticated customers
+    // (a real checkout that now 500s), making the failure a behavioral
+    // regression rather than an auth rejection.
+    {
+      matcher: GATE_MATCHERS[0],
+      method: ["POST"],
+      middlewares: [regressionDemoFault]
     }
   ]
 })

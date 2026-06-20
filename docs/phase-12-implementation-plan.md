@@ -48,3 +48,45 @@ Change a response body shape on a known endpoint — e.g. rename or drop a field
 - Expected-vs-actual status (A) and/or golden diff (B) is shown.
 - Reverting restores a green report.
 - Screenshots/logs captured for the writeup.
+
+## Status — Implemented (scenario A), with a live-capture remainder
+
+The two things the demo depends on are built and proven **offline**:
+
+1. **Reversible injection** — `regressionDemoFault` in
+   `apps/medusa/apps/backend/src/api/middlewares.ts`. OFF by default; when
+   `REGRESSION_DEMO=carts_complete_500` is set it forces `POST /store/carts/{id}/complete`
+   to return **500**. Registered *after* `requireCustomerAuth`, so only an
+   authenticated customer reaches the fault — the failure is a behavioral
+   regression, not an auth rejection. Flip the env var to go red→green with no
+   redeploy. (Backend `tsc --noEmit` clean.)
+
+2. **Detection + attribution** — proven by `npm run check:phase12` (9/9) against
+   two committed normalized fixtures (`baseline-green` / `regressed-red`, same
+   flow): the baseline builds a GREEN report; the regressed run builds a RED
+   report attributing the failure to the right **persona** (`registered_customer`),
+   **flow** (`Registered Customer Checkout`), and **endpoint**
+   (`POST /store/carts/{id}/complete`, 200→500, source sessions cited), while the
+   unaffected **guest** flow stays green — attribution is specific, not blanket.
+   Rebuilding the baseline returns to green (reversibility).
+
+### Live runbook (the remaining capture items)
+
+Requires the running stack + a generated suite + frozen goldens:
+
+```bash
+# 1. Baseline green
+npm run stack:core            # Medusa + deps + ELK
+npm run traffic:generate && npm run ingest:run && npm run behavior:mine
+npm run script-generator:generate
+npm run test:all              # -> reports/report.json|html should be GREEN
+
+# 2. Freeze goldens (do NOT re-ingest), then inject + re-run execution only
+REGRESSION_DEMO=carts_complete_500 npm run medusa:dev   # restart backend with the toggle
+npm run test:all              # -> report goes RED on POST /store/carts/{id}/complete
+
+# 3. Revert: restart Medusa without the env var, re-run -> GREEN again.
+```
+
+Capture the red `report.html`, the 500 log lines, and the one-line middleware diff
+for the Phase 13 writeup.

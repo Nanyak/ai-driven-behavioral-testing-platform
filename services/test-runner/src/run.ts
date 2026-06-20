@@ -27,6 +27,8 @@ const SERVICE_ROOT = resolvePath(__dirname, "..");
 const REPO_ROOT = resolvePath(SERVICE_ROOT, "..", "..");
 const GENERATED_TESTS_DIR = resolvePath(REPO_ROOT, "generated-tests");
 const REPORTS_DIR = resolvePath(REPO_ROOT, "reports", "playwright");
+/** Repo-root reports/ — where Phase 11 writes report.json + report.html. */
+const REPO_REPORTS_DIR = resolvePath(REPO_ROOT, "reports");
 
 export type Project = "guest" | "customer" | "admin" | "edge";
 export type Target = Project | "all";
@@ -135,4 +137,4 @@ export function runPlaywright(options: RunOptions): RunResult {
   };
 }
 
-export { GENERATED_TESTS_DIR, REPORTS_DIR };
+export { GENERATED_TESTS_DIR, REPORTS_DIR, REPO_REPORTS_DIR };

@@ -1,0 +1,37 @@
+{
+  "generated_at": "2026-06-21T08:00:00.000Z",
+  "totals": { "executed": 2, "passed": 2, "failed": 0, "skipped": 0 },
+  "tests": [
+    {
+      "persona": "registered_customer",
+      "flow_name": "Registered Customer Checkout",
+      "flow_signature": "c0ffee11223344556677889900aabbccddeeff00112233445566778899aabbcc",
+      "source_sessions": ["sess-newCheckout-aaa", "sess-newCheckout-bbb"],
+      "project": "customer",
+      "file": "customer/c0ffee112233.spec.ts",
+      "title": "registered_customer — Registered Customer Checkout",
+      "status": "passed",
+      "duration_ms": 320,
+      "steps": [
+        { "endpoint": "POST /store/carts", "method": "POST", "expected_status": 200, "actual_status": 200, "status": "passed", "duration_ms": 40, "golden_diff": null, "failure_message": null },
+        { "endpoint": "POST /store/carts/{id}/line-items", "method": "POST", "expected_status": 200, "actual_status": 200, "status": "passed", "duration_ms": 55, "golden_diff": null, "failure_message": null },
+        { "endpoint": "POST /store/carts/{id}/complete", "method": "POST", "expected_status": 200, "actual_status": 200, "status": "passed", "duration_ms": 90, "golden_diff": null, "failure_message": null }
+      ]
+    },
+    {
+      "persona": "guest_shopper",
+      "flow_name": "Guest Browses Catalog",
+      "flow_signature": "a11ce0011223344556677889900aabbccddeeff00112233445566778899aabb22",
+      "source_sessions": ["sess-guest-ccc"],
+      "project": "guest",
+      "file": "guest/a11ce0011223.spec.ts",
+      "title": "guest_shopper — Guest Browses Catalog",
+      "status": "passed",
+      "duration_ms": 70,
+      "steps": [
+        { "endpoint": "GET /store/regions", "method": "GET", "expected_status": 200, "actual_status": 200, "status": "passed", "duration_ms": 20, "golden_diff": null, "failure_message": null },
+        { "endpoint": "GET /store/products", "method": "GET", "expected_status": 200, "actual_status": 200, "status": "passed", "duration_ms": 30, "golden_diff": null, "failure_message": null }
+      ]
+    }
+  ]
+}

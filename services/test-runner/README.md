@@ -1,12 +1,13 @@
-# Test Runner (Phase 10)
+# Test Runner (Phase 10) + Reporting (Phase 11)
 
 Executes the Phase 9 generated Playwright suite (`generated-tests/`) against a
-running Medusa instance, captures machine-readable + human-readable results, and
-normalizes the Playwright JSON into a **persona → flow → step** run result that
-is the input to Phase 11 reporting.
+running Medusa instance, captures machine-readable + human-readable results,
+normalizes the Playwright JSON into a **persona → flow → step** run result, and
+then builds the **stakeholder regression report** (`reports/report.json` +
+`reports/report.html`) from it.
 
-This service does not generate tests (that is Phase 9) or render stakeholder
-reports (that is Phase 11). Its job is purely execution + normalization.
+This service does not generate tests (that is Phase 9). Execution + normalization
+is Phase 10; the report build/render is Phase 11 (`src/report/`).
 
 ## Commands
 
@@ -80,6 +81,38 @@ Reporter output paths are wired in the generated config via
   (≈20 specs are `test.fixme` and report as skipped).
 - `src/failure.ts` — renders a failure as expected-vs-actual status + a readable
   golden diff (plan §5), not a raw object dump.
+
+### Reporting (Phase 11) — `src/report/`
+
+- `schema.ts` — report types + `summarizeGoldenDiff` (rolls a `SchemaDiffEntry[]`
+  into `{ missing, unexpected, type_changed }` path lists).
+- `build.ts` — `buildReport(normalized)` → deterministic `Report`: totals,
+  `by_persona`, `by_flow` (keyed by ADR 0002 flow signature), `endpoint_failures`
+  (sorted desc), and one `failures` entry per failing step with expected/actual
+  status, golden diff, duration, and `source_sessions` (+ `trace_id` only when
+  present upstream — never invented).
+- `html.ts` — `renderHtml(report)` → a single self-contained `report.html`
+  (inline CSS, no `<link>`/`<script>`), openable by double-click: red/green
+  banner, totals, most-failing-endpoint callout, per-persona / per-flow /
+  failures tables.
+- `summary.ts` — `formatReportSummary(report)` console block (verdict + totals +
+  top endpoint + one line per failure).
+- `write.ts` — `writeReports(normalized, dir)` → writes `report.json` +
+  `report.html`, returns the built report.
+
+The CLI wires this in: every `npm run test:*` ends by writing both report files
+to repo-root `reports/` and printing the summary. Verify offline:
+`npm run check:phase11`.
+
+## Phase 12 — regression demo toggle
+
+`apps/.../api/middlewares.ts` carries a reversible fault injector
+(`regressionDemoFault`) used by the Phase 12 demo. It is **OFF by default**;
+set `REGRESSION_DEMO=carts_complete_500` to make `POST /store/carts/{id}/complete`
+return 500 (a behavioral regression on a frozen golden baseline), and unset it to
+go red→green live. Detection + attribution is proven offline by
+`npm run check:phase12`; the full live runbook is in
+`docs/phase-12-implementation-plan.md`.
 
 ## Normalized result shape (the Phase 11 contract)
 

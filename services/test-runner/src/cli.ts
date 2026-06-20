@@ -16,7 +16,9 @@ import { writeFileSync } from "node:fs";
 import { resolve as resolvePath } from "node:path";
 import { collectFromFile, type NormalizedRunResult } from "./collect.js";
 import { formatFailures } from "./failure.js";
-import { PROJECTS, REPORTS_DIR, runPlaywright, type Target } from "./run.js";
+import { formatReportSummary } from "./report/summary.js";
+import { writeReports } from "./report/write.js";
+import { PROJECTS, REPO_REPORTS_DIR, REPORTS_DIR, runPlaywright, type Target } from "./run.js";
 
 const VALID_TARGETS: Target[] = ["all", ...PROJECTS];
 
@@ -63,9 +65,16 @@ function main(): void {
   writeFileSync(normalizedPath, JSON.stringify(result, null, 2));
 
   printSummary(result, target);
-  console.log(`\n  JSON report:       ${run.jsonReportPath}`);
-  console.log(`  HTML report:       ${run.htmlReportDir}/index.html`);
+
+  // Phase 11: build + write the stakeholder report (report.json + report.html).
+  const { report, jsonPath, htmlPath } = writeReports(result, REPO_REPORTS_DIR);
+  console.log(`\n${formatReportSummary(report)}`);
+
+  console.log(`\n  Playwright JSON:   ${run.jsonReportPath}`);
+  console.log(`  Playwright HTML:   ${run.htmlReportDir}/index.html`);
   console.log(`  Normalized result: ${normalizedPath}`);
+  console.log(`  Report (JSON):     ${jsonPath}`);
+  console.log(`  Report (HTML):     ${htmlPath}`);
 
   // Exit non-zero if Playwright reported failures, so CI/`npm run` surfaces it.
   process.exit(run.status);

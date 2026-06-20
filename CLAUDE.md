@@ -48,6 +48,8 @@ npm run check:phase7   # behavioral modeling (candidates, emergent personas, hol
 npm run check:phase8   # golden response handling (OAS overlay + oracle utilities)
 npm run check:phase9   # script generator (flow_signature stamps, runtime ID resolution, generated-tests/ validity)
 npm run check:phase10  # test execution (per-persona Playwright projects, collect.ts normalization, live run when Medusa up / graceful skip when down)
+npm run check:phase11  # reporting (buildReport rollups + self-contained report.html, offline against the normalized fixture)
+npm run check:phase12  # regression demo (offline green↔red detection + attribution; reversible Medusa REGRESSION_DEMO toggle, off by default)
 
 # Traffic generator TypeScript must always compile clean:
 cd services/traffic-generator && npx tsc --noEmit

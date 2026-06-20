@@ -348,31 +348,48 @@ invented; see the Phase 11 note below). Verify: `npm run check:phase10`.
 
 ## Phase 11: Reporting
 
-- [ ] Create `reports/` output directory.
-- [ ] Define report JSON schema.
-- [ ] Include total tests executed.
-- [ ] Include passed and failed test counts.
-- [ ] Include persona-level results.
-- [ ] Include flow-level results.
-- [ ] Include endpoint-level failures.
-- [ ] Include expected vs actual status code.
-- [ ] Include golden response diff.
-- [ ] Include source `session_id`. (carried as `source_sessions` on the Phase 10 normalized result — always present)
-- [ ] Include source `trace_id`. **Note (Phase 10 audit):** `trace_id` does not exist upstream — candidates carry `source_sessions` but no trace id, and steps are only method/endpoint/expected_status. The Phase 10 normalized result types it `trace_id?: string | null` and **omits it when absent (never invents one)**. Read this item as "include `trace_id` when present; otherwise omit"; the report builder must not require it on every failure.
-- [ ] Generate `reports/report.json`.
-- [ ] Generate `reports/report.html`.
-- [ ] Verify the report can be opened locally.
+- [x] Create `reports/` output directory.
+- [x] Define report JSON schema (`services/test-runner/src/report/schema.ts`).
+- [x] Include total tests executed.
+- [x] Include passed and failed test counts.
+- [x] Include persona-level results (`by_persona`).
+- [x] Include flow-level results (`by_flow`, keyed by flow signature, ADR 0002).
+- [x] Include endpoint-level failures (`endpoint_failures`, sorted desc — drives the "most-failing endpoint" callout).
+- [x] Include expected vs actual status code (per failing step).
+- [x] Include golden response diff (rolled up to `{ missing, unexpected, type_changed }` per plan §schema).
+- [x] Include source `session_id`. (carried as `source_sessions` on each failure — always present)
+- [x] Include source `trace_id`. **Note (Phase 10 audit):** `trace_id` does not exist upstream — candidates carry `source_sessions` but no trace id, and steps are only method/endpoint/expected_status. The report builder carries `trace_id` **only when an upstream annotation supplies one, and omits it otherwise (never invents one)**. Confirmed: the failure entry has no `trace_id` key on the current corpus.
+- [x] Generate `reports/report.json` (`report/build.ts` + `report/write.ts`).
+- [x] Generate `reports/report.html` (`report/html.ts` — single self-contained file, inline CSS, no `<link>`/`<script>`).
+- [x] Verify the report can be opened locally (double-click; validated by `npm run check:phase11`).
+
+> Reporting lives in `services/test-runner/src/report/` (`schema.ts`, `build.ts`,
+> `html.ts`, `summary.ts`, `write.ts`) and is wired into the runner CLI — every
+> `npm run test:*` ends by writing `reports/report.json` + `reports/report.html`
+> and printing a red/green console summary. `npm run check:phase11` proves it
+> **offline** (10/10): tsc clean; `buildReport` aggregates the committed
+> normalized fixture into totals/persona/flow/endpoint rollups; the failure
+> entry cites persona/flow/endpoint/expected-vs-actual/golden-diff/source
+> sessions; `report.html` is self-contained. No live stack required.
 
 ## Phase 12: Regression Demonstration
 
-- [ ] Create a controlled regression scenario.
-- [ ] Change one response code or response schema in Medusa.
-- [ ] Re-run generated tests.
-- [ ] Confirm the regression is detected.
-- [ ] Confirm the report identifies the affected persona.
-- [ ] Confirm the report identifies the affected flow.
-- [ ] Confirm the report identifies the affected endpoint.
-- [ ] Capture screenshots or logs for documentation.
+- [x] Create a controlled regression scenario (response-code regression, scenario A).
+- [x] Change one response code in Medusa — `regressionDemoFault` middleware forces `POST /store/carts/{id}/complete` → 500 when `REGRESSION_DEMO=carts_complete_500` (OFF by default, reversible by env var).
+- [ ] Re-run generated tests **live** — requires the running stack + a generated suite + frozen goldens (covered by the runbook in `docs/phase-12-implementation-plan.md`; pending a live end-to-end run, same gate as Phase 5/9/10 live items).
+- [x] Confirm the regression is detected — proven **offline** by `npm run check:phase12`: a baseline-green normalized run builds a GREEN report; the same flow with `complete` flipped 200→500 builds a RED report (1 failure).
+- [x] Confirm the report identifies the affected persona (`registered_customer`; the unaffected guest flow stays green — attribution is specific, not blanket).
+- [x] Confirm the report identifies the affected flow (`Registered Customer Checkout`).
+- [x] Confirm the report identifies the affected endpoint (`POST /store/carts/{id}/complete`, with 200→500 shown and source sessions cited).
+- [ ] Capture screenshots or logs for documentation (Phase 13; needs the live red report).
+
+> Phase 12 is fundamentally a live demo. The two things it depends on are built
+> and proven offline: (1) the **detection + attribution** logic
+> (`scripts/check-phase12.mjs`, 9/9 — green↔red flip is reproducible, the
+> guest flow stays green); (2) the **reversible injection** mechanism (the
+> Medusa toggle, OFF unless `REGRESSION_DEMO` is set). The remaining items are
+> the live capture (re-run against the stack + screenshots), which share the
+> same "needs the running stack" gate as the other live validation items.
 
 ## Phase 13: Documentation
 
@@ -451,5 +468,5 @@ Optional (time-permitting):
 - [ ] Playwright API tests are generated.
 - [ ] Generated tests are executable.
 - [ ] Golden response comparison works.
-- [ ] Regression report is generated.
+- [x] Regression report is generated. (`report.json` + self-contained `report.html`, persona/flow/endpoint rollups; `npm run check:phase11`. Live capture pending the running stack.)
 - [ ] HITL review: discovered flows and generated tests are reviewable in the dashboard with approve/discard.

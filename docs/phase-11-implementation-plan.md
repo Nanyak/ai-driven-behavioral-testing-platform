@@ -77,3 +77,27 @@ reports/
 - `report.html` opens locally and renders the summary, per-persona, and failures tables.
 - Every failure entry cites persona, flow, endpoint, expected/actual status, golden diff, and source session/trace IDs.
 - Console prints a readable summary.
+
+## Status — Implemented
+
+Built in `services/test-runner/src/report/`: `schema.ts` (types + `summarizeGoldenDiff`),
+`build.ts` (`buildReport` — deterministic aggregation), `html.ts` (`renderHtml` —
+single self-contained file), `summary.ts` (`formatReportSummary`), and `write.ts`
+(`writeReports` → `reports/report.json` + `reports/report.html`). Wired into
+`src/cli.ts`: every `npm run test:*` run ends by writing both files and printing a
+red/green summary. `run.ts` exports `REPO_REPORTS_DIR`.
+
+Design notes:
+- The report's `totals` carry `skipped` through from the Phase 10 normalized result
+  (≈20 specs are `test.fixme`), so `executed = passed + failed + skipped` reconciles —
+  the plan's example omitted it.
+- `golden_diff` is the plan's rolled-up `{ missing, unexpected, type_changed }` path
+  lists; the full expected/actual detail stays in the normalized result.
+- `by_flow` is keyed by the ADR 0002 flow signature when present (persona-independent
+  identity), falling back to persona+name.
+- `trace_id` is omitted from a failure entry unless an upstream annotation supplies one
+  (never invented) — consistent with the Phase 10 contract.
+
+Verified offline by `npm run check:phase11` (10/10): tsc clean, rollups + failure
+fields aggregated from the committed normalized fixture, both report files written,
+`report.html` confirmed self-contained (no `<link>`/`<script>`).
