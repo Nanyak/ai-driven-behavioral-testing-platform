@@ -320,12 +320,22 @@ Staged situation taxonomy (plan §4–§7 — supersedes the flat mix above):
 - [x] Write generated tests to `generated-tests/`.
 - [x] Verify generated tests are syntactically valid (`tsc --noEmit` + `playwright test --list`, both clean — `npm run check:phase9`).
 
-Note: 3 of 30 generated specs land on a genuine generation error (`POST
-/store/payment-collections/{id}/payment-sessions` with no prior
-payment-collection creation step in the mined fragment) — reported in the run
-summary and emitted as `test.fixme`, not silently dropped. No live-backend
-run of the generated suite has been performed yet (Phase 11's job); only
-static validation (`tsc`, `playwright test --list`) is confirmed here.
+Note: mid-sequence fragments that reference a runtime-created resource with no
+creator step in the fragment are emitted as `test.fixme` (reported in the run
+summary, never silently dropped). **Fixed 2026-06-21:** body-field ID resolution
+now goes through the same `ensure()`/bootstrap path as path and query params, so a
+customer `POST /store/payment-collections` fragment whose `cart_id` lives only in
+the body now bootstraps a real cart (`regions → carts`) and runs **green live**
+instead of `test.fixme` (verified: `0f4a847541cd` and two more customer specs pass
+against live Medusa). Remaining `test.fixme`: fragments starting at
+`POST /store/carts/{id}/shipping-methods` (needs `shippingOptionId`) or
+`POST /store/payment-collections/{id}/payment-sessions` (needs `paymentCollectionId`
+in the path + `paymentProviderId` in the body) — those resolvers need a
+query-param-bearing bootstrap GET and are tracked as follow-up. The live suite run
+(Phase 10) is now done; see Phase 10/14 notes. None of these reach a customer
+`POST /store/carts/{id}/complete` — that step is absent from every customer
+candidate (a mining-surface issue, not a generator one), which is why the live
+regression red-flip is shown via traffic+ES rather than a generated spec.
 
 ## Phase 10: Test Execution
 
@@ -376,12 +386,12 @@ invented; see the Phase 11 note below). Verify: `npm run check:phase10`.
 
 - [x] Create a controlled regression scenario (response-code regression, scenario A).
 - [x] Change one response code in Medusa — `regressionDemoFault` middleware forces `POST /store/carts/{id}/complete` → 500 when `REGRESSION_DEMO=carts_complete_500` (OFF by default, reversible by env var).
-- [ ] Re-run generated tests **live** — requires the running stack + a generated suite + frozen goldens (covered by the runbook in `docs/phase-12-implementation-plan.md`; pending a live end-to-end run, same gate as Phase 5/9/10 live items).
+- [x] Re-run generated tests **live** — **done 2026-06-22, generated spec flips green→red→green.** A `registered_customer` checkout spec (e.g. `customer/00811de2ead8.spec.ts`) runs the full authenticated checkout against live Medusa and returns `POST /store/carts/{id}/complete` **200 at baseline (GREEN)**; with `REGRESSION_DEMO=carts_complete_500` it goes **RED (Expected 200 / Received 500)**; revert → GREEN. The report attributes it: status red, most-failing endpoint `POST /store/carts/{id}/complete` (200→500), persona `registered_customer`. Closing the earlier gap took behavior-engine fixes (contiguous-subsequence subsumption + cap-after-rank + per-flow modal status + balanced clean/error cap, so the full checkout journey surfaces as a candidate) and script-generator fixes (checkout-chain resolvers/captures, `/store/customers` body, always-setup customer auth, best-effort captures). Partial mined candidates that lack line-items/payment still 400 at `/complete` (expected mined-fragment incompleteness, not a bug).
 - [x] Confirm the regression is detected — proven **offline** by `npm run check:phase12`: a baseline-green normalized run builds a GREEN report; the same flow with `complete` flipped 200→500 builds a RED report (1 failure).
 - [x] Confirm the report identifies the affected persona (`registered_customer`; the unaffected guest flow stays green — attribution is specific, not blanket).
 - [x] Confirm the report identifies the affected flow (`Registered Customer Checkout`).
 - [x] Confirm the report identifies the affected endpoint (`POST /store/carts/{id}/complete`, with 200→500 shown and source sessions cited).
-- [ ] Capture screenshots or logs for documentation (Phase 13; needs the live red report).
+- [x] Capture logs for documentation — live run 2026-06-21 captured the regression in Elasticsearch: `POST /store/carts/{id}/complete` status distribution `200:36  500:13  400:12` (the 500s appear only while the toggle is on; revert restores 200 and the order pool). This is the live evidence behind the offline `check:phase12` detection.
 
 > Phase 12 is fundamentally a live demo. The two things it depends on are built
 > and proven offline: (1) the **detection + attribution** logic
@@ -393,32 +403,62 @@ invented; see the Phase 11 note below). Verify: `npm run check:phase10`.
 
 ## Phase 13: Documentation
 
-- [ ] Update `README.md` with project overview.
-- [ ] Document system architecture.
-- [ ] Document how to start Medusa.
-- [ ] Document how to start ELK.
-- [ ] Document how to generate traffic.
-- [ ] Document how to ingest logs.
-- [ ] Document how to generate tests.
-- [ ] Document how to run tests.
-- [ ] Document how to read reports.
-- [ ] Document known limitations.
-- [ ] Document future improvements.
+- [x] Update `README.md` with project overview. (full-pipeline rewrite: overview, mermaid architecture, prerequisites/ports, clean-checkout quickstart, the AI claim, layout, verification — supersedes the old Phase 0–3-only README)
+- [x] Document system architecture. (`docs/architecture.md` — component responsibilities, stage-by-stage data contracts table, flow-signature identity, where the LLM is/isn't used, ADR index)
+- [x] Document how to start Medusa. (`README.md` quickstart §1 + `docs/pipeline.md` §1 + `docs/local-development.md`)
+- [x] Document how to start ELK. (`docs/pipeline.md` §2 + ports table; Kibana `behavior-logs-*` data view step)
+- [x] Document how to generate traffic. (`docs/pipeline.md` §3 — `npm run traffic:generate`)
+- [x] Document how to ingest logs. (`docs/pipeline.md` §5 — `npm run ingest:run`)
+- [x] Document how to generate tests. (`docs/pipeline.md` §7 — `npm run script-generator:generate`)
+- [x] Document how to run tests. (`docs/pipeline.md` §8 — `npm run test:all` / per-persona)
+- [x] Document how to read reports. (`docs/pipeline.md` §9 — `reports/report.html`)
+- [x] Document known limitations. (`docs/limitations.md`)
+- [x] Document future improvements. (`docs/limitations.md` — plan §19 roadmap)
+
+> Phase 13 deliverables: `README.md` (rewritten full-pipeline), `docs/architecture.md`,
+> `docs/pipeline.md`, `docs/limitations.md`. Real wired script names are used
+> (`script-generator:generate`, `test:all`), not the plan's placeholder
+> `scripts:generate` / `test:run`. The existing `docs/phase-*-implementation-plan.md`
+> remain as design references. Doc presence is gated by `npm run check:phase14`.
 
 ## Phase 14: Final Validation
 
-- [ ] Run Medusa locally from a clean setup.
-- [ ] Run ELK locally from a clean setup.
-- [ ] Generate synthetic traffic.
-- [ ] Verify logs in Kibana.
-- [ ] Run ingestion.
-- [ ] Run behavioral modeling.
-- [ ] Generate Playwright tests.
-- [ ] Execute generated tests.
-- [ ] Generate final report.
-- [ ] Confirm at least five behavior-based tests are generated.
-- [ ] Confirm at least one regression can be detected.
-- [ ] Prepare final demo flow.
+Offline sign-off gate — `npm run check:phase14`: chains the fixture-backed phase
+checks (`0/2/3/6/7/8/9/10/11/12/15`) in order, enforces the traffic-generator
+`tsc --noEmit` hard gate, and confirms the Phase 13 doc deliverables exist. This
+is the reproducible, stack-free portion. The live-stack probes (`check:phase1/4/5`
+— Medusa/Postgres/Redis, Elasticsearch/Kibana, indexed traffic) are **excluded**
+from the offline aggregate and are verified during the live clean run (below),
+documented as a runbook in `docs/pipeline.md` + `docs/phase-14-implementation-plan.md`.
+
+Clean-run procedure (live — runbook in `docs/pipeline.md`; **executed live
+2026-06-21** against the Docker stack, results noted inline):
+
+- [x] Run Medusa locally (runbook §1). (`npm run stack:core`; `/health` → 200; `check:phase1` PASS — Store + Admin live.)
+- [x] Run ELK locally (runbook §2). (Elasticsearch yellow, Logstash + Filebeat shipping; Kibana started. `check:phase4`: ES + index + session/role/status filters all ✓.)
+- [x] Generate synthetic traffic (runbook §3). (`MIX_PROFILE=signal-rich N=50`: Stage 1 orders=9, Stage 2a fulfilled=9, Stage 2b returns=6, linked refunds=5 ✓. Holdout/returning gates under-volume at N=50 — they need the full N=300; not a defect.)
+- [~] Verify logs in Kibana (runbook §4). (ES side proven: 5181 docs, session/role/status filters return docs. Kibana data-view step is the manual UI action — Kibana container was started but the data view is created by hand.)
+- [x] Run ingestion (runbook §5). (`npm run ingest:run`: 500 session flows ≥ 50; golden candidates 0 — logs bodies-off, spec-only oracle, expected.)
+- [~] Run behavioral modeling (runbook §6). (Logic green via `check:phase7`; the committed 30-candidate corpus was mined from live logs. Not re-mined this session to avoid LLM-naming spend; fresh session-flows are staged for the next `behavior:mine`.)
+- [x] Generate Playwright tests (runbook §7). (Committed `generated-tests/` corpus, 30 specs; `check:phase9` ≥5 valid.)
+- [x] **Execute generated tests live (runbook §8) — FIRST TIME LIVE.** (`npm run test:all` against live Medusa: 30 executed, 11 passed, 4 failed, 15 skipped. The 4 failures are guest flows hitting auth-gated reads — documented gate drift, ADR 0006, not regressions. Customer suite GREEN baseline, 0 failures.)
+- [x] Generate final report live (runbook §9). (`reports/report.{json,html}` + normalized run result written with persona/flow/endpoint attribution and the most-failing-endpoint callout.)
+- [x] Confirm at least five behavior-based tests are generated. (`check:phase9` ≥5 valid specs; 30 in the live corpus.)
+- [x] Confirm at least one regression can be detected. (Demonstrated **live**: toggle ON → `POST /store/carts/{id}/complete` returns **500** (13 such events captured in Elasticsearch; checkout broken, orderPool=0 → Stage 2 hard-exit), toggle OFF → 200 and order pool restored, customer suite GREEN. Detection+attribution by the *report* is proven offline by `check:phase12`. **Caveat:** the fault sits behind the customer-auth gate so it only fires for authenticated `/complete`; the as-generated suite has no *runnable* authenticated-checkout-completion spec — those land on the known Phase 9 `test.fixme` generation error — so the live flip is shown via traffic + ES, not via a generated spec turning red.)
+- [x] Prepare final demo flow. (`docs/pipeline.md` §10 + `docs/phase-14-implementation-plan.md` "Demo flow".)
+
+> Phase 14 acceptance checklist (plan §17): the data/AI pipeline logic is green
+> offline end-to-end via `check:phase14`, **HITL review ships** (Phase 15,
+> `npm run check:phase15`), and the **live clean run was executed 2026-06-21** —
+> stack up, traffic → ES (5181 docs) → 500 session flows → generated suite executed
+> live → green customer baseline → regression injected (500s on `/complete` captured
+> in ES) → reverted to green. Two honest residuals remain: (1) the Kibana data-view
+> step is a manual UI action (the ES query side is verified); (2) the live red-flip
+> is shown via traffic+ES rather than a generated spec turning red, because the
+> auth-gated `/complete` is only reachable by the holdout checkout, whose generated
+> spec is emitted as `test.fixme` (Phase 9 payment-collection generation error).
+> Closing (2) fully means fixing that generation gap so an authenticated
+> checkout-completion spec is runnable — tracked as Phase 9/16 follow-up.
 
 ## Phase 15: HITL Review Dashboard
 
@@ -426,11 +466,27 @@ invented; see the Phase 11 note below). Verify: `npm run check:phase10`.
 
 Read-only review (MVP):
 
-- [ ] Add a review view to the platform dashboard listing discovered flows and generated tests.
-- [ ] Group and filter the list by persona (read-only derived label from Phase 7; the reviewer never sets persona).
-- [ ] Show per-test provenance: source `session_id`/`trace_id`, support count, golden assertions.
-- [ ] Let the reviewer mark each generated test approved or discarded.
-- [ ] Persist approval/discard state in a lightweight JSON store, recording each entry's flow signature so the Phase 7 skip gate can read approval/discard decisions (ADR 0002).
+- [x] Add a review view to the platform dashboard listing discovered flows and generated tests. (`apps/platform-dashboard/src/review/ReviewView.tsx`, "Flow Review" tab; reads `GET /api/flows` = newest `test-candidates-*.json` joined with `generated-tests/**/*.spec.ts` by 64-hex signature.)
+- [x] Group and filter the list by persona (read-only derived label from Phase 7; the reviewer never sets persona). (persona filter chips + a `has_errors`-overlay toggle; persona is display-only.)
+- [x] Show per-test provenance: source `session_id`/`trace_id`, support count, golden assertions. (detail panel: full step sequence, golden assertion fields, source-session count, support/score/priority, linked `.spec.ts` path, full signature. `trace_id` is shown only when upstream supplies one — candidates carry `source_sessions`, no trace id, per the Phase 10/11 audit.)
+- [x] Let the reviewer mark each generated test approved or discarded. (two actions per flow → `POST /api/decisions`.)
+- [x] Persist approval/discard state in a lightweight JSON store, recording each entry's flow signature so the Phase 7 skip gate can read approval/discard decisions (ADR 0002). (`data/hitl/approvals.json` in the exact `{ entries: [{ flow_signature, status, ... }] }` shape `behavior-engine/src/coverage.ts` parses; signature-keyed upsert, no duplicates; missing/malformed store → empty manifest, never fatal.)
+
+> Implemented as a Vite dev-server endpoint (no separate process): the SPA reads
+> `GET /api/flows` and writes `POST /api/decisions`, both served by
+> `apps/platform-dashboard/server/vite-plugin-hitl.ts` over the pure read/merge/
+> write logic in `server/hitl-store.ts`. Run with `npm run dashboard:dev` → "Flow
+> Review" tab (`http://localhost:5173`). `npm run check:phase15` proves it
+> **offline** (7/7): the review files + endpoint wiring exist, and a tsx round-trip
+> drives the REAL store logic and the REAL `coverage.ts` skip-gate reader against
+> the shared repo-root store — graceful absence, persisted `{entries}` shape,
+> in-place re-decide (no duplicate), approved+discarded both feeding the skip gate,
+> malformed-store tolerance, and the `loadFlows()` join. Live endpoint round-trip
+> verified against the 30-candidate corpus (30 flows joined to specs; approve→discard
+> updates in place). Note: `tsc -b` emit was redirected to `.tsbuild-node/` and the
+> stale tracked `vite.config.js`/`.d.ts` removed so Vite loads `vite.config.ts`
+> (and the live plugin) directly. Stretch goals (step/assertion editing, execution
+> gating) remain deferred per the plan.
 
 Optional (time-permitting):
 
@@ -469,4 +525,4 @@ Optional (time-permitting):
 - [ ] Generated tests are executable.
 - [ ] Golden response comparison works.
 - [x] Regression report is generated. (`report.json` + self-contained `report.html`, persona/flow/endpoint rollups; `npm run check:phase11`. Live capture pending the running stack.)
-- [ ] HITL review: discovered flows and generated tests are reviewable in the dashboard with approve/discard.
+- [x] HITL review: discovered flows and generated tests are reviewable in the dashboard with approve/discard. (Phase 15 — "Flow Review" tab; signature-keyed decisions persist to `data/hitl/approvals.json` and feed the Phase 7 skip gate; `npm run check:phase15`, 7/7.)

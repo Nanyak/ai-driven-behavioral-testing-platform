@@ -27,7 +27,7 @@ import { classify } from "./persona.js";
 import { mineNGrams } from "./ngram.js";
 import { minePrefixSpan, decodePattern } from "./prefixspan.js";
 import { buildMarkov } from "./markov.js";
-import { dedup, type CandidateStep, type MinedFlow } from "./dedup.js";
+import { dedup, capRankedPerPersona, type CandidateStep, type MinedFlow } from "./dedup.js";
 import { buildCoverageManifest, applySkipGate } from "./coverage.js";
 import { rankFlows, priorityOf, type ScoredFlow } from "./rank.js";
 import { annotateFlows, llmEnabled, MODEL as NAMING_MODEL } from "./naming.js";
@@ -219,26 +219,38 @@ async function main(): Promise<void> {
   );
 
   // --- Assemble + classify mined flows -------------------------------------
-  const modal = modalStatuses(sessions);
+  // Expected status per token is computed from the flow's OWN supporting
+  // sessions, NOT globally: a token like `POST /store/carts` is 401 globally
+  // (guests attempt it far more than customers succeed), but inside a customer
+  // checkout flow it is 200. A global modal would stamp the contaminated 401 on
+  // a clean customer journey, mis-flagging it has_errors and breaking the
+  // generated test's expectations. Per-flow modal keeps each journey coherent.
+  const sessionById = new Map(sessions.map((s) => [s.session_id, s]));
+  const flowModal = (supportIds: string[]): Map<string, number> => {
+    const subset = supportIds.map((id) => sessionById.get(id)).filter((s): s is SessionFlow => s !== undefined);
+    return modalStatuses(subset.length > 0 ? subset : sessions);
+  };
   // Keep substantial journeys: PrefixSpan emits every frequent prefix; we want
   // candidates with >=2 steps (a single endpoint is not a flow to test).
   const minedFlows: MinedFlow[] = prefixspan.patterns
     .filter((p) => p.itemIds.length >= 2)
     .map((p) => {
       const tokens = decodePattern(p, prefixspan.vocabulary);
-      return toMinedFlow(tokens, p.support, modal, supportingSessions(tokens, sessionTokens));
+      const supporting = supportingSessions(tokens, sessionTokens);
+      return toMinedFlow(tokens, p.support, flowModal(supporting), supporting);
     });
 
-  // --- Dedup (within-run) ---------------------------------------------------
+  // --- Dedup (within-run: collapse identical + prune subsumed) --------------
   const deduped = dedup(minedFlows);
   log(
     `[behavior-engine] dedup: ${minedFlows.length} -> ${deduped.flows.length} ` +
-      `(collapsed ${deduped.collapsedIdentical}, clustered ${deduped.clusteredPrefix}, ` +
-      `capped ${deduped.cappedOut})`
+      `(collapsed ${deduped.collapsedIdentical}, subsumed ${deduped.subsumed})`
   );
 
-  // --- Rank -----------------------------------------------------------------
-  const ranked: ScoredFlow[] = rankFlows(deduped.flows);
+  // --- Rank, THEN cap per persona by score (highest-value survives) ---------
+  const rankedAll: ScoredFlow[] = rankFlows(deduped.flows);
+  const { kept: ranked, cappedOut } = capRankedPerPersona(rankedAll);
+  log(`[behavior-engine] per-persona cap: ${rankedAll.length} -> ${ranked.length} (capped ${cappedOut})`);
 
   // --- Cross-run skip gate (ADR 0002) — before LLM -------------------------
   const manifest = buildCoverageManifest();

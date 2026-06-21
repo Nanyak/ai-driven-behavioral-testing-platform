@@ -1,287 +1,212 @@
 # AI-Driven Behavioral Testing Platform
 
-This repository contains an AI-driven behavioral regression testing platform for Medusa REST APIs.
+An AI-driven behavioral **regression** testing platform for Medusa REST APIs.
 
-The current verified baseline covers:
+The platform drives synthetic traffic at a real Medusa e-commerce backend,
+captures every request as a structured log, ships those logs through ELK, and
+then **mines the raw log stream** to discover how users actually behave. From the
+discovered behavior flows it generates executable Playwright API tests, runs them
+against Medusa, and compares each response against a golden OpenAPI-derived schema
+to produce a red/green regression report.
 
-- Phase 0: project setup
-- Phase 1: Medusa initialization, seed data, Store API, and Admin API
-- Phase 2: structured JSONL request logging
-- Phase 3: simple storefront and platform dashboard frontends
+The two claims that make this "AI-driven" rather than a scripted round-trip:
 
-## Requirements
+1. **Emergent persona discovery.** Sessions are *not* labelled with a persona.
+   Guest / customer / admin personas fall out of the mined endpoint sequences and
+   their response statuses, and are then scored against the held-out JWT
+   `user_role` ground truth (precision/recall reported per persona).
+2. **Holdout validation.** The registered-customer `register → login → checkout`
+   sequence exists **only** in LLM-varied traffic — it is never scripted. The
+   behavior engine is expected to rediscover it from statistical co-occurrence,
+   reported as a support count, with a negative control proving the engine does
+   not hallucinate un-injected flows.
 
-Install these before setup:
+See `docs/architecture.md` for the component/data-flow breakdown,
+`docs/pipeline.md` for the exact run order, and `docs/limitations.md` for honest
+scope boundaries and future work.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    C["Synthetic Traffic Generator"] --> B["Store API / Admin API"]
+    S["Storefront"] --> B
+    P["Platform Dashboard"] --> B
+    A["Medusa Backend"] --> B
+    B --> D["Structured Logging Middleware"]
+    D --> E["Filebeat / Logstash"]
+    E --> F["Elasticsearch"]
+    F --> M["Kibana Dashboard"]
+    F --> G["Log Ingestion Service"]
+    G --> H["Behavioral Modeling Engine"]
+    G --> L["Golden Response Store (OpenAPI oracle)"]
+    H --> I["Script Generator"]
+    I --> J["Playwright API Test Runner"]
+    L --> J
+    J --> K["Execution & Regression Report"]
+    H --> P
+    K --> P
+```
+
+Data flows in one direction: **traffic → logs → Elasticsearch → session flows →
+behavior candidates → Playwright specs → run results → report.** The OpenAPI
+contract (not logged bodies) is the assertion oracle (ADR 0001). An entity diagram
+lives at `docs/erd.png` / `docs/erd.svg`.
+
+## Prerequisites
 
 | Tool | Version | Purpose |
 | --- | --- | --- |
-| Node.js | 20 or newer | Medusa, TypeScript, verification scripts |
-| npm | 10 or newer | Package management |
-| Docker | Current stable | PostgreSQL, Redis, Medusa local stack |
-| Docker Compose | `docker-compose` command available | Local multi-service startup |
+| Node.js | 20 or newer | Medusa, TypeScript services, verification scripts |
+| npm | 10 or newer | Package management (npm workspaces) |
+| Docker | Current stable | PostgreSQL, Redis, Medusa, ELK |
+| Docker Compose | `docker-compose` available | Local multi-service startup |
+| `ANTHROPIC_API_KEY` | — | LLM-varied traffic (Haiku 4.5) + flow naming/anomaly/assertions (Sonnet 4.6). Mining and classification are deterministic and do **not** need a key. |
 
-## First-Time Setup
+### Ports
 
-From the repository root:
+| Service | Port | Start command |
+| --- | --- | --- |
+| Medusa | 9000 | `npm run compose:up` |
+| Elasticsearch | 9200 | `npm run elk:up` |
+| Kibana | 5601 | `npm run elk:up` |
+| Logstash | 5044 | `npm run elk:up` |
+| PostgreSQL | 5432 | `npm run compose:up` |
+| Redis | 6379 | `npm run compose:up` |
+| Storefront | 8000 | `npm run storefront:dev` |
+| Platform dashboard | 5173 | `npm run dashboard:dev` |
+
+## Quickstart (clean checkout → green report)
+
+Each stage has one command. Run them in order. The detailed, per-step runbook
+(with expected output and acceptance gates) is in `docs/pipeline.md`.
 
 ```bash
+# 0. Install root + service deps
 npm install
-```
-
-Install the Medusa workspace dependencies:
-
-```bash
 npm install --prefix apps/medusa
-```
-
-Install the frontend app dependencies:
-
-```bash
 npm install --prefix apps/storefront
 npm install --prefix apps/platform-dashboard
-```
+cp .env.example .env            # set ANTHROPIC_API_KEY for LLM-varied traffic
 
-Create your environment file:
-
-```bash
-copy .env.example .env
-```
-
-The root `.env` is used by Docker Compose. For the Compose stack, keep these service-host URLs:
-
-```env
-DATABASE_URL=postgres://medusa:medusa@postgres:5432/medusa
-REDIS_URL=redis://redis:6379
-```
-
-The setup script also writes a backend-local `.env` under `apps/medusa/apps/backend/.env` for host-side Medusa CLI commands.
-
-## Start The Local Stack
-
-Start PostgreSQL, Redis, and Medusa:
-
-```bash
+# 1. Start Medusa + Postgres + Redis, then seed
 npm run compose:up
+npm run medusa:setup            # seed products/regions/keys + admin user
+docker-compose restart medusa   # pick up seeded schema
+
+# 2. Start ELK, then create the Kibana behavior-logs-* data view (one-time, in the UI)
+npm run elk:up
+
+# 3. Generate synthetic traffic against Medusa
+npm run traffic:generate
+
+# 4. Ingest logs from Elasticsearch into session flows + golden candidates
+npm run ingest:run
+
+# 5. Mine behavior flows + emergent personas (writes test candidates + validation report)
+npm run behavior:mine
+
+# 6. Generate Playwright API tests from the candidates
+npm run script-generator:generate
+
+# 7. Execute the generated suite against Medusa (writes reports/report.{json,html})
+npm run test:all
+
+# 8. Read the report
+open reports/report.html
 ```
 
-Watch Medusa logs:
+To see a regression caught end to end, run the Phase 12 demo: restart Medusa with
+`REGRESSION_DEMO=carts_complete_500`, re-run `npm run test:customer`, watch the
+report go red with persona/flow/endpoint attribution, then unset the toggle and
+re-run to return to green. See `docs/phase-12-implementation-plan.md`.
 
-```bash
-npm run compose:logs
-```
+## The AI claim, briefly
 
-Stop the stack:
+The "AI-driven" title is backed by measured numbers, not assertion. After
+`npm run behavior:mine`, the behavior engine writes a **classification/holdout/
+negative-control validation report** alongside the test candidates:
 
-```bash
-npm run compose:down
-```
+- **Emergent classification accuracy** — per-persona precision/recall of the
+  derived persona attribute vs. the held-out JWT `user_role` (two rule variants:
+  explicit-endpoint only, and with the auth-gated cart signal).
+- **Holdout recovery** — the support count at which PrefixSpan rediscovers the
+  registered-customer checkout sequence that exists only in LLM-varied traffic.
+- **Negative control** — confirmation that no un-injected flow (e.g. a successful
+  `POST /store/returns`, or an admin→customer-checkout chimera) is reported as
+  high-support.
 
-## Initialize And Seed Medusa
+Where the LLM is and is **not** used: Haiku 4.5 generates LLM-varied traffic
+narratives; Sonnet 4.6 (configurable to Opus 4.8 via `BEHAVIOR_LLM_MODEL`) names
+flows, flags anomalies/contamination, and recommends assertions. The LLM is
+**never** on the classification, oracle, or gate path — those are deterministic
+(ADR 0001, ADR 0005, plan §10.3).
 
-Run the Phase 1 setup script:
-
-```bash
-npm run medusa:setup
-```
-
-This will:
-
-- start/check PostgreSQL and Redis
-- run Medusa database setup
-- run migration scripts
-- seed products, regions, shipping options, stock, inventory, and API keys
-- create the admin user
-- write `MEDUSA_PUBLISHABLE_API_KEY` into `.env`
-
-After setup, restart Medusa so the running container picks up the repaired schema and seed state:
-
-```bash
-docker-compose restart medusa
-```
-
-## URLs
-
-| URL | Purpose |
-| --- | --- |
-| `http://localhost:9000/health` | Medusa health check |
-| `http://localhost:9000/app` | Medusa Admin UI frontend |
-| `http://localhost:9000/store/products` | Store API endpoint |
-| `http://localhost:9000/admin/products` | Admin API endpoint |
-| `http://localhost:8000` | Phase 3 storefront |
-| `http://localhost:5173` | Phase 3 platform dashboard |
-
-`/app` is the browser UI. Open it in your browser and log in with:
-
-```text
-Email: admin@example.com
-Password: change-me
-```
-
-`/admin` is the Admin REST API. It returns JSON and requires a bearer token.
-
-`/store` is the Store REST API. It requires a publishable API key header.
-
-## API Examples
-
-Store API calls need `x-publishable-api-key`:
-
-```powershell
-Invoke-RestMethod `
-  -Uri "http://localhost:9000/store/products" `
-  -Headers @{ "x-publishable-api-key" = $env:MEDUSA_PUBLISHABLE_API_KEY }
-```
-
-If your shell has not loaded `.env`, copy the value from `.env` directly:
-
-```powershell
-Invoke-RestMethod `
-  -Uri "http://localhost:9000/store/products" `
-  -Headers @{ "x-publishable-api-key" = "pk_your_key_here" }
-```
-
-Admin API calls need an auth token:
-
-```powershell
-$auth = Invoke-RestMethod `
-  -Uri "http://localhost:9000/auth/user/emailpass" `
-  -Method POST `
-  -ContentType "application/json" `
-  -Body '{"email":"admin@example.com","password":"change-me"}'
-
-Invoke-RestMethod `
-  -Uri "http://localhost:9000/admin/products" `
-  -Headers @{ Authorization = "Bearer $($auth.token)" }
-```
-
-Opening `/store/...` or `/admin/...` directly in a browser address bar does not send these headers, so unauthorized responses are expected.
-
-## Structured Logs
-
-Phase 2 writes structured Medusa request logs to:
-
-```text
-logs/medusa-json.log
-```
-
-Each line is JSON. These logs are the input for later sequence mining phases.
-
-Logs are **production-shaped hybrid** events (bodies-off by default). Useful fields include:
-
-- `timestamp`
-- `level`
-- `service` (logical domain derived from route, e.g. `cart-service`)
-- `environment`
-- `request_id`
-- `trace_id`
-- `session_id`
-- `user_role`
-- `event` (semantic, e.g. `cart_item_added`)
-- `method`
-- `endpoint` (normalized, e.g. `/store/carts/{id}/line-items`)
-- `status`
-- `duration_ms`
-- `request_payload` / `response_body` (only with `LOG_CAPTURE_BODIES=true`)
-
-For sequence mining, send traffic with a session header like:
-
-```http
-x-session-id: guest-session-001
-```
-
-Clients do **not** send a persona header. `user_role` is derived from the JWT by the logging middleware (`null` for unauthenticated guests), and persona is derived later as an emergent flow attribute in Phase 7 (see `context/plan.md` §10.3). Then group log events by `session_id`, sort by `timestamp`, and mine ordered `event` / `endpoint` sequences.
-
-## Frontend Apps
-
-Start the storefront:
-
-```bash
-npm run storefront:dev
-```
-
-Start the platform dashboard:
-
-```bash
-npm run dashboard:dev
-```
-
-Both apps use Vite dev-server proxies for `/medusa/*`, so browser requests are forwarded to `MEDUSA_BACKEND_URL` from the root `.env`.
-
-The storefront supports product browsing, customer register/login, cart checks, and a Medusa checkout flow using the local system payment provider.
-
-## Verification
-
-Run all currently verified phases:
-
-```bash
-npm run check:phase0
-npm run check:phase1
-npm run check:phase2
-npm run check:phase3
-```
-
-Expected result:
-
-```text
-Phase 0 verification passed.
-Phase 1 verification passed.
-Phase 2 verification passed.
-Phase 3 verification passed.
-```
-
-You can also verify the TypeScript Medusa backend:
-
-```bash
-cd apps/medusa/apps/backend
-npx tsc --noEmit
-```
-
-Or run the Medusa build:
-
-```bash
-npm --prefix apps/medusa run backend:build
-```
-
-## Current Project Layout
+## Repository layout
 
 ```text
 apps/
-  medusa/
-    apps/backend/
-      src/api/
-      src/migration-scripts/
-  platform-dashboard/
-  storefront/
-docs/
-generated-tests/
-golden-responses/
-infra/
-logs/
-reports/
-scripts/
+  medusa/              Medusa backend (system under test) + logging middleware
+  storefront/          Next.js customer-facing storefront
+  platform-dashboard/  Internal ops dashboard
 services/
+  traffic-generator/   Synthetic traffic (Phase 5)
+  log-ingestion/       Elasticsearch → session-flow + golden candidate extraction (Phase 6)
+  behavior-engine/     n-gram/PrefixSpan mining + emergent personas (Phase 7)
+  golden/              OpenAPI overlay + golden comparison oracle (Phase 8)
+  script-generator/    Playwright test generation (Phase 9)
+  test-runner/         Test execution (Phase 10) + reporting (Phase 11/12)
+context/               Project-level specs (plan.md, checklist.md, problem-statement.md)
+docs/                  Phase plans, ADRs, architecture/pipeline/limitations
+generated-tests/       Emitted Playwright specs (per persona)
+golden-responses/      Golden schema snapshots
+reports/               report.json + report.html
+infra/ scripts/        Infra config + root automation (check-phaseN, setup)
 ```
 
-## Troubleshooting
+Each service has its own `README.md` — read it before the source.
 
-If Store API returns `Publishable API key required`, add the `x-publishable-api-key` header.
+## Verification
 
-If Admin API returns `Unauthorized`, log in through `/auth/user/emailpass` and send `Authorization: Bearer <token>`.
-
-If Phase 1 fails because API calls cannot connect, check that Medusa is healthy:
+Every phase ships an **offline** check script that proves its logic without the
+live stack (mining, golden comparison, report build, and the regression
+detection/attribution all run against committed fixtures):
 
 ```bash
-docker-compose ps
+npm run check:phase0    # project setup            npm run check:phase7   # behavioral modeling
+npm run check:phase1    # Medusa API + seed        npm run check:phase8   # golden / OAS oracle
+npm run check:phase2    # logging middleware       npm run check:phase9   # script generator
+npm run check:phase3    # ELK ingestion            npm run check:phase10  # test execution
+npm run check:phase4    # log schema + Kibana      npm run check:phase11  # reporting
+npm run check:phase5    # traffic generator        npm run check:phase12  # regression demo
+npm run check:phase6    # log ingestion            npm run check:phase14  # offline sign-off (fixture phases)
+                                                  npm run check:phase15  # HITL review dashboard
+
+# Traffic generator must always compile clean (hard gate):
+cd services/traffic-generator && npx tsc --noEmit
 ```
 
-Then restart Medusa:
+`npm run check:phase14` chains the fixture-backed sign-off in order (phases
+0/2/3/6–12/15; the live-stack probes 1/4/5 are excluded — they run during the
+clean run). The **live** end-to-end validation procedure (clean Docker state →
+traffic → Kibana → green report → regression → revert) is documented in
+`docs/phase-14-implementation-plan.md` and `docs/pipeline.md`.
 
-```bash
-docker-compose restart medusa
-```
+## Detailed setup, API examples, and troubleshooting
 
-If the database is empty or missing tables, run:
+The full Medusa setup walkthrough, Store/Admin API request examples, structured
+log schema, and troubleshooting steps are in `docs/local-development.md` and the
+per-phase plans under `docs/`. Quick references:
 
-```bash
-npm run medusa:setup
-docker-compose restart medusa
-```
+- **Medusa health:** `http://localhost:9000/health`
+- **Medusa Admin UI:** `http://localhost:9000/app` (`admin@example.com` / `change-me`)
+- **Store API:** `http://localhost:9000/store/products` (needs `x-publishable-api-key`)
+- **Admin API:** `http://localhost:9000/admin/products` (needs `Authorization: Bearer <token>` from `POST /auth/user/emailpass`)
+- **Structured logs:** `logs/medusa-json.log` (JSON lines, bodies-off by default)
+
+### Known limitations
+
+Synthetic traffic is not real production data (mitigated by mixed sources +
+holdout); mining is classical n-gram/PrefixSpan, not deep ML; golden snapshots
+are shape/type level, not value level; ELK is single-node and memory-bound on a
+laptop. Full detail and the future-work roadmap are in `docs/limitations.md`.

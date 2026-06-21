@@ -118,11 +118,18 @@ function main() {
   if (offenders.length === 0) ok("no hardcoded ID literal values found");
   else fail("hardcoded ID literals", offenders.slice(0, 5).join(", "));
 
-  // [6] edge/ specs assert the logged non-2xx status.
-  console.log("\n[6] edge/ specs assert a non-2xx status");
-  const edgeSpecs = specs.filter((f) => f.includes(`${join("edge", "")}`));
-  if (edgeSpecs.length === 0) {
+  // [6] RUNNABLE edge/ specs assert the logged non-2xx status. A `test.fixme`
+  // spec executes nothing (it is reported as a known generation gap, never run),
+  // so a runtime 4xx/5xx assertion is moot for it — only non-fixme edge specs
+  // must carry one.
+  console.log("\n[6] runnable edge/ specs assert a non-2xx status");
+  const allEdgeSpecs = specs.filter((f) => f.includes(`${join("edge", "")}`));
+  const edgeSpecs = allEdgeSpecs.filter((f) => !/test\.fixme\(/.test(readFileSync(f, "utf8")));
+  const fixmeEdge = allEdgeSpecs.length - edgeSpecs.length;
+  if (allEdgeSpecs.length === 0) {
     fail("edge specs present", "expected >=1 spec under generated-tests/edge/");
+  } else if (edgeSpecs.length === 0) {
+    fail("runnable edge specs present", `all ${allEdgeSpecs.length} edge specs are test.fixme`);
   } else {
     let allAssertError = true;
     for (const f of edgeSpecs) {
@@ -132,7 +139,8 @@ function main() {
         fail("edge spec error-status assertion", `${f} has no toBe(4xx/5xx) assertion`);
       }
     }
-    if (allAssertError) ok(`all ${edgeSpecs.length} edge spec(s) assert a 4xx/5xx status`);
+    if (allAssertError)
+      ok(`all ${edgeSpecs.length} runnable edge spec(s) assert a 4xx/5xx status (${fixmeEdge} fixme skipped)`);
   }
 
   // [7] generated-tests/ itself type-checks and lists via Playwright.

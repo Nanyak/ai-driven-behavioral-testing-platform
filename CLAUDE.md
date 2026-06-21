@@ -50,6 +50,8 @@ npm run check:phase9   # script generator (flow_signature stamps, runtime ID res
 npm run check:phase10  # test execution (per-persona Playwright projects, collect.ts normalization, live run when Medusa up / graceful skip when down)
 npm run check:phase11  # reporting (buildReport rollups + self-contained report.html, offline against the normalized fixture)
 npm run check:phase12  # regression demo (offline green↔red detection + attribution; reversible Medusa REGRESSION_DEMO toggle, off by default)
+npm run check:phase14  # final validation (offline sign-off: chains check:phase0–12 + tsc gate + Phase 13 doc presence; live clean run is a runbook in docs/pipeline.md)
+npm run check:phase15  # HITL review dashboard (review files + endpoint wiring; tsx round-trip over the real store + coverage.ts skip-gate reader)
 
 # Traffic generator TypeScript must always compile clean:
 cd services/traffic-generator && npx tsc --noEmit
@@ -148,6 +150,8 @@ Do not assume any service is running. Use `npm run check:phaseN` or a direct
 | Playwright test generation | `docs/phase-9-implementation-plan.md` + `services/script-generator/README.md` |
 | Test execution / per-persona runs / normalized run result (Phase 11 input) | `docs/phase-10-implementation-plan.md` + `services/test-runner/README.md` |
 | Reporting | `docs/phase-11-implementation-plan.md` |
+| Project overview / architecture / pipeline run order / limitations | `README.md` + `docs/architecture.md` + `docs/pipeline.md` + `docs/limitations.md` (Phase 13) |
+| Final validation / clean-run dress rehearsal / offline sign-off | `docs/phase-14-implementation-plan.md` + `docs/pipeline.md` (`npm run check:phase14`) |
 | Medusa API endpoints + seed data | `docs/phase-1-implementation-plan.md` |
 | Storefront UI | `apps/storefront/` README |
 | Assertion oracle design | `docs/adr/0001-assertion-oracle-openapi-contract.md` |

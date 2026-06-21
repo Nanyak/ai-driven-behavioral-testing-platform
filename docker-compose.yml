@@ -53,6 +53,8 @@ services:
       MEDUSA_TELEMETRY_DISABLED: "true"
       LOG_OUTPUT_PATH: /workspace/logs/medusa-json.log
       LOG_CAPTURE_BODIES: ${LOG_CAPTURE_BODIES:-false}
+      # Phase 12 regression demo toggle: OFF unless set (reversible by env var).
+      REGRESSION_DEMO: ${REGRESSION_DEMO:-}
     ports:
       - "9000:9000"
     volumes:
@@ -105,6 +107,12 @@ services:
     volumes:
       - ./apps/platform-dashboard:/workspace/apps/platform-dashboard
       - ./.env:/workspace/.env
+      # Phase 15 HITL review reads pipeline artifacts via /api/flows; mount them
+      # under /workspace so findRepoRoot() resolves the repo root in-container.
+      - ./services/behavior-engine/data:/workspace/services/behavior-engine/data:ro
+      - ./generated-tests:/workspace/generated-tests:ro
+      - ./reports:/workspace/reports:ro
+      - ./data:/workspace/data
       - platform_dashboard_node_modules:/workspace/apps/platform-dashboard/node_modules
 
   elasticsearch:

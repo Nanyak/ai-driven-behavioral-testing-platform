@@ -114,6 +114,35 @@ an auth header, and (for non-GET) a request body.
   shipping → payment → complete` threading. This is the **only** multi-step
   standalone resolver; it is not a general-purpose "invent any missing
   precondition" mechanism.
+- **Bootstrap applies to body fields too, not just path/query.** An ID a step
+  needs in its **request body** (e.g. `cart_id` on `POST /store/payment-collections`)
+  goes through the same `ensure()`/`standaloneResolverFor` path as a `{id}` path
+  param or a required query param. Before this was unified, a customer
+  payment-collection fragment with `cart_id` only in the body bailed out as
+  `test.fixme` ("cart_id needs runtime value cartId, which no prior step
+  produced") even though the cart bootstrap existed — it just wasn't reachable
+  from body synthesis. Now those fragments bootstrap a real cart and run green.
+- **Full-checkout threading.** The downstream checkout ids are now threaded too,
+  so a mined customer journey runs end to end through `POST /store/carts/{id}/complete`:
+  `GET /store/shipping-options` captures `shippingOptionId`, `GET /store/payment-providers`
+  captures `paymentProviderId`, `GET /store/products` captures `variantId` (also a
+  standalone resolver), and `paymentCollectionId` is captured from `POST /store/payment-collections`.
+  `POST /store/customers` threads the in-scope `email` (an empty body 400s). A
+  fragment that starts at `payment-sessions` with no payment-collection step still
+  `test.fixme`s (no standalone resolver for `paymentCollectionId`). This is what
+  lets the Phase 12 regression flip a **generated** checkout spec red live (not
+  only traffic), see the root checklist Phase 12.
+- **Customer auth is setup, not a flow step.** A real session token is always
+  established in the test setup (register → create customer → login with the
+  in-scope `email`/`password`), and the flow's OWN handshake steps
+  (`/auth/customer/emailpass[/register]`, `POST /store/customers`) are **skipped**
+  when emitting. Mined fragments frequently DROP the login (leaving a register-only
+  token the gate 401s) or REPEAT `POST /store/customers` (duplicate identity → 400);
+  owning auth in setup makes every customer journey start from a valid session.
+- **Captures are best-effort.** A capture whose path doesn't match the live
+  response shape (e.g. Medusa v2 line-items returns `{ cart }`, not `{ line_item }`)
+  is wrapped in try/catch, so an unused id never crashes a flow; a step that
+  genuinely needs an unset id fails its own status assertion cleanly.
 - **Auth**: `requireCustomerAuth`/`requireAdminAuth` per step is read off the
   candidate's `attributes.requires_auth` plus endpoint shape; customer flows
   establish a session inline (no shared fixture — token reuse is per-flow) via

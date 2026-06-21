@@ -54,3 +54,11 @@ services/golden/openapi/augmented/*
 Thumbs.db
 .idea/
 .vscode/
+
+# HITL review store (Phase 15 runtime state)
+data/hitl/approvals.json
+
+# Dashboard tsc project-ref emit (redirected away from sources)
+apps/platform-dashboard/.tsbuild-node/
+apps/platform-dashboard/vite.config.js
+apps/platform-dashboard/vite.config.d.ts

@@ -96,8 +96,16 @@ function pathParamNames(endpoint: string): string[] {
 
 /** Known capture rules: which step (method+endpoint) responses bind which scope variables. */
 function captureRulesFor(method: string, endpoint: string): Record<string, string> {
+  if (method === "GET" && endpoint === "/store/products")
+    return { productId: "products[0].id", variantId: "products[0].variants[0].id" };
   if (method === "POST" && endpoint === "/store/carts") return { cartId: "cart.id" };
   if (method === "POST" && endpoint === "/store/carts/{id}/line-items") return { lineItemId: "line_item.id" };
+  // Checkout reads that produce an id a later mutation needs in its body: the
+  // shipping-method step takes `option_id` and the payment-session step takes
+  // `provider_id`. Binding them here lets the full checkout chain thread end to
+  // end (GET appears before the POST that consumes it in the mined journey).
+  if (method === "GET" && endpoint === "/store/shipping-options") return { shippingOptionId: "shipping_options[0].id" };
+  if (method === "GET" && endpoint === "/store/payment-providers") return { paymentProviderId: "payment_providers[0].id" };
   if (method === "POST" && endpoint === "/store/payment-collections") return { paymentCollectionId: "payment_collection.id" };
   if (method === "POST" && endpoint === "/store/payment-collections/{id}/payment-sessions")
     return { paymentSessionProviderId: "payment_collection.id" };
@@ -133,6 +141,9 @@ function standaloneResolverFor(varName: string, auth: AuthRequirement): ResolveS
       return [{ bindTo: varName, method: "GET", endpoint: "/store/regions", extract: "regions[0].id" }];
     case "productId":
       return [{ bindTo: varName, method: "GET", endpoint: "/store/products", extract: "products[0].id" }];
+    case "variantId":
+      // A line-item needs a real variant; pull the first product's first variant.
+      return [{ bindTo: varName, method: "GET", endpoint: "/store/products", extract: "products[0].variants[0].id" }];
     case "orderId":
       return auth === ADMIN
         ? [{ bindTo: varName, method: "GET", endpoint: "/admin/orders", extract: "orders[0].id" }]
@@ -235,20 +246,23 @@ const ID_FIELD_TO_SCOPE: Record<string, string> = {
 
 /**
  * Synthesize a minimal request body from the OAS schema (priority 2: payload
- * policy). Required ID-typed fields resolve to runtime scope variables;
- * other required scalars get deterministic literals. Returns `unresolvable`
- * when a required ID field has no corresponding scope variable available —
- * UNLESS `edgeOmitOnFailure` is set (the step's logged `expected_status` is
- * itself a 4xx/5xx), in which case an unsynthesizable required field is
- * deliberately OMITTED: that is the reproducible structural condition (a
- * missing OAS-required field) that the plan's edge-case section calls for,
- * not a guessed malformed value.
+ * policy). Required ID-typed fields resolve to runtime scope variables —
+ * bootstrapping them via `ensure` (a standalone GET or the `regions -> carts`
+ * cart chain) exactly as path and query params do, so e.g. a customer
+ * `POST /store/payment-collections` fragment that needs a `cart_id` in its BODY
+ * gets a real runtime cart instead of bailing out. Other required scalars get
+ * deterministic literals. Returns `unresolvable` only when a required ID field
+ * can be neither captured nor bootstrapped — UNLESS `edgeOmitOnFailure` is set
+ * (the step's logged `expected_status` is itself a 4xx/5xx), in which case an
+ * unsynthesizable required field is deliberately OMITTED: that is the
+ * reproducible structural condition (a missing OAS-required field) that the
+ * plan's edge-case section calls for, not a guessed malformed value.
  */
 function synthesizeBody(
   specs: OasSpecs,
   method: string,
   endpoint: string,
-  scope: Set<string>,
+  ensure: (varName: string) => boolean,
   edgeOmitOnFailure: boolean
 ): BodyPlan {
   const found = requestSchemaFor(specs, method, endpoint);
@@ -263,7 +277,7 @@ function synthesizeBody(
   for (const field of fields) {
     const scopeVar = ID_FIELD_TO_SCOPE[field.name];
     if (scopeVar) {
-      if (!scope.has(scopeVar)) {
+      if (!ensure(scopeVar)) {
         if (edgeOmitOnFailure) continue; // omit: reproduces the logged missing-required-field condition
         return {
           kind: "unresolvable",
@@ -318,6 +332,14 @@ function authCredentialBody(method: string, endpoint: string): BodyPlan | null {
       kind: "synthesized",
       fields: { email: { kind: "raw", expr: "email" }, password: { kind: "raw", expr: "password" } },
     };
+  }
+  // Creating the customer entity (step 2 of the Medusa v2 handshake) needs the
+  // SAME generated `email` the register/login steps use, or the new customer
+  // record won't match the authenticated identity. The generic synthesizer would
+  // emit an empty body (no id-typed required field) -> 400. Thread the in-scope
+  // `email` const, mirroring the auto-register setup.
+  if (endpoint === "/store/customers") {
+    return { kind: "synthesized", fields: { email: { kind: "raw", expr: "email" } } };
   }
   return null;
 }
@@ -419,7 +441,7 @@ export function buildFlowPlan(
     } else {
       body =
         authCredentialBody(step.method, step.endpoint) ??
-        synthesizeBody(specs, step.method, step.endpoint, scope, step.expected_status >= 400);
+        synthesizeBody(specs, step.method, step.endpoint, ensure, step.expected_status >= 400);
     }
 
     const captures = captureRulesFor(step.method, step.endpoint);

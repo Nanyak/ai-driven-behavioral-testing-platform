@@ -65,9 +65,10 @@ acceptance gate still passes.
 ```
 load (repo-root data/sessions)  → canonical tokens (signature.ts)
   → mine: n-gram baseline (n=2..4) ‖ PrefixSpan (closed, gap-bounded) ‖ Markov
-  → assemble + classify mined flows  (attributes.ts → persona.ts; endpoint+status only)
-  → dedup (within-run: identical-sig collapse, ≥3-prefix cluster, cap 10/persona)
-  → rank (one weight config)
+  → assemble + classify mined flows  (per-flow modal status from each flow's OWN
+       supporting sessions, not global; attributes.ts → persona.ts; endpoint+status)
+  → dedup (within-run: identical-sig collapse, contiguous-subsequence subsumption)
+  → rank (one weight config)  →  cap 10/persona AFTER ranking, balanced clean/error
   → [SKIP GATE]  (coverage.ts — drop already-covered signatures; ADR 0002)
   → naming (LLM Sonnet 4.6 — judgment only; offline fallback when no API key)
   → write candidates + validation report + run summary
@@ -84,7 +85,7 @@ load (repo-root data/sessions)  → canonical tokens (signature.ts)
 | `ngram.ts` | Fixed-window (n=2,3,4) session-support baseline — a demo contrast for PrefixSpan. |
 | `prefixspan.ts` | **Closed** sequential pattern mining with a `maxGap` bound and per-root fairness (so a high-volume browse root cannot starve admin reversals). Deterministic ordering (PO-5): support desc, length desc, lexicographic. |
 | `markov.ts` | First-order transition model; low-probability transitions are anomaly hints for naming (supporting signal only). |
-| `dedup.ts` | Within-run collapse + ≥3-step prefix clustering + per-persona cap of 10. All "same flow?" comparisons go through `signature.ts`. |
+| `dedup.ts` | Within-run identical-sig collapse + **contiguous-subsequence subsumption** (drop a flow that is a contiguous sub-run, ≥2 tokens, of a longer kept flow of the same persona — generalizes prefix clustering; collapses mid-checkout fragments into the full journey). The per-persona cap of 10 is `capRankedPerPersona`, applied by the caller AFTER ranking (so value, not raw support, decides survivors) and **balanced** across the has_errors split (reserve ~half each persona's cap for clean vs error flows, else error flows — routed to `edge/` — empty the persona's own folder). All "same flow?" comparisons go through `signature.ts`. |
 | `coverage.ts` | Cross-run coverage manifest + skip gate. Reads `generated-tests/**/*.spec.ts` (signature stamp) and the HITL store (`approved` + `discarded`). A **missing** dir/store is an **empty** manifest, never an error (PO-6). |
 | `rank.ts` | One config object with explicit weights: support, persona coverage, endpoint importance (**business importance merged in** — PO-7), error coverage. |
 | `naming.ts` | LLM (Sonnet 4.6, `claude-sonnet-4-6` by default; `BEHAVIOR_LLM_MODEL` overrides — e.g. `claude-opus-4-8`; adaptive thinking) — naming, anomaly/contamination, and **advisory** assertion hints (BA-F1; never a Phase 8/9 oracle — ADR 0001 keeps the OAS authoritative). Raw HTTPS so the service stays dependency-light; degrades to deterministic local names when `ANTHROPIC_API_KEY` is unset. |

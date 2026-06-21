@@ -89,11 +89,16 @@ function renderResolveCall(call: ResolveCall, index: number): string {
 function renderCaptures(captures: Record<string, string>, respVar: string): string {
   const lines: string[] = [];
   for (const [varName, path] of Object.entries(captures)) {
-    if (path === "$raw") {
-      lines.push(`  scope.${varName} = (await ${respVar}.json()).token;`);
-    } else {
-      lines.push(`  scope.${varName} = extractPath(await ${respVar}.json(), ${JSON.stringify(path)});`);
-    }
+    // Captures are BEST-EFFORT: a response whose shape differs from the expected
+    // path (e.g. Medusa v2 line-items returns `{ cart }`, not `{ line_item }`)
+    // must not crash a flow that never consumes this id. Wrap in try/catch — a
+    // step that genuinely needs an unset id then fails its OWN status assertion
+    // cleanly (the honest "doesn't reproduce" outcome), not with an extract throw.
+    const expr =
+      path === "$raw"
+        ? `(await ${respVar}.json()).token`
+        : `extractPath(await ${respVar}.json(), ${JSON.stringify(path)})`;
+    lines.push(`  try { scope.${varName} = ${expr}; } catch { /* best-effort capture */ }`);
   }
   return lines.join("\n");
 }
@@ -207,20 +212,24 @@ export function emitSpec({ candidate, plan, folder, golden }: EmitOptions): Emit
     needsAdminViaFixture ? `import { adminToken } from "../fixtures/auth.js";` : null,
   ].filter((l): l is string => l !== null);
 
-  // A flow may carry its own customer register/login step. When it does, that
-  // step creates the account + token (with the shared `email`/`password`
-  // consts) and the setup must NOT auto-register, or it would double-register a
-  // duplicate email. A flow with a login step but no register step still needs
-  // the account created up front. A flow that only consumes a customer token
-  // (no auth step of its own) registers in setup as before.
+  // Any flow that touches a customer-gated endpoint OR carries its own
+  // register/login needs a real customer SESSION token. Establish it ONCE in
+  // setup via the full Medusa v2 handshake (register -> create customer ->
+  // login), and skip the flow's OWN handshake steps when emitting. Why always,
+  // not "only when the flow lacks a register step": a mined fragment frequently
+  // DROPS the login (leaving only a register token, which `requireCustomerAuth`
+  // 401s) or REPEATS `POST /store/customers` (duplicate identity -> 400). Auth
+  // is test setup, not the behavior under test (the checkout is), so the setup
+  // owns it and the redundant in-flow handshake steps are not emitted.
   const hasRegisterStep = plan.steps.some(
     (s) => s.step.method === "POST" && s.step.endpoint === "/auth/customer/emailpass/register"
   );
   const hasLoginStep = plan.steps.some(
     (s) => s.step.method === "POST" && s.step.endpoint === "/auth/customer/emailpass"
   );
-  const needsCustomerCreds = needsCustomer || hasRegisterStep || hasLoginStep;
-  const autoRegister = (needsCustomer || hasLoginStep) && !hasRegisterStep;
+  const needsCustomer2 = needsCustomer || hasRegisterStep || hasLoginStep;
+  const needsCustomerCreds = needsCustomer2;
+  const autoRegister = needsCustomer2;
 
   const setupLines: string[] = [
     `  const publishableKey = process.env.MEDUSA_PUBLISHABLE_API_KEY!;`,
@@ -266,11 +275,24 @@ export function emitSpec({ candidate, plan, folder, golden }: EmitOptions): Emit
   // Stop emitting once a step hits test.fixme()+return: every later step is
   // unreachable (CLAUDE.md §5 no dead code), and may itself depend on a
   // capture the fixme'd step would have produced.
+  // The handshake steps the setup now owns (see autoRegister above) — skip
+  // emitting them as flow steps so they neither duplicate the setup nor leave a
+  // register-only token behind.
+  const HANDSHAKE_STEPS = new Set([
+    "POST /auth/customer/emailpass/register",
+    "POST /store/customers",
+    "POST /auth/customer/emailpass",
+  ]);
+
   let fixmeCount = 0;
   const stepBlocks: string[] = [];
   for (let index = 0; index < plan.steps.length; index++) {
+    const step = plan.steps[index];
+    if (autoRegister && HANDSHAKE_STEPS.has(`${step.step.method} ${step.step.endpoint}`)) {
+      continue; // owned by setup
+    }
     const { code, fixme } = renderStep(
-      plan.steps[index],
+      step,
       index,
       golden && (folder === "guest" || folder === "customer" || folder === "admin")
     );

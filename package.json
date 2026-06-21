@@ -18,6 +18,8 @@
     "check:phase10": "node scripts/check-phase10.mjs",
     "check:phase11": "node scripts/check-phase11.mjs",
     "check:phase12": "node scripts/check-phase12.mjs",
+    "check:phase14": "node scripts/check-phase14.mjs",
+    "check:phase15": "node scripts/check-phase15.mjs",
     "es:template": "node scripts/setup-es-template.mjs",
     "traffic:install": "npm --prefix services/traffic-generator install",
     "traffic:generate": "npm --prefix services/traffic-generator run generate",
