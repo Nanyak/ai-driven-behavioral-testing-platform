@@ -143,6 +143,7 @@ Do not assume any service is running. Use `npm run check:phaseN` or a direct
 | Traffic generator flows / session mix | `docs/phase-5-implementation-plan.md` + `services/traffic-generator/README.md` |
 | Log schema / Elasticsearch field names | `docs/phase-2-implementation-plan.md` + `docs/phase-3-implementation-plan.md` |
 | Persona classification logic | `docs/phase-7-implementation-plan.md` |
+| Emergent `requires_auth` signal — status-derived (2xx cart mutation / 2xx auth-gated read ⇒ customer), conservative read set | `docs/adr/0006-emergent-auth-signal-extends-to-gated-reads.md` + `docs/phase-7-implementation-plan.md` |
 | Behavioral modeling / sequence mining | `docs/phase-7-implementation-plan.md` + `docs/phase-8-implementation-plan.md` |
 | Playwright test generation | `docs/phase-9-implementation-plan.md` + `services/script-generator/README.md` |
 | Test execution / per-persona runs / normalized run result (Phase 11 input) | `docs/phase-10-implementation-plan.md` + `services/test-runner/README.md` |

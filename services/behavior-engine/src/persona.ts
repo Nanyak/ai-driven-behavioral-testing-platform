@@ -43,7 +43,11 @@ export interface Classification {
 }
 
 /** Convenience: derive attributes (under a rule variant) then resolve persona. */
-export function classify(steps: AttrStep[], useCartSignal: boolean): Classification {
-  const attributes = deriveAttributes(steps, useCartSignal);
+export function classify(
+  steps: AttrStep[],
+  useCartSignal: boolean,
+  useReadSignal = false
+): Classification {
+  const attributes = deriveAttributes(steps, useCartSignal, useReadSignal);
   return { attributes, persona: resolvePersona(attributes) };
 }

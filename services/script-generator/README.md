@@ -116,11 +116,20 @@ an auth header, and (for non-GET) a request body.
   precondition" mechanism.
 - **Auth**: `requireCustomerAuth`/`requireAdminAuth` per step is read off the
   candidate's `attributes.requires_auth` plus endpoint shape; customer flows
-  register+login inline (no shared fixture — token reuse is per-flow),
-  admin flows use the shared `fixtures/auth.ts` `adminToken()` helper
-  **unless the flow already contains its own** `POST /auth/user/emailpass`
-  step, in which case the fixture call is skipped (it would just be
-  immediately overwritten by the flow's own login capture).
+  establish a session inline (no shared fixture — token reuse is per-flow) via
+  the **full Medusa v2 handshake**: `POST /auth/customer/emailpass/register` →
+  `POST /store/customers` → `POST /auth/customer/emailpass` (login). The
+  register call alone is **not** enough — its token has an empty `actor_id` and
+  is rejected by the `requireCustomerAuth` cart/checkout gate (it authorizes
+  *creating* the customer, nothing more); only the post-create **login** token
+  carries a resolved `actor_id` the gate accepts. Using the register token
+  directly 401s every gated step. Admin flows use the shared
+  `fixtures/auth.ts` `adminToken()` helper **unless the flow already contains
+  its own** `POST /auth/user/emailpass` step, in which case the fixture call is
+  skipped (it would just be immediately overwritten by the flow's own login
+  capture). The customer handshake is version-sensitive (Medusa 2.x auth
+  shapes vary) — the emitted setup carries a `// VERIFY against live backend`
+  marker.
 - **Body synthesis** (`synthesizeBody`), in priority order:
   1. observed `request_payload` on the candidate step — never present today
      (bodies-off logging, ADR 0001), but checked first for forward

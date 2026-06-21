@@ -117,8 +117,9 @@ function main() {
   const val = JSON.parse(readFileSync(valFile, "utf8"));
 
   const cls = val.classification;
-  if (cls && cls.endpoint_only && cls.cart_signal) ok("both rule variants emitted (endpoint-only + cart-signal)");
-  else fail("both rule variants", "report missing a variant");
+  if (cls && cls.endpoint_only && cls.cart_signal && cls.cart_read_signal)
+    ok("all three rule variants emitted (endpoint-only + cart-signal + cart_read_signal, ADR 0006)");
+  else fail("three rule variants", "report missing a variant");
 
   if (val.ground_truth_footnote && val.ground_truth_footnote.length > 0) ok("ground-truth footnote present (PO-2)");
   else fail("ground-truth footnote", "missing");
@@ -132,6 +133,11 @@ function main() {
   if (recallUp && f1NotDown)
     ok(`cart signal net-positive (recall +${cls.registered_customer_recall_lift.toFixed(4)}, macro-F1 delta ${cls.macro_f1_delta.toFixed(4)})`);
   else fail("cart signal net-positive", `recall lift ${cls.registered_customer_recall_lift}, F1 delta ${cls.macro_f1_delta}`);
+
+  const rs = cls.read_signal;
+  if (rs && rs.registered_customer_recall_lift >= 0 && rs.macro_f1_delta >= 0)
+    ok(`read signal net-positive (recall +${rs.registered_customer_recall_lift.toFixed(4)}, macro-F1 delta ${rs.macro_f1_delta.toFixed(4)}) (ADR 0006)`);
+  else fail("read signal net-positive", `recall lift ${rs?.registered_customer_recall_lift}, F1 delta ${rs?.macro_f1_delta}`);
 
   if (val.negative_control && val.negative_control.passes)
     ok(`negative control passes (successful store-returns ${val.negative_control.successfulStoreReturnSessions}, chimera support ${val.negative_control.chimeraSupport})`);

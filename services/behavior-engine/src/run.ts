@@ -125,9 +125,11 @@ function toMinedFlow(
     const { method, endpoint } = splitToken(token);
     return { method, endpoint, expected_status: modal.get(token) ?? 200 };
   });
-  // classify() reads {method, endpoint, status} only.
+  // classify() reads {method, endpoint, status} only. Production rule = the full
+  // status-derived signal: cart-mutation signal AND auth-gated-read signal (ADR 0006).
   const { attributes, persona } = classify(
     steps.map((s) => ({ method: s.method, endpoint: s.endpoint, status: s.expected_status })),
+    true,
     true
   );
   return {
@@ -320,6 +322,9 @@ async function main(): Promise<void> {
     [`holdout support >= ${validation.holdout.floor}`]: validation.holdout.passes,
     "cart signal net-positive (recall up, macro-F1 not down)":
       cls.registered_customer_recall_lift >= 0 && cls.macro_f1_delta >= 0,
+    "read signal net-positive (recall up, macro-F1 not down)":
+      cls.read_signal.registered_customer_recall_lift >= 0 &&
+      cls.read_signal.macro_f1_delta >= 0,
     "negative control passes": validation.negative_control.passes,
     "contamination -> highest privilege": validation.contamination.passes,
     ">=1 edge (has_errors) candidate": edgeCandidates.length >= 1,
@@ -337,9 +342,13 @@ async function main(): Promise<void> {
   log(`  holdout support ....... ${validation.holdout.support} (floor ${validation.holdout.floor})`);
   log(
     `  macro-F1 baseline ..... ${cls.endpoint_only.macroF1.toFixed(4)} | ` +
-      `cart-signal ${cls.cart_signal.macroF1.toFixed(4)} (delta ${cls.macro_f1_delta.toFixed(4)})`
+      `cart-signal ${cls.cart_signal.macroF1.toFixed(4)} (delta ${cls.macro_f1_delta.toFixed(4)}) | ` +
+      `+read ${cls.cart_read_signal.macroF1.toFixed(4)} (delta ${cls.read_signal.macro_f1_delta.toFixed(4)})`
   );
-  log(`  reg-customer recall ... +${cls.registered_customer_recall_lift.toFixed(4)} from cart signal`);
+  log(
+    `  reg-customer recall ... +${cls.registered_customer_recall_lift.toFixed(4)} from cart signal, ` +
+      `+${cls.read_signal.registered_customer_recall_lift.toFixed(4)} from read signal`
+  );
   log(`  negative control ...... ${validation.negative_control.passes ? "PASS" : "FAIL"}`);
   log("");
   log("[behavior-engine] acceptance gates");

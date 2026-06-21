@@ -46,7 +46,13 @@ Per discovered flow (a normalized step sequence), compute attributes from step c
 
 - `requires_auth` = sequence contains an explicit auth/identity endpoint
   (`/auth/customer/*` or `/store/customers`) **OR** a *successful* (2xx) cart/checkout
-  mutation (`POST`/`PATCH`/`DELETE` on `/store/carts` or `/store/payment-collections`).
+  mutation (`POST`/`PATCH`/`DELETE` on `/store/carts` or `/store/payment-collections`)
+  **OR** a *successful* (2xx) **auth-gated read** (a `GET` the backend `401`s for
+  without a token — `GET /store/orders` (list), `GET /store/customers/me` and its
+  sub-paths). The read signal is the read analog of the cart signal and is scoped
+  by ADR 0006; it is **conservative by design** — `GET /store/orders/{id}` is
+  excluded (a guest gets `404`, not `401`, so a 2xx does not prove a token), as is
+  `GET /store/shipping-options` (cart-gated, not auth-gated). See ADR 0006.
 - `is_admin` = sequence contains `/admin/*`
 - `has_errors` = sequence contains any 4xx/5xx step
 
@@ -307,7 +313,7 @@ its successful cart mutations set `requires_auth: true`:
 
 Write `data/validation/classification-report-<runId>.json` with:
 
-1. **Classification accuracy.** Compare each session's emergent persona against the highest-privilege `role_observed` ground truth; report precision/recall per persona and a confusion matrix. Emit this for **two rule variants on the same data** — the endpoint-only baseline and the endpoint+cart-signal rule — so the cart signal's contribution is a measured delta. This report is the single source of truth for all classification figures; the plan deliberately states no run-specific counts. The report **footnotes** that `role_observed` under-labels token-reuse/login-only sessions (PO-2), so some guest→customer reclassifications under the cart-signal variant are ground-truth gaps, not classifier errors.
+1. **Classification accuracy.** Compare each session's emergent persona against the highest-privilege `role_observed` ground truth; report precision/recall per persona and a confusion matrix. Emit this for **three rule variants on the same data** (ADR 0006) — `endpoint_only` (baseline), `cart_signal` (baseline + 2xx cart mutation), and `cart_read_signal` (the production rule: baseline + cart + 2xx auth-gated read) — so **each** status-derived signal's contribution is a measured delta. The cart-signal delta is `cart_signal − endpoint_only`; the read-signal delta is `cart_read_signal − cart_signal`. This report is the single source of truth for all classification figures; the plan deliberately states no run-specific counts. The report **footnotes** that `role_observed` under-labels token-reuse/login-only sessions (PO-2), so some guest→customer reclassifications under the cart-signal variant are ground-truth gaps, not classifier errors.
 2. **Holdout recovery (BA-F2).** Confirm PrefixSpan recovered the registered-customer checkout backbone (`register → cart → line-items → complete`) and report its **support count**, not a yes/no. Acceptance is **support ≥ 6** — the Phase 5 holdout floor — reported as a count and comfortably above `minSupport = 3`.
 3. **Negative control (BA-F3 / PO-Q2) — a concrete fixture, not prose.** Assert that no high-support (≥ `minSupport`) mined flow contains a sequence the traffic generator provably never injects:
    - a *successful* (2xx) `POST /store/returns` — store returns were removed by ADR 0003, so the only such steps in real logs are 4xx; the fixture asserts **zero** 2xx store-returns across the sessions; and
@@ -334,6 +340,11 @@ explained rather than mistaken for a failure.
   macro-F1 drops, **confirm against the cartWall 401→200 path that the gate enforces
   before concluding the gate leaks** (PO-2) — the rule is correct while a guest
   `POST /store/carts` returns 401.
+- The **read signal** (ADR 0006) is likewise **net-positive**, measured as
+  `cart_read_signal − cart_signal`: it raises registered_customer recall (token-reuse
+  read-only customers) without lowering macro-F1. The same soundness check applies —
+  the rule is correct while a guest `GET /store/orders` / `GET /store/customers/me`
+  returns 401.
 - Negative control passes (the concrete fixture in §Validation item 3).
 - Per-persona output capped at 10 canonical flows.
 - **At least one candidate per non-error persona** (`guest_shopper`,

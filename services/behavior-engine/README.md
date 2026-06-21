@@ -79,7 +79,7 @@ load (repo-root data/sessions)  → canonical tokens (signature.ts)
 | --- | --- |
 | `signature.ts` | **The one** canonical flow signature (ADR 0002). Stable SHA-256 over the ordered `METHOD endpoint` token list, **with consecutive duplicates collapsed** (a 200/304 revalidation pair is a no-op repeat). Persona and status are **not** part of the key. Shared by dedup, the skip gate, and Phase 9 emit. Locked first; golden test in `signature.test.ts`. |
 | `load.ts` | Reads repo-root `data/sessions/` (newest `session-flows-*.json`). |
-| `attributes.ts` | Deterministic `requires_auth` / `is_admin` / `has_errors` from **endpoint + status only**. Two rule variants: endpoint-only baseline and the cart-signal rule (a *successful* 2xx cart/checkout mutation ⇒ `requires_auth`). |
+| `attributes.ts` | Deterministic `requires_auth` / `is_admin` / `has_errors` from **endpoint + status only**. Three rule variants (ADR 0006): endpoint-only baseline; the cart-signal rule (a *successful* 2xx cart/checkout mutation ⇒ `requires_auth`); and the read-signal rule (a *successful* 2xx **auth-gated read** — `GET /store/orders`, `GET /store/customers/me` — also ⇒ `requires_auth`). The read set excludes guest-permitted reads (`GET /store/orders/{id}` 404s for guests). The production rule = cart + read. |
 | `persona.ts` | Resolve persona from attributes (highest privilege wins). `has_errors` is an orthogonal overlay, not a persona. |
 | `ngram.ts` | Fixed-window (n=2,3,4) session-support baseline — a demo contrast for PrefixSpan. |
 | `prefixspan.ts` | **Closed** sequential pattern mining with a `maxGap` bound and per-root fairness (so a high-volume browse root cannot starve admin reversals). Deterministic ordering (PO-5): support desc, length desc, lexicographic. |
@@ -96,17 +96,18 @@ load (repo-root data/sessions)  → canonical tokens (signature.ts)
 
 `data/validation/classification-report-<runId>.json` emits:
 
-1. **Both rule variants on the same sessions** — endpoint-only baseline and the
-   cart-signal rule — with per-persona precision/recall, a confusion matrix,
-   macro-F1, and the **measured delta** (so the cart signal's value is measured,
-   not asserted).
+1. **Three rule variants on the same sessions** (ADR 0006) — `endpoint_only`
+   baseline, `cart_signal`, and `cart_read_signal` (production) — with per-persona
+   precision/recall, a confusion matrix, macro-F1, and the **measured delta** for
+   each status-derived signal (cart-signal delta vs baseline; read-signal delta vs
+   cart-signal) — so each signal's value is measured, not asserted.
    - **Footnote (PO-2):** `role_observed` under-labels token-reuse / login-only
      sessions as guest (a returning customer reusing a live JWT emits no
      `/auth/*` endpoint). Some guest→customer reclassifications under the
-     cart-signal variant are therefore **ground-truth gaps, not classifier
-     errors**. The cart signal is sound only while the `requireCustomerAuth`
-     gate enforces — confirm a guest `POST /store/carts` returns 401
-     (cartWall 401→200) before concluding the gate leaks.
+     cart/read-signal variants are therefore **ground-truth gaps, not classifier
+     errors**. A status signal is sound only while the `requireCustomerAuth`
+     gate enforces — confirm a guest `POST /store/carts` (and `GET /store/orders`)
+     returns 401 before concluding the gate leaks.
 2. **Holdout recovery** — PrefixSpan support count for the registered-customer
    checkout backbone (`register → cart → line-items → complete`). Acceptance =
    **support ≥ 6** (the Phase 5 holdout floor, BA-F2), reported as a count.
@@ -121,8 +122,9 @@ load (repo-root data/sessions)  → canonical tokens (signature.ts)
 
 ## Acceptance gates (run summary + `npm run check:phase7`)
 
-≥5 candidates · holdout support ≥ 6 · cart signal net-positive (registered_customer
-recall up, macro-F1 not down) · negative control passes · ≥1 edge (`has_errors`)
+≥5 candidates · holdout support ≥ 6 · cart signal net-positive · read signal
+net-positive (registered_customer recall up, macro-F1 not down; ADR 0006) ·
+negative control passes · ≥1 edge (`has_errors`)
 candidate survives · per-persona cap of 10 · ≥1 candidate per non-error persona ·
 contamination → highest privilege.
 

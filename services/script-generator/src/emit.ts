@@ -147,7 +147,16 @@ function renderStep(plan: StepPlan, index: number, golden: boolean): { code: str
     );
   }
 
-  const captureLines = renderCaptures(plan.captures, respVar);
+  // Only thread captured IDs forward from a step that is EXPECTED to succeed.
+  // An edge step whose expected_status is a non-2xx (e.g. a guest cart mutation
+  // the gate 401s) never returns the success body, so `extractPath(..., "cart.id")`
+  // would read `.id` of undefined and throw at runtime. Skip the capture for such
+  // steps; a downstream consumer of the unset id then fails its own status
+  // assertion cleanly (the honest "this flow doesn't reproduce" outcome) instead
+  // of crashing.
+  const stepSucceeds =
+    plan.step.expected_status >= 200 && plan.step.expected_status < 300;
+  const captureLines = stepSucceeds ? renderCaptures(plan.captures, respVar) : "";
   if (captureLines) inner.push(indentStepLine(captureLines));
 
   const stepTitle = `${plan.step.method} ${plan.step.endpoint}`;
@@ -224,13 +233,30 @@ export function emitSpec({ candidate, plan, folder, golden }: EmitOptions): Emit
     );
   }
   if (autoRegister) {
+    // Medusa v2 customer auth handshake. The register call returns a token with
+    // an EMPTY `actor_id` — it authorizes creating the customer entity but does
+    // NOT satisfy `requireCustomerAuth` (the cart/checkout gate), so using it
+    // directly 401s every gated step. Create the customer, then log in to mint a
+    // session token whose `actor_id` resolves to a real customer — the token the
+    // gate accepts. // VERIFY against live backend (Medusa 2.x auth shapes vary)
     setupLines.push(
       `  const registerResp = await request.post("/auth/customer/emailpass/register", {`,
       `    headers: { "x-publishable-api-key": publishableKey },`,
       `    data: { email, password },`,
       `  });`,
       `  expect(registerResp.status(), "customer register").toBe(200);`,
-      `  scope.customerToken = (await registerResp.json()).token;`
+      `  const registrationToken = (await registerResp.json()).token;`,
+      `  const createCustomerResp = await request.post("/store/customers", {`,
+      `    headers: { "x-publishable-api-key": publishableKey, Authorization: \`Bearer \${registrationToken}\` },`,
+      `    data: { email },`,
+      `  });`,
+      `  expect(createCustomerResp.status(), "create customer").toBe(200);`,
+      `  const loginResp = await request.post("/auth/customer/emailpass", {`,
+      `    headers: { "x-publishable-api-key": publishableKey },`,
+      `    data: { email, password },`,
+      `  });`,
+      `  expect(loginResp.status(), "customer login").toBe(200);`,
+      `  scope.customerToken = (await loginResp.json()).token;`
     );
   }
   if (needsAdminViaFixture) {

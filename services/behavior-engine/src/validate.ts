@@ -58,7 +58,7 @@ export interface PersonaScore {
 }
 
 export interface VariantReport {
-  variant: "endpoint_only" | "cart_signal";
+  variant: "endpoint_only" | "cart_signal" | "cart_read_signal";
   /** confusion[truth][predicted] = count. */
   confusion: Record<Persona, Record<Persona, number>>;
   perPersona: Record<Persona, PersonaScore>;
@@ -77,7 +77,8 @@ function emptyConfusion(): Record<Persona, Record<Persona, number>> {
 
 function scoreVariant(
   sessions: SessionFlow[],
-  useCartSignal: boolean
+  useCartSignal: boolean,
+  useReadSignal = false
 ): VariantReport {
   const confusion = emptyConfusion();
   let correct = 0;
@@ -85,7 +86,7 @@ function scoreVariant(
   for (const session of sessions) {
     const truth = groundTruthPersona(session.role_observed);
     // attributes.ts reads endpoint + status only — NOT role_observed.
-    const predicted = classify(session.steps, useCartSignal).persona;
+    const predicted = classify(session.steps, useCartSignal, useReadSignal).persona;
     confusion[truth][predicted]++;
     if (truth === predicted) {
       correct++;
@@ -110,7 +111,11 @@ function scoreVariant(
   }
 
   return {
-    variant: useCartSignal ? "cart_signal" : "endpoint_only",
+    variant: useReadSignal
+      ? "cart_read_signal"
+      : useCartSignal
+        ? "cart_signal"
+        : "endpoint_only",
     confusion,
     perPersona,
     macroF1: macroF1Sum / PERSONAS.length,
@@ -306,7 +311,8 @@ function scoreContamination(sessions: SessionFlow[]): ContaminationReport {
     }
     contaminated++;
     const truth = groundTruthPersona(session.role_observed); // highest privilege
-    const predicted = classify(session.steps, true).persona;
+    // Production rule: full status-derived signal (cart + read), ADR 0006.
+    const predicted = classify(session.steps, true, true).persona;
     if (predicted === truth) {
       resolved++;
     } else if (hasPrivilegeSignal(session)) {
@@ -348,10 +354,22 @@ export interface ValidationReport {
   classification: {
     endpoint_only: VariantReport;
     cart_signal: VariantReport;
+    /** Baseline + cart + read signals — the production rule (ADR 0006). */
+    cart_read_signal: VariantReport;
     /** cart_signal.macroF1 - endpoint_only.macroF1 (must be >= 0, plan §Acceptance). */
     macro_f1_delta: number;
     /** Per-persona recall lift the cart signal gives (the measured delta). */
     registered_customer_recall_lift: number;
+    /**
+     * The READ signal's incremental contribution (ADR 0006), measured vs the
+     * cart-signal variant — the read analog of the cart-signal delta above.
+     */
+    read_signal: {
+      /** cart_read_signal.macroF1 - cart_signal.macroF1 (must be >= 0). */
+      macro_f1_delta: number;
+      /** registered_customer recall lift the read signal adds over cart-signal. */
+      registered_customer_recall_lift: number;
+    };
   };
   holdout: HoldoutReport;
   negative_control: NegativeControlReport;
@@ -374,6 +392,7 @@ export function buildValidationReport(
 ): ValidationReport {
   const endpointOnly = scoreVariant(sessions, false);
   const cartSignal = scoreVariant(sessions, true);
+  const cartReadSignal = scoreVariant(sessions, true, true);
 
   return {
     run_id: runId,
@@ -382,10 +401,17 @@ export function buildValidationReport(
     classification: {
       endpoint_only: endpointOnly,
       cart_signal: cartSignal,
+      cart_read_signal: cartReadSignal,
       macro_f1_delta: cartSignal.macroF1 - endpointOnly.macroF1,
       registered_customer_recall_lift:
         cartSignal.perPersona.registered_customer.recall -
         endpointOnly.perPersona.registered_customer.recall,
+      read_signal: {
+        macro_f1_delta: cartReadSignal.macroF1 - cartSignal.macroF1,
+        registered_customer_recall_lift:
+          cartReadSignal.perPersona.registered_customer.recall -
+          cartSignal.perPersona.registered_customer.recall,
+      },
     },
     holdout: scoreHoldout(prefixspan),
     negative_control: scoreNegativeControl(sessions, prefixspan, minSupport),

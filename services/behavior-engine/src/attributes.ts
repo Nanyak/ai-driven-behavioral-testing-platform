@@ -7,16 +7,23 @@
  * flow content (a response the backend produced); the JWT role is not. A
  * `SignatureStep`-like input (method, endpoint, status) is all this sees.
  *
- * Two rule variants live here so the validation step can measure the cart
- * signal's contribution as a delta (plan §Validation):
+ * Three rule variants live here so the validation step can measure each
+ * status-derived signal's contribution as a delta (plan §Validation):
  *   - ENDPOINT-ONLY baseline: requires_auth from auth/identity endpoints only.
- *   - CART-SIGNAL rule (the spec rule): baseline OR a *successful* (2xx)
- *     cart/checkout mutation.
+ *   - CART-SIGNAL rule: baseline OR a *successful* (2xx) cart/checkout mutation.
+ *   - READ-SIGNAL rule (ADR 0006, the production rule): cart-signal OR a
+ *     *successful* (2xx) response on an auth-gated read.
  *
  * Premise (reworded per PO-2): a *genuinely unauthenticated* guest cart mutation
- * 4xx's (the requireCustomerAuth gate, ADR 0003); a 2xx cart mutation implies a
- * held token — a customer signal. Confirmed against the live data: guest
- * `POST /store/carts` returns 401, customer returns 200.
+ * 4xx's (the requireCustomerAuth gate, ADR 0003/0004); a 2xx cart mutation
+ * implies a held token — a customer signal. The SAME logic extends to reads the
+ * backend auth-gates (ADR 0006): a guest 401's on `GET /store/orders` and
+ * `GET /store/customers/me`, so a 2xx there is equally proof of a held token.
+ * Confirmed against the live data: guest `POST /store/carts`, `GET /store/orders`,
+ * and `GET /store/customers/me` all return 401; a customer returns 2xx. The read
+ * set is deliberately conservative — only reads that 401 for a guest, so a 2xx is
+ * *proof*. `GET /store/orders/{id}` is EXCLUDED: a guest gets 404 (order-by-id
+ * lookup is permitted), so a 2xx there does not prove a token.
  */
 
 /** The only fields the classifier may read. */
@@ -56,15 +63,37 @@ function isCartMutation(method: string, endpoint: string): boolean {
 }
 
 /**
- * Derive attributes under one of two rule variants.
+ * An auth-gated READ (ADR 0006): a `GET` the live backend returns `401` for
+ * without a customer token, so a 2xx on it proves a held token. Conservative by
+ * design — `/store/orders/{id}` is omitted (a guest gets 404, not 401, because
+ * order-by-id lookup is permitted), as is `/store/shipping-options` (cart-gated,
+ * not auth-gated). // VERIFY against live backend (gate enforcement, PO-2).
+ */
+function isAuthGatedRead(method: string, endpoint: string): boolean {
+  if (method.toUpperCase() !== "GET") {
+    return false;
+  }
+  return (
+    endpoint === "/store/orders" ||
+    endpoint === "/store/customers/me" ||
+    endpoint.startsWith("/store/customers/me/")
+  );
+}
+
+/**
+ * Derive attributes under one of three rule variants (ADR 0006).
  *
  * @param useCartSignal when true, a *successful* (2xx) cart/checkout mutation
- *   also sets `requires_auth` (the spec rule). When false, only auth/identity
- *   endpoints do (the endpoint-only baseline).
+ *   also sets `requires_auth`. When false, only auth/identity endpoints do (the
+ *   endpoint-only baseline).
+ * @param useReadSignal when true, a *successful* (2xx) auth-gated read also sets
+ *   `requires_auth` (the read analog of the cart signal). The production rule
+ *   sets both flags; validation scores all three combinations as a delta.
  */
 export function deriveAttributes(
   steps: AttrStep[],
-  useCartSignal: boolean
+  useCartSignal: boolean,
+  useReadSignal = false
 ): FlowAttributes {
   let requiresAuth = false;
   let isAdmin = false;
@@ -81,13 +110,20 @@ export function deriveAttributes(
     if (isAuthEndpoint(step.endpoint)) {
       requiresAuth = true;
     }
-    // A step counts toward the cart signal ONLY when 2xx (plan §attributes.ts
-    // implementation note). A guest's failed cart attempt is a 4xx and carries
-    // has_errors instead, which is correct.
+    // The cart/read signals count ONLY when 2xx (plan §attributes.ts impl note,
+    // ADR 0006). A guest's failed attempt is a 4xx and carries has_errors
+    // instead, which is correct.
     if (
       useCartSignal &&
       isSuccess(step.status) &&
       isCartMutation(method, step.endpoint)
+    ) {
+      requiresAuth = true;
+    }
+    if (
+      useReadSignal &&
+      isSuccess(step.status) &&
+      isAuthGatedRead(method, step.endpoint)
     ) {
       requiresAuth = true;
     }
