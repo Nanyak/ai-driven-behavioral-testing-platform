@@ -1,6 +1,3 @@
-/**
- * Unit test for schema-extract.ts. Run via `npm test` (test/run-all.ts).
- */
 import { strict as assert } from "node:assert";
 import { extractObservedSchema } from "../src/schema-extract.js";
 

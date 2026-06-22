@@ -1,6 +1,3 @@
-/**
- * Unit test for compare.ts. Run via `npm test` (test/run-all.ts).
- */
 import { strict as assert } from "node:assert";
 import { compareResponse } from "../src/compare.js";
 import type { GoldenResponse } from "../src/types.js";
@@ -63,7 +60,7 @@ check("new unexpected field -> detected as unexpected_field", () => {
 check("type change -> detected as type_changed", () => {
   const result = compareResponse(baseGolden, 200, {
     id: "cart_abc123",
-    currency_code: 42, // was string, now number
+    currency_code: 42,
     items: [],
   });
   assert.equal(result.pass, false);

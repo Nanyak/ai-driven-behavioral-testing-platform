@@ -1,13 +1,5 @@
 /**
- * HITL review data layer (Phase 15).
- *
- * Pure, framework-free read/merge/write over three artifacts produced by earlier
- * phases:
- *   - discovered flows + ranking ........ services/behavior-engine/data/candidates/test-candidates-*.json (Phase 7)
- *   - generated tests (signature stamp).. generated-tests/ ** /*.spec.ts (Phase 9, ADR 0002)
- *   - the approval/discard store ........ data/hitl/approvals.json (this phase; read by behavior-engine/coverage.ts)
- *
- * The store contract is exactly what `services/behavior-engine/src/coverage.ts`
+ * The store contract here is exactly what `services/behavior-engine/src/coverage.ts`
  * parses: `{ entries: [{ flow_signature, status, ... }] }`, status in
  * {approved, discarded}, both feeding the skip gate. A missing/malformed store is
  * treated as empty here too — never fatal (PO-6 / BA-F8).
@@ -47,7 +39,7 @@ function findRepoRoot(): string {
       dir = parent;
     }
   }
-  // Last-resort default (clean-checkout safe: downstream reads tolerate absence).
+  // Fallback only; downstream reads tolerate a wrong/missing root.
   return resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 }
 
@@ -66,16 +58,13 @@ const REPORT_HTML = resolve(REPO_ROOT, "reports", "report.html");
 const REPORT_JSON = resolve(REPO_ROOT, "reports", "report.json");
 const REPORTS_RUNS_DIR = resolve(REPO_ROOT, "reports", "runs");
 
-/** The self-contained Phase 11 report HTML, or null if no run has produced one. */
 export function readReportHtml(): string | null {
   return existsSync(REPORT_HTML) ? readFileSync(REPORT_HTML, "utf8") : null;
 }
 
-/** One archived run in reports/runs/ (history). */
 export interface ReportRow {
-  /** report.run_id as recorded in the JSON. */
   run_id: string;
-  /** Archive filename stem — the id used by /api/reports/view?run=<slug>. */
+  /** Filename stem, also the id used by /api/reports/view?run=<slug>. */
   slug: string;
   generated_at: string | null;
   status: "green" | "red";
@@ -96,7 +85,6 @@ function parseTotals(r: {
   };
 }
 
-/** Archived runs, newest first. Empty if none archived yet. */
 export function listReports(): ReportRow[] {
   if (!existsSync(REPORTS_RUNS_DIR)) {
     return [];
@@ -125,14 +113,13 @@ export function listReports(): ReportRow[] {
   return rows;
 }
 
-/** The HTML of one archived run, or null. Slug is sanitized to stay in runs/. */
 export function readReportHtmlById(slug: string): string | null {
+  // Sanitize so a crafted slug can't escape runs/ via path traversal.
   const safe = slug.replace(/[^A-Za-z0-9._-]/g, "-");
   const path = join(REPORTS_RUNS_DIR, `${safe}.html`);
   return existsSync(path) ? readFileSync(path, "utf8") : null;
 }
 
-/** Headline totals from the Phase 11 report, or null if absent/malformed. */
 export function readReportSummary(): {
   executed: number;
   passed: number;

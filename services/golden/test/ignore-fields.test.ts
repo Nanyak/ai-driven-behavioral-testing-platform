@@ -1,6 +1,3 @@
-/**
- * Unit test for ignore-fields.ts. Run via `npm test` (test/run-all.ts).
- */
 import { strict as assert } from "node:assert";
 import { GLOBAL_IGNORE_FIELDS, ignoreFieldsFor, isGloballyIgnored } from "../src/ignore-fields.js";
 

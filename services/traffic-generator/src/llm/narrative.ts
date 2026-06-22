@@ -74,14 +74,12 @@ function sanitize(actions: unknown, kind: NarrativeKind): Action[] {
   if (list.length === 0) {
     return localNarrative(kind);
   }
-  // Guests must never carry the customer auth sub-flow.
   if (kind === "guest") {
     return list.filter((a) => a !== "register" && a !== "login" && a !== "view_profile");
   }
   return list;
 }
 
-/** Local fallback narrative generator — keeps the run working fully offline. */
 export function localNarrative(kind: NarrativeKind): Action[] {
   const actions: Action[] = ["browse_products", "view_product"];
   if (Math.random() < 0.5) {
@@ -109,7 +107,6 @@ export function localNarrative(kind: NarrativeKind): Action[] {
     actions.push("apply_promo");
   }
 
-  // ~45% of fallback sessions abandon before completing.
   if (kind !== "customer" && Math.random() < 0.45) {
     actions.push("abandon");
     return actions;
@@ -127,10 +124,6 @@ export function localNarrative(kind: NarrativeKind): Action[] {
   return actions;
 }
 
-/**
- * Produce a session narrative as an ordered list of action tokens. Uses Haiku
- * 4.5 when an API key is available, otherwise the local fallback.
- */
 export async function generateNarrative(
   cfg: TrafficConfig,
   kind: NarrativeKind

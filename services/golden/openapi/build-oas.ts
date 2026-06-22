@@ -44,7 +44,6 @@ const GATE_UNAUTHORIZED_SCHEMA_DEF = {
   required: ["type", "message"],
 };
 
-/** Convert a gate matcher (`"/store/carts*"`) into a path-prefix test against an OAS path key. */
 function matchesGate(path: string, method: OasMethod): boolean {
   if (!(GATE_METHODS as readonly string[]).includes(method.toUpperCase())) {
     return false;
@@ -59,9 +58,8 @@ const GATE_TRIGGER_DESCRIPTION =
   "Unauthenticated/non-customer request blocked by the requireCustomerAuth gate middleware (ADR 0004).";
 
 /**
- * Resolve a response-level `$ref` (`components/responses/*`) against the
- * document being overlaid. The real bundled Medusa spec shares common error
- * envelopes this way (e.g. `responses.401: { $ref: "#/components/responses/unauthorized" }`)
+ * The real bundled Medusa spec shares common error envelopes via
+ * response-level `$ref` (e.g. `responses.401: { $ref: "#/components/responses/unauthorized" }`)
  * rather than inlining them per-operation.
  */
 function resolveResponseRef(doc: OasDocument, response: OasResponse): OasInlineResponse {
@@ -73,10 +71,6 @@ function resolveResponseRef(doc: OasDocument, response: OasResponse): OasInlineR
   return resolved;
 }
 
-/**
- * Inject the gate's 401 into one operation's responses, in place. Returns
- * whether a union (vs a fresh-add) occurred, for the drift report.
- */
 function injectGateResponse(doc: OasDocument, responses: Record<string, OasResponse>): "added" | "unioned" {
   const statusKey = String(GATE_UNAUTHORIZED_STATUS);
   const existing = responses[statusKey];
@@ -91,11 +85,10 @@ function injectGateResponse(doc: OasDocument, responses: Record<string, OasRespo
     return "added";
   }
 
-  // Status already documented for a different trigger (real Medusa spec:
-  // a response-level $ref to `components/responses/unauthorized`, a
-  // `text/plain` envelope distinct from the gate's `application/json`
-  // GateUnauthorized envelope) — union the schemas (oneOf) and record both
-  // trigger conditions in the description. NEVER overwrite (ADR 0004 #4).
+  // Status already documented for a different trigger (real Medusa spec: a
+  // response-level $ref to `components/responses/unauthorized`, a `text/plain`
+  // envelope distinct from the gate's `application/json` GateUnauthorized
+  // envelope) — union the schemas, NEVER overwrite (ADR 0004 #4).
   const resolvedExisting = resolveResponseRef(doc, existing);
   const existingMediaType = resolvedExisting.content?.["application/json"] ?? firstMediaType(resolvedExisting.content);
   const existingSchema = existingMediaType?.schema;
@@ -124,14 +117,11 @@ export interface OverlayReport {
   gateInjections: { path: string; method: string; status: "added" | "unioned" }[];
 }
 
-/**
- * Apply the gate overlay to a spec document, in place. Pure function of
- * (doc, gate config). Exported so tests can exercise both the pure-add AND
- * union collision branches against a small SYNTHETIC in-memory document —
- * the real committed `base/store.json` only exercises the union branch
- * (every real gated operation already documents a 401), so the add branch
- * needs a controlled fixture to stay covered (see `test/build-oas.test.ts`).
- */
+// Exported (not just used by main()) so tests can exercise both the pure-add
+// AND union collision branches against a small synthetic document — the real
+// committed `base/store.json` only exercises the union branch (every real
+// gated operation already documents a 401), so the add branch needs a
+// controlled fixture to stay covered (see `test/build-oas.test.ts`).
 export function applyGateOverlay(doc: OasDocument, report: OverlayReport): void {
   doc.components.schemas.GateUnauthorized ??= GATE_UNAUTHORIZED_SCHEMA_DEF;
 

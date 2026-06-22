@@ -1,22 +1,12 @@
 /**
- * End-to-end golden-production test: oas-source + schema-extract + schema-merge
- * wired together, exercising the plan's full acceptance list in one realistic
- * pass (bodies-off vs bodies-on, provenance, drift). Run via `npm test`.
- *
- * Runs against the REAL bundled Medusa v2 spec (openapi/base/). One
- * consequence worth recording here: the real `StoreCart` schema is NOT
- * meaningfully under-specified the way the old hand-authored fixture was
- * (`shipping_address`/`region` etc. are all properly `$ref`'d typed objects
- * in the real spec, not generic `"object"` leaves) — the ONE generic-object
- * field (`metadata`) is also globally ignore-listed, so "spec field tightened
- * by observation" can't be honestly demonstrated on real data without
- * fabricating an under-specified field that doesn't exist in the real
- * contract. Per the task brief, the bodies-on demo below instead shows
- * **optional-field reconciliation across sessions** — `StoreCartAddress`
- * fields (e.g. `phone`, `company`) are optional in the real spec, and
- * `unionSchema`/tightening correctly captures a field present in one
- * session's observation but absent in another's, rather than flagging it as
- * a regression.
+ * Runs against the REAL bundled Medusa v2 spec (openapi/base/), not a
+ * hand-authored fixture. The real `StoreCart` schema has no meaningfully
+ * under-specified field to tighten (`shipping_address`/`region` etc. are
+ * fully `$ref`'d typed objects, not generic `"object"` leaves, and the one
+ * generic-object field `metadata` is globally ignore-listed) — so "spec
+ * field tightened by observation" can't be honestly demonstrated here. The
+ * bodies-on case below instead demonstrates optional-field reconciliation
+ * across sessions instead.
  */
 import { strict as assert } from "node:assert";
 import { loadAugmentedSpecs, resolveOperation } from "../src/oas-source.js";
@@ -39,7 +29,7 @@ check("bodies-off: a golden is produced with schema_source 'openapi' (oracle wor
   const golden = buildGolden({
     endpoint: "POST /store/carts",
     observedStatus: 200,
-    observedSchema: null, // bodies-off: no observed data
+    observedSchema: null,
     oas,
     capturedAt: "2026-06-19T00:00:00.000Z",
     sourceSessions: [],
@@ -58,15 +48,13 @@ check(
     const oas = resolveOperation(specs, "POST", "/store/carts", 200);
     assert.ok(oas);
     const oasSchema = oas!.schema as { cart: Record<string, unknown> };
-    // The real spec's shipping_address is already a fully-typed StoreCartAddress
-    // (not a generic "object" leaf) — confirms there's nothing to tighten there.
     assert.notEqual(typeof oasSchema.cart.shipping_address, "string");
     assert.ok(
       "city" in (oasSchema.cart.shipping_address as Record<string, unknown>),
       "real spec already types shipping_address's fields"
     );
-    // metadata IS a generic "object" leaf in the real spec, but it's globally
-    // ignore-listed, so tightening it would be pointless (immediately re-ignored).
+    // Tightening metadata would be pointless: it's globally ignore-listed,
+    // so the tightened value would be immediately re-ignored anyway.
     assert.equal(oasSchema.cart.metadata, "object");
   }
 );

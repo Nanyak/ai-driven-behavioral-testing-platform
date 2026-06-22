@@ -332,14 +332,6 @@ function getAuthContext(req: MedusaRequest): {
   }
 }
 
-// --- Production log shaping (hybrid: semantic event + route, bodies-off) ---
-//
-// Real production systems emit business-event logs with a logical service tag
-// and no request/response bodies (cost + PII). We simulate that here so the
-// pipeline's source looks like production rather than dev access logs. The
-// route (method + normalized endpoint) is retained alongside the derived
-// `event` so downstream sequence mining keeps working.
-
 const VERB_BY_METHOD: Record<string, string> = {
   GET: "viewed",
   POST: "created",
@@ -380,7 +372,6 @@ const EVENT_MAP: Record<string, string> = {
   "GET /health": "health_checked"
 }
 
-/** Collapse normalizer placeholders (e.g. `:cart_id`) to a uniform `{id}`. */
 function endpointTemplate(normalized: string): string {
   return normalized.replace(/\/:[^/]+/g, "/{id}")
 }
@@ -418,7 +409,6 @@ function deriveService(template: string): string {
   return "medusa"
 }
 
-/** Semantic business-event name for a route; falls back to `<resource>_<verb>`. */
 function deriveEvent(method: string, template: string): string {
   const mapped = EVENT_MAP[`${method} ${template}`]
   if (mapped) {
@@ -490,8 +480,8 @@ async function structuredRequestLogger(
       status: res.statusCode,
       duration_ms: Math.round(durationMs * 100) / 100,
       source: "medusa",
-      // Production runs bodies-off (cost + PII); the OpenAPI spec is the golden
-      // oracle (ADR 0001). Bodies are an optional dev enrichment only.
+      // Bodies are off by default in production shape (cost + PII); the OpenAPI
+      // spec is the golden oracle (ADR 0001). This is an optional dev enrichment.
       ...(captureBodies
         ? {
             request_payload: reduceValue(requestBody) ?? null,

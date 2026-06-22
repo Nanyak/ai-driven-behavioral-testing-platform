@@ -1,11 +1,7 @@
 /**
- * Test orchestrator: builds the augmented spec (so oas-source.test.ts and
- * everything downstream of it never run against a stale artifact), then runs
- * every `*.test.ts` file in this directory in-process. Each test file
- * self-checks with `node:assert` and throws on the first failure; an uncaught
- * throw here exits non-zero, which is what `check-phase8.mjs` gates on.
- *
- * Run: `npm test` (services/golden) or `npm run golden:test` (repo root).
+ * Builds the augmented spec first so oas-source.test.ts and everything
+ * downstream of it never run against a stale artifact. An uncaught throw
+ * here exits non-zero, which is what `check-phase8.mjs` gates on.
  */
 import { readdirSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";

@@ -18,9 +18,9 @@ export type ReturningIntent =
  */
 function baymardCut(stepsLength: number): number {
   const r = Math.random();
-  if (r < 0.25) return 1;                                     // abandon at address
-  if (r < 0.40) return 2;                                     // abandon at shipping
-  return 2 + Math.ceil(Math.random() * (stepsLength - 2));   // abandon at payment
+  if (r < 0.25) return 1;
+  if (r < 0.40) return 2;
+  return 2 + Math.ceil(Math.random() * (stepsLength - 2));
 }
 
 /**
@@ -62,9 +62,6 @@ export async function runReturningFlow(
   await session.addItem();
 
   if (intent === "reviseAbandon") {
-    // Cart curation: build up 2–3 lines, adjust a quantity, then drop one line
-    // and leave without checking out — the first-class update_item + remove_item
-    // (DELETE line-item) signal.
     await session.addItem();
     if (chance(0.5)) await session.addItem();
     await session.updateItem();
@@ -92,7 +89,6 @@ export async function runReturningFlow(
     return session;
   }
 
-  // buy — guaranteed complete returning-customer order.
   await session.ensureCheckoutReady();
   await session.complete();
   await session.viewOrder();

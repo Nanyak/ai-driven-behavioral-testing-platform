@@ -20,12 +20,10 @@ export function newSessionId(source: string): string {
   return `sess-${source}-${randomUUID()}`;
 }
 
-/** trace_id = fresh uuid per request. */
 export function newTraceId(): string {
   return randomUUID();
 }
 
-/** Unique throwaway customer email for registration flows. */
 export function newCustomerEmail(): string {
   return `behavior+${randomUUID().slice(0, 12)}@example.com`;
 }

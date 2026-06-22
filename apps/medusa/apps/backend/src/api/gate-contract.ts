@@ -25,16 +25,13 @@ export const GATE_MATCHERS = ["/store/carts*", "/store/payment-collections*"] as
 /** HTTP methods the gate applies to. GET is intentionally left open. */
 export const GATE_METHODS = ["POST", "PATCH", "DELETE"] as const;
 
-/** Status code the gate responds with when the actor is not a customer. */
 export const GATE_UNAUTHORIZED_STATUS = 401;
 
-/** Shape of the gate's `401` response body. */
 export interface GateUnauthorized {
   type: "unauthorized";
   message: string;
 }
 
-/** The exact literal body the middleware returns on an unauthorized request. */
 export const GATE_UNAUTHORIZED_BODY: GateUnauthorized = {
   type: "unauthorized",
   message: "Cart and checkout operations require a customer account. Please sign in.",

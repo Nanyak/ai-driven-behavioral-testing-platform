@@ -10,13 +10,11 @@ import type { SchemaNode } from "./types.js";
 
 const GLOBAL_IGNORE_SET = new Set(GLOBAL_IGNORE_FIELDS);
 
-/** Per-endpoint dotted-path ignores, as a Set of full paths, for fast lookup. */
 function perEndpointPathSet(endpoint: string | undefined): Set<string> {
   if (!endpoint) return new Set();
   return new Set(PER_ENDPOINT_IGNORE_FIELDS[endpoint] ?? []);
 }
 
-/** Classify one JSON value into a recursive shape/type snapshot. */
 function describeAt(value: unknown, path: string, perEndpointPaths: Set<string>): SchemaNode {
   if (value === null || value === undefined) {
     return "null";
@@ -47,10 +45,6 @@ function describeAt(value: unknown, path: string, perEndpointPaths: Set<string>)
   }
 }
 
-/**
- * Walk an observed response body into a `SchemaNode` snapshot, applying the
- * global ignore list plus any per-endpoint additions for `endpoint`.
- */
 export function extractObservedSchema(value: unknown, endpoint?: string): SchemaNode {
   return describeAt(value, "", perEndpointPathSet(endpoint));
 }

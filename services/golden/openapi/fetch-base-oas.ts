@@ -45,7 +45,6 @@ import { readFileSync } from "node:fs";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const BASE_DIR = resolvePath(__dirname, "base");
 
-/** Medusa's published split-spec root documents (resolved via Redocly bundling). */
 const SPEC_ROOTS = {
   store:
     "https://raw.githubusercontent.com/medusajs/medusa/develop/www/apps/api-reference/specs/store/openapi.yaml",
@@ -53,7 +52,6 @@ const SPEC_ROOTS = {
     "https://raw.githubusercontent.com/medusajs/medusa/develop/www/apps/api-reference/specs/admin/openapi.yaml",
 } as const;
 
-/** The spec `info.version` confirmed in both bundled documents at authoring time. */
 export const EXPECTED_OAS_VERSION = "2.0.0";
 
 function bundle(name: keyof typeof SPEC_ROOTS): void {

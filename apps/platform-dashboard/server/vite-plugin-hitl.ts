@@ -1,14 +1,3 @@
-/**
- * Tiny dev-server endpoint for the HITL review store (Phase 15).
- *
- * Adds two routes to the Vite dev server so the dashboard SPA can read flows and
- * persist decisions without a separate process:
- *   GET  /api/flows      -> loadFlows() (candidates + generated tests + decisions)
- *   POST /api/decisions  -> upsertDecision({ flow_signature, status }) keyed by signature
- *
- * Read/write logic lives in hitl-store.ts; this file is only the HTTP shim.
- */
-
 import type { Plugin } from "vite";
 import {
   listReports,
@@ -54,7 +43,6 @@ export function hitlApiPlugin(): Plugin {
         }
       });
 
-      // Headline counts for the Status view (flows + tests + last report totals).
       server.middlewares.use("/api/summary", (req, res, next) => {
         if (req.method !== "GET") {
           next();
@@ -68,8 +56,8 @@ export function hitlApiPlugin(): Plugin {
         }
       });
 
-      // Archived run history (newest first). Registered BEFORE /api/reports/view
-      // would be too greedy, so the view route is registered first below.
+      // Registered before /api/reports because /api/reports's prefix match would
+      // otherwise shadow this more specific route.
       server.middlewares.use("/api/reports/view", (req, res, next) => {
         if (req.method !== "GET") {
           next();
@@ -100,7 +88,6 @@ export function hitlApiPlugin(): Plugin {
         }
       });
 
-      // Serve the latest self-contained Phase 11 report (back-compat).
       server.middlewares.use("/api/report", (req, res, next) => {
         if (req.method !== "GET") {
           next();
