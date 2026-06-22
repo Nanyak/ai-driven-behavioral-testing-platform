@@ -22,7 +22,7 @@ candidate into a real Playwright test that:
   ADR 0001) — and degrades to a no-op when it doesn't (bodies-off logging
   means `golden-responses/` starts empty; see below),
 - stamps a machine-readable `flow_signature` so the Phase 7 skip gate
-  (`services/behavior-engine/src/coverage.ts`, ADR 0002) can read it back on
+  (`services/behavior-engine/src/selection/coverage.ts`, ADR 0002) can read it back on
   the next mining run and skip already-covered flows.
 
 ## Pipeline
@@ -223,13 +223,13 @@ helpers used by every emitted spec) alongside the vendored files. No emitted
 spec or vendored file imports anything outside `generated-tests/` except the
 `golden-responses/` directory lookup inside `assert-golden.ts` itself.
 
-## Defensive dedup (`src/dedup.ts`)
+## Defensive dedup (`src/selection/dedup.ts`)
 
 `behavior-engine` already dedupes within its own run. This is a **second,
 independent pass** at generation time (candidates files can be hand-edited or
 come from an older run), reusing the same primitives
-(`behavior-engine/src/signature.ts`'s `canonicalTokens`/`flowSignature`) and
-the same algorithm as `behavior-engine/src/dedup.ts`:
+(`behavior-engine/src/signature/signature.ts`'s `canonicalTokens`/`flowSignature`) and
+the same algorithm as `behavior-engine/src/selection/dedup.ts`:
 
 1. collapse candidates with an identical flow signature,
 2. cluster remaining candidates by a >=3-token canonical-prefix match within
@@ -251,7 +251,7 @@ npm run check:phase9                                   # full gate, see below
 `npm run check:phase9` (`scripts/check-phase9.mjs`) verifies, in order:
 generator `tsc --noEmit` clean, a generation run exits 0, >=5 specs across
 multiple persona folders, every spec's `flow_signature` stamp matches
-`behavior-engine/src/coverage.ts`'s skip-gate regex exactly, no hardcoded
+`behavior-engine/src/selection/coverage.ts`'s skip-gate regex exactly, no hardcoded
 seed-ID literal values, every `edge/` spec asserts a 4xx/5xx status,
 `generated-tests/` itself type-checks and lists cleanly under Playwright, and
 `_golden/` is self-contained.

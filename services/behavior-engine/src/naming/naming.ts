@@ -25,9 +25,9 @@
  */
 
 import { request } from "node:https";
-import type { ScoredFlow } from "./rank.js";
-import { rareTransitions, type MarkovModel } from "./markov.js";
-import { getEnv } from "./env.js";
+import type { ScoredFlow } from "../selection/rank.js";
+import { rareTransitions, type MarkovModel } from "../mining/markov.js";
+import { getEnv } from "../config/env.js";
 
 export const MODEL = getEnv("BEHAVIOR_LLM_MODEL", "claude-sonnet-4-6");
 const API_HOST = "api.anthropic.com";

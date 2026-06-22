@@ -15,7 +15,8 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const SERVICE_ROOT = resolve(__dirname, "..");
+// src/config -> service root two up, repo root two more.
+const SERVICE_ROOT = resolve(__dirname, "..", "..");
 const REPO_ROOT = resolve(SERVICE_ROOT, "..", "..");
 
 function parseEnvFile(path: string): Record<string, string> {

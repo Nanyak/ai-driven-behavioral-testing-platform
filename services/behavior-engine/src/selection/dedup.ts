@@ -24,9 +24,9 @@
  * ADR 0002).
  */
 
-import { canonicalTokens, flowSignature } from "./signature.js";
-import type { FlowAttributes } from "./attributes.js";
-import type { Persona } from "./persona.js";
+import { canonicalTokens, flowSignature } from "../signature/signature.js";
+import type { FlowAttributes } from "../classification/attributes.js";
+import type { Persona } from "../classification/persona.js";
 
 /** A step in a mined flow, with the modal expected status from supporting logs. */
 export interface CandidateStep {

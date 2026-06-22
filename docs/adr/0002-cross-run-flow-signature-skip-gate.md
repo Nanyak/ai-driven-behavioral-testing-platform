@@ -46,7 +46,7 @@ the same dynamic-segment normalization the ingestion stage already applies
 key** — identity is the behavior (the endpoint sequence), not its derived label.
 
 This is the *same* key the within-run dedup already needs. It is defined **once** in
-`services/behavior-engine/src/signature.ts` and consumed by three places, which must
+`services/behavior-engine/src/signature/signature.ts` and consumed by three places, which must
 never compute it divergently:
 
 - `dedup.ts` — within-run identical-sequence collapse (Phase 7).

@@ -23,7 +23,7 @@
  */
 
 import type { MinedFlow } from "./dedup.js";
-import type { Persona } from "./persona.js";
+import type { Persona } from "../classification/persona.js";
 
 export interface RankWeights {
   support: number;

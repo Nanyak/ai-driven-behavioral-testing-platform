@@ -54,7 +54,7 @@ function main() {
 
   // [0] signature golden test (the single-source flow signature, ADR 0002).
   console.log("\n[0] signature.ts golden/unit test");
-  const sig = spawnSync("npx", ["tsx", "src/signature.test.ts"], {
+  const sig = spawnSync("npx", ["tsx", "src/signature/signature.test.ts"], {
     cwd: SERVICE,
     encoding: "utf8",
   });

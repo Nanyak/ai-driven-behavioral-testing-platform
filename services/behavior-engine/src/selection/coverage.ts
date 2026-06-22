@@ -22,7 +22,8 @@ import { fileURLToPath } from "node:url";
 import type { MinedFlow } from "./dedup.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SERVICE_ROOT = resolve(__dirname, "..");
+// src/selection -> service root two up, repo root two more.
+const SERVICE_ROOT = resolve(__dirname, "..", "..");
 const REPO_ROOT = resolve(SERVICE_ROOT, "..", "..");
 
 const GENERATED_TESTS_DIR = resolve(REPO_ROOT, "generated-tests");

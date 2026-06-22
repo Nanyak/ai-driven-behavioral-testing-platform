@@ -19,8 +19,8 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// services/behavior-engine/src -> service root one up, repo root two more.
-const SERVICE_ROOT = resolve(__dirname, "..");
+// services/behavior-engine/src/io -> service root two up, repo root two more.
+const SERVICE_ROOT = resolve(__dirname, "..", "..");
 const REPO_ROOT = resolve(SERVICE_ROOT, "..", "..");
 
 /** Repo-root `data/sessions/` — the ingestion output dir (shared, read-only here). */

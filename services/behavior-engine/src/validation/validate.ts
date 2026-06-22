@@ -24,12 +24,12 @@
  *      resolve to the highest-privilege persona.
  */
 
-import type { SessionFlow } from "./load.js";
-import type { Persona } from "./persona.js";
-import { PERSONAS, classify } from "./persona.js";
-import { canonicalTokens } from "./signature.js";
-import type { SequentialPattern, PrefixSpanResult } from "./prefixspan.js";
-import { decodePattern } from "./prefixspan.js";
+import type { SessionFlow } from "../io/sessions.js";
+import type { Persona } from "../classification/persona.js";
+import { PERSONAS, classify } from "../classification/persona.js";
+import { canonicalTokens } from "../signature/signature.js";
+import type { SequentialPattern, PrefixSpanResult } from "../mining/prefixspan.js";
+import { decodePattern } from "../mining/prefixspan.js";
 
 // ---------------------------------------------------------------------------
 // Ground truth (VALIDATION ONLY)

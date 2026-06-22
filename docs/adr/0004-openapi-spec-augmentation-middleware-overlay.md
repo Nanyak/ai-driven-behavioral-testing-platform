@@ -88,7 +88,7 @@ non-reproducible (goldens are a regression baseline), which is disallowed.
    permitted role here is an **advisory drift report** — a human-readable summary
    of operations where base and overlay define the same status with different
    schemas — produced *outside* the oracle and never fed into the augmented spec
-   (mirrors the "ADVISORY ONLY" stance in `behavior-engine/src/naming.ts`).
+   (mirrors the "ADVISORY ONLY" stance in `behavior-engine/src/naming/naming.ts`).
 
 ## Consequences
 

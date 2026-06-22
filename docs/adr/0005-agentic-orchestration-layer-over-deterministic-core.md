@@ -91,7 +91,7 @@ competitor to the agent system — it is the **substrate** the agents need.
 
 6. **Graceful degradation is mandatory.** Every agent degrades to a deterministic
    fallback when the LLM is unavailable or `AGENT_LAYER=off` (mirrors
-   `behavior-engine/src/naming.ts`): Flow-Ranker → support-count ordering; verifiers →
+   `behavior-engine/src/naming/naming.ts`): Flow-Ranker → support-count ordering; verifiers →
    skipped (deterministic gates still run); Drift-Triage → raw `checkOasDrift` output;
    Orchestrator → the static DAG. **The pipeline runs end-to-end with the agent layer
    disabled** — the agents are an enhancement, never a dependency.

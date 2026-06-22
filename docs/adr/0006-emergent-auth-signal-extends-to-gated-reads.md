@@ -4,7 +4,7 @@
 - **Date:** 2026-06-21
 - **Affects:** Phase 7 (behavioral modeling / emergent persona classification)
 - **Amends:** the `requires_auth` rule in `docs/phase-7-implementation-plan.md`
-  (§Emergent persona derivation) and `services/behavior-engine/src/attributes.ts`.
+  (§Emergent persona derivation) and `services/behavior-engine/src/classification/attributes.ts`.
   Does **not** touch ADR 0001 (the OpenAPI/observed-status oracle) or the §guardrail.
 
 ## Context

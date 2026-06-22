@@ -470,7 +470,7 @@ Read-only review (MVP):
 - [x] Group and filter the list by persona (read-only derived label from Phase 7; the reviewer never sets persona). (persona filter chips + a `has_errors`-overlay toggle; persona is display-only.)
 - [x] Show per-test provenance: source `session_id`/`trace_id`, support count, golden assertions. (detail panel: full step sequence, golden assertion fields, source-session count, support/score/priority, linked `.spec.ts` path, full signature. `trace_id` is shown only when upstream supplies one — candidates carry `source_sessions`, no trace id, per the Phase 10/11 audit.)
 - [x] Let the reviewer mark each generated test approved or discarded. (two actions per flow → `POST /api/decisions`.)
-- [x] Persist approval/discard state in a lightweight JSON store, recording each entry's flow signature so the Phase 7 skip gate can read approval/discard decisions (ADR 0002). (`data/hitl/approvals.json` in the exact `{ entries: [{ flow_signature, status, ... }] }` shape `behavior-engine/src/coverage.ts` parses; signature-keyed upsert, no duplicates; missing/malformed store → empty manifest, never fatal.)
+- [x] Persist approval/discard state in a lightweight JSON store, recording each entry's flow signature so the Phase 7 skip gate can read approval/discard decisions (ADR 0002). (`data/hitl/approvals.json` in the exact `{ entries: [{ flow_signature, status, ... }] }` shape `behavior-engine/src/selection/coverage.ts` parses; signature-keyed upsert, no duplicates; missing/malformed store → empty manifest, never fatal.)
 
 > Implemented as a Vite dev-server endpoint (no separate process): the SPA reads
 > `GET /api/flows` and writes `POST /api/decisions`, both served by

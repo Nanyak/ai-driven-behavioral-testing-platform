@@ -40,7 +40,7 @@ data/
 ## The approval store (contract — already consumed by `coverage.ts`)
 
 Path: **`data/hitl/approvals.json`** (repo root). The Phase 7 reader
-(`behavior-engine/src/coverage.ts`) accepts **either** a top-level array **or**
+(`behavior-engine/src/selection/coverage.ts`) accepts **either** a top-level array **or**
 `{ "entries": [ ... ] }`, and reads two fields per entry:
 
 ```jsonc

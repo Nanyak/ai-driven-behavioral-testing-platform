@@ -63,34 +63,52 @@ acceptance gate still passes.
 ## Pipeline
 
 ```
-load (repo-root data/sessions)  → canonical tokens (signature.ts)
+load (repo-root data/sessions)  → canonical tokens (signature/)
   → mine: n-gram baseline (n=2..4) ‖ PrefixSpan (closed, gap-bounded) ‖ Markov
   → assemble + classify mined flows  (per-flow modal status from each flow's OWN
-       supporting sessions, not global; attributes.ts → persona.ts; endpoint+status)
+       supporting sessions, not global; classification/; endpoint+status)
   → dedup (within-run: identical-sig collapse, contiguous-subsequence subsumption)
   → rank (one weight config)  →  cap 10/persona AFTER ranking, balanced clean/error
-  → [SKIP GATE]  (coverage.ts — drop already-covered signatures; ADR 0002)
+  → [SKIP GATE]  (selection/coverage.ts — drop already-covered signatures; ADR 0002)
   → naming (LLM Sonnet 4.6 — judgment only; offline fallback when no API key)
   → write candidates + validation report + run summary
+```
+
+### Layout
+
+`src/` groups modules by pipeline stage; `run.ts` is the CLI entry point that
+wires them in the order above.
+
+```
+src/
+  run.ts                  CLI orchestrator + run summary (entry point)
+  config/env.ts           .env loader (LLM key/model)
+  io/sessions.ts          load session flows from repo-root data/sessions/
+  signature/              the one canonical flow signature (+ golden test)
+  mining/                 ngram · prefixspan · markov
+  classification/         attributes → persona (emergent, deterministic)
+  selection/              dedup · rank · coverage (skip gate)
+  naming/                 LLM annotation (judgment only)
+  validation/             classification report (the only role_observed reader)
 ```
 
 ### Modules
 
 | Module | Responsibility |
 | --- | --- |
-| `signature.ts` | **The one** canonical flow signature (ADR 0002). Stable SHA-256 over the ordered `METHOD endpoint` token list, **with consecutive duplicates collapsed** (a 200/304 revalidation pair is a no-op repeat). Persona and status are **not** part of the key. Shared by dedup, the skip gate, and Phase 9 emit. Locked first; golden test in `signature.test.ts`. |
-| `load.ts` | Reads repo-root `data/sessions/` (newest `session-flows-*.json`). |
-| `attributes.ts` | Deterministic `requires_auth` / `is_admin` / `has_errors` from **endpoint + status only**. Three rule variants (ADR 0006): endpoint-only baseline; the cart-signal rule (a *successful* 2xx cart/checkout mutation ⇒ `requires_auth`); and the read-signal rule (a *successful* 2xx **auth-gated read** — `GET /store/orders`, `GET /store/customers/me` — also ⇒ `requires_auth`). The read set excludes guest-permitted reads (`GET /store/orders/{id}` 404s for guests). The production rule = cart + read. |
-| `persona.ts` | Resolve persona from attributes (highest privilege wins). `has_errors` is an orthogonal overlay, not a persona. |
-| `ngram.ts` | Fixed-window (n=2,3,4) session-support baseline — a demo contrast for PrefixSpan. |
-| `prefixspan.ts` | **Closed** sequential pattern mining with a `maxGap` bound and per-root fairness (so a high-volume browse root cannot starve admin reversals). Deterministic ordering (PO-5): support desc, length desc, lexicographic. |
-| `markov.ts` | First-order transition model; low-probability transitions are anomaly hints for naming (supporting signal only). |
-| `dedup.ts` | Within-run identical-sig collapse + **contiguous-subsequence subsumption** (drop a flow that is a contiguous sub-run, ≥2 tokens, of a longer kept flow of the same persona — generalizes prefix clustering; collapses mid-checkout fragments into the full journey). The per-persona cap of 10 is `capRankedPerPersona`, applied by the caller AFTER ranking (so value, not raw support, decides survivors) and **balanced** across the has_errors split (reserve ~half each persona's cap for clean vs error flows, else error flows — routed to `edge/` — empty the persona's own folder). All "same flow?" comparisons go through `signature.ts`. |
-| `coverage.ts` | Cross-run coverage manifest + skip gate. Reads `generated-tests/**/*.spec.ts` (signature stamp) and the HITL store (`approved` + `discarded`). A **missing** dir/store is an **empty** manifest, never an error (PO-6). |
-| `rank.ts` | One config object with explicit weights: support, persona coverage, endpoint importance (**business importance merged in** — PO-7), error coverage. |
-| `naming.ts` | LLM (Sonnet 4.6, `claude-sonnet-4-6` by default; `BEHAVIOR_LLM_MODEL` overrides — e.g. `claude-opus-4-8`; adaptive thinking) — naming, anomaly/contamination, and **advisory** assertion hints (BA-F1; never a Phase 8/9 oracle — ADR 0001 keeps the OAS authoritative). Raw HTTPS so the service stays dependency-light; degrades to deterministic local names when `ANTHROPIC_API_KEY` is unset. |
-| `env.ts` | `.env` loader (precedence `process.env` > service `.env` > repo-root `.env`) for the LLM key/model, mirroring the traffic generator. Put the key in `services/behavior-engine/.env` (gitignored) so `npm run mine` finds it without a shell export. |
-| `validate.ts` | The defensible claims (below). The **only** reader of `role_observed`. |
+| `signature/signature.ts` | **The one** canonical flow signature (ADR 0002). Stable SHA-256 over the ordered `METHOD endpoint` token list, **with consecutive duplicates collapsed** (a 200/304 revalidation pair is a no-op repeat). Persona and status are **not** part of the key. Shared by dedup, the skip gate, and Phase 9 emit. Locked first; golden test in `signature/signature.test.ts`. |
+| `io/sessions.ts` | Reads repo-root `data/sessions/` (newest `session-flows-*.json`). |
+| `classification/attributes.ts` | Deterministic `requires_auth` / `is_admin` / `has_errors` from **endpoint + status only**. Three rule variants (ADR 0006): endpoint-only baseline; the cart-signal rule (a *successful* 2xx cart/checkout mutation ⇒ `requires_auth`); and the read-signal rule (a *successful* 2xx **auth-gated read** — `GET /store/orders`, `GET /store/customers/me` — also ⇒ `requires_auth`). The read set excludes guest-permitted reads (`GET /store/orders/{id}` 404s for guests). The production rule = cart + read. |
+| `classification/persona.ts` | Resolve persona from attributes (highest privilege wins). `has_errors` is an orthogonal overlay, not a persona. |
+| `mining/ngram.ts` | Fixed-window (n=2,3,4) session-support baseline — a demo contrast for PrefixSpan. |
+| `mining/prefixspan.ts` | **Closed** sequential pattern mining with a `maxGap` bound and per-root fairness (so a high-volume browse root cannot starve admin reversals). Deterministic ordering (PO-5): support desc, length desc, lexicographic. |
+| `mining/markov.ts` | First-order transition model; low-probability transitions are anomaly hints for naming (supporting signal only). |
+| `selection/dedup.ts` | Within-run identical-sig collapse + **contiguous-subsequence subsumption** (drop a flow that is a contiguous sub-run, ≥2 tokens, of a longer kept flow of the same persona — generalizes prefix clustering; collapses mid-checkout fragments into the full journey). The per-persona cap of 10 is `capRankedPerPersona`, applied by the caller AFTER ranking (so value, not raw support, decides survivors) and **balanced** across the has_errors split (reserve ~half each persona's cap for clean vs error flows, else error flows — routed to `edge/` — empty the persona's own folder). All "same flow?" comparisons go through `signature.ts`. |
+| `selection/coverage.ts` | Cross-run coverage manifest + skip gate. Reads `generated-tests/**/*.spec.ts` (signature stamp) and the HITL store (`approved` + `discarded`). A **missing** dir/store is an **empty** manifest, never an error (PO-6). |
+| `selection/rank.ts` | One config object with explicit weights: support, persona coverage, endpoint importance (**business importance merged in** — PO-7), error coverage. |
+| `naming/naming.ts` | LLM (Sonnet 4.6, `claude-sonnet-4-6` by default; `BEHAVIOR_LLM_MODEL` overrides — e.g. `claude-opus-4-8`; adaptive thinking) — naming, anomaly/contamination, and **advisory** assertion hints (BA-F1; never a Phase 8/9 oracle — ADR 0001 keeps the OAS authoritative). Raw HTTPS so the service stays dependency-light; degrades to deterministic local names when `ANTHROPIC_API_KEY` is unset. |
+| `config/env.ts` | `.env` loader (precedence `process.env` > service `.env` > repo-root `.env`) for the LLM key/model, mirroring the traffic generator. Put the key in `services/behavior-engine/.env` (gitignored) so `npm run mine` finds it without a shell export. |
+| `validation/validate.ts` | The defensible claims (below). The **only** reader of `role_observed`. |
 | `run.ts` | CLI orchestrator + run summary. |
 
 ## Validation report
