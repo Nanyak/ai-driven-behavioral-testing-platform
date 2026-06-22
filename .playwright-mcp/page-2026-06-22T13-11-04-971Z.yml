@@ -1,0 +1,137 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - link "B Behavior Storefront" [ref=e6] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e7]: B
+        - generic [ref=e8]: Behavior Storefront
+      - navigation "Store navigation" [ref=e9]:
+        - link "Shop" [ref=e10] [cursor=pointer]:
+          - /url: /
+        - link "Deals" [ref=e11] [cursor=pointer]:
+          - /url: /deals
+      - generic "Search products" [ref=e12]:
+        - img [ref=e13]
+        - textbox "Search products" [ref=e16]:
+          - /placeholder: Search products...
+      - generic [ref=e17]:
+        - link "Sign in" [ref=e18] [cursor=pointer]:
+          - /url: /signin
+          - img [ref=e19]
+          - generic [ref=e22]: Sign in
+        - link [ref=e23] [cursor=pointer]:
+          - /url: /wishlist
+          - img [ref=e24]
+        - link "1" [ref=e26] [cursor=pointer]:
+          - /url: /notifications
+          - img [ref=e27]
+          - generic [ref=e30]: "1"
+        - link "Cart 0" [ref=e31] [cursor=pointer]:
+          - /url: /cart
+          - img [ref=e32]
+          - generic [ref=e35]: Cart
+          - generic [ref=e36]: "0"
+  - main [ref=e37]:
+    - generic [ref=e38]:
+      - paragraph [ref=e39]: Cart
+      - heading "Your shopping cart" [level=1] [ref=e40]
+      - paragraph [ref=e41]: Review line items, validate shipping and payment availability, then complete checkout.
+    - generic [ref=e42]:
+      - generic "Order summary" [ref=e43]:
+        - generic [ref=e44]:
+          - paragraph [ref=e45]: Checkout
+          - generic [ref=e46]: Order summary
+        - generic [ref=e47]:
+          - paragraph [ref=e48]: Cart will be created on first add.
+          - generic [ref=e50]:
+            - img [ref=e51]
+            - generic [ref=e55]: No items yet.
+          - generic [ref=e56]:
+            - generic [ref=e57]:
+              - generic [ref=e58]: Subtotal
+              - strong [ref=e59]: Price pending
+            - generic [ref=e60]:
+              - generic [ref=e61]: Discount
+              - strong [ref=e62]: Price pending
+            - generic [ref=e63]:
+              - generic [ref=e64]: Shipping
+              - strong [ref=e65]: Price pending
+            - separator [ref=e66]
+            - generic [ref=e67]:
+              - generic [ref=e68]: Total
+              - strong [ref=e69]: Price pending
+          - generic [ref=e70]:
+            - generic [ref=e71]: 0 shipping options
+            - generic [ref=e72]: 0 payment providers
+            - generic [ref=e73]: 0 methods on cart
+            - generic [ref=e74]: 0 payment sessions
+      - generic [ref=e76]:
+        - heading "Checkout" [level=2] [ref=e77]
+        - generic [ref=e78]:
+          - generic [ref=e79]:
+            - img [ref=e80]
+            - generic [ref=e83]:
+              - strong [ref=e84]: Protected checkout
+              - text: Delivery, payment, and support are confirmed before order placement.
+          - generic [ref=e85]:
+            - generic [ref=e86]:
+              - img [ref=e87]
+              - text: Delivery options
+            - generic [ref=e92]:
+              - img [ref=e93]
+              - text: Return requests
+        - generic [ref=e96]:
+          - generic [ref=e97]:
+            - generic [ref=e98]: Address label
+            - textbox "Address label" [ref=e99]: Home
+          - generic [ref=e100]:
+            - generic [ref=e101]: Email
+            - textbox "Email" [ref=e102]
+          - generic [ref=e103]:
+            - generic [ref=e104]:
+              - generic [ref=e105]: First name
+              - textbox "First name" [ref=e106]: Behavior
+            - generic [ref=e107]:
+              - generic [ref=e108]: Last name
+              - textbox "Last name" [ref=e109]: Shopper
+          - generic [ref=e110]:
+            - generic [ref=e111]: Address
+            - textbox "Address" [ref=e112]: Test Street 1
+          - generic [ref=e113]:
+            - generic [ref=e114]:
+              - generic [ref=e115]: City
+              - textbox "City" [ref=e116]: Copenhagen
+            - generic [ref=e117]:
+              - generic [ref=e118]: Postal
+              - textbox "Postal" [ref=e119]: "1000"
+          - generic [ref=e120]:
+            - generic [ref=e121]:
+              - generic [ref=e122]: Country
+              - textbox "Country" [ref=e123]: dk
+            - generic [ref=e124]:
+              - generic [ref=e125]: Phone
+              - textbox "Phone" [ref=e126]: "12345678"
+          - button "Get delivery options" [disabled]:
+            - img
+            - generic: Get delivery options
+          - button "Save address" [disabled]:
+            - img
+            - generic: Save address
+        - generic [ref=e127]:
+          - heading "Promo code" [level=3] [ref=e128]
+          - generic [ref=e129]:
+            - textbox "Enter voucher or promo code" [ref=e130]
+            - button "Apply" [disabled]:
+              - img
+              - generic: Apply
+        - generic [ref=e131]:
+          - heading "Shipping option" [level=3] [ref=e132]
+          - paragraph [ref=e133]: Enter address details to load delivery options.
+        - generic [ref=e134]:
+          - heading "Payment type" [level=3] [ref=e135]
+          - paragraph [ref=e136]: Payment types appear after delivery options are loaded.
+        - button "Place order" [disabled]:
+          - img
+          - generic: Place order
+        - link "Continue shopping" [ref=e137] [cursor=pointer]:
+          - /url: /

@@ -465,46 +465,23 @@ export class StoreSession {
     return this.record("sort_products", "GET", "/store/products", res);
   }
 
-  async updateProfile(): Promise<ApiResponse> {
-    const res = await this.client.request("POST", "/store/customers/me", {
-      token: this.token,
-      body: { first_name: "Behavior", last_name: "Shopper", company_name: "Test Co" },
-    });
-    return this.record("update_profile", "POST", "/store/customers/me", res);
-  }
-
-  async addAddress(): Promise<ApiResponse> {
-    const res = await this.client.request("POST", "/store/customers/me/addresses", {
-      token: this.token,
-      body: {
-        address_name: "Home",
-        first_name: "Behavior",
-        last_name: "Shopper",
-        address_1: "1 Market Street",
-        city: "San Francisco",
-        postal_code: "94105",
-        country_code: "us",
-        phone: "5551234567",
-      },
-    });
-    return this.record("add_address", "POST", "/store/customers/me/addresses", res);
-  }
-
   /**
-   * Apply a specific promo code (valid or invalid) via the dedicated promotions
-   * endpoint `POST /store/carts/{id}/promotions { promo_codes }` (Theme 4a). A
-   * valid order-level code applies the discount (200); an unknown code surfaces a
-   * clean, countable 400 ("The promotion code ... is invalid"). Both emit the
-   * same `apply_promo` event so the success/failure split is a status signal, not
-   * a separate endpoint.
+   * Apply a specific promo code (valid or invalid) the way the storefront does:
+   * `POST /store/carts/{id} { promo_codes }` — the same cart-update endpoint used
+   * for the address step, not a dedicated `/promotions` route (verified against
+   * the live storefront, which has no promotions call). A valid order-level code
+   * applies the discount (200); an unknown code surfaces a clean, countable 400
+   * (`invalid_data` "The promotion code ... is invalid"). Both emit the same
+   * `apply_promo` event so the success/failure split is a status signal, not a
+   * separate endpoint (Theme 4a).
    */
   async applyPromoCode(code: string): Promise<ApiResponse> {
     await this.ensureCart();
-    const res = await this.client.request("POST", `/store/carts/${this.cartId}/promotions`, {
+    const res = await this.client.request("POST", `/store/carts/${this.cartId}`, {
       body: { promo_codes: [code] },
       token: this.token,
     });
-    return this.record("apply_promo", "POST", "/store/carts/{id}/promotions", res);
+    return this.record("apply_promo", "POST", "/store/carts/{id}", res);
   }
 
   // --- Stage-2 additions (plan §6.5) ---

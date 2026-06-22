@@ -124,7 +124,8 @@ export function printAcceptance(all: SessionResult[], state: RunState, floors: F
   ).length;
 
   // Promo failures (Theme 4a): a customer applied an unknown code and got a clean
-  // 400 on POST /store/carts/{id}/promotions — the negative-test signal.
+  // 400 on POST /store/carts/{id} (the storefront's promo path) — the
+  // negative-test signal.
   const invalidPromo400s = all.filter(
     (r) => r.steps.some((s) => s.action === "apply_promo" && s.status === 400)
   ).length;

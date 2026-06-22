@@ -70,7 +70,11 @@ export async function runRepeatOrderStatusFlow(
 
 /**
  * Profile & address management (plan §4 D2). Returning identity, no purchase:
- * login → view profile → update profile → (sometimes) add an address.
+ * login → view profile → (sometimes) browse the catalog. The storefront profile
+ * page is read-only: saved addresses live in localStorage and there is no
+ * profile-update or add-address API call (verified against the live storefront),
+ * so the only authenticated footprint is GET /store/customers/me. A returning
+ * shopper often also glances at the catalog, so optionally emit a browse.
  */
 export async function runProfileMgmtFlow(
   client: MedusaClient,
@@ -83,9 +87,8 @@ export async function runProfileMgmtFlow(
   }
 
   await session.viewProfile();
-  await session.updateProfile();
   if (chance(0.6)) {
-    await session.addAddress();
+    await session.browseProducts();
   }
 
   return session;

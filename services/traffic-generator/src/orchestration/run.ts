@@ -100,14 +100,17 @@ async function stage0(cfg: TrafficConfig, state: RunState): Promise<SessionResul
     );
   }
 
-  // K signup-only sessions: register (+ maybe profile), NO checkout. Populates
-  // the pool AND provides the register-without-checkout decoupling evidence.
+  // K signup-only sessions: register (+ maybe a profile view), NO checkout.
+  // Populates the pool AND provides the register-without-checkout decoupling
+  // evidence. The storefront has no profile-update API, so the optional extra
+  // step is a read-only GET /store/customers/me (viewProfile), matching what the
+  // app actually does for an authenticated customer.
   const seedTasks = Array.from({ length: cfg.accountPoolSize }, () => async (): Promise<SessionResult> => {
     const sessionId = newSessionId("signup");
     const client = new MedusaClient(cfg, sessionId);
     const s = new StoreSession(client);
     await s.register();
-    if (chance(0.4)) await s.updateProfile();
+    if (chance(0.4)) await s.viewProfile();
     if (s.email && s.token) {
       state.addAccount({ email: s.email, password: DEFAULT_PASSWORD, token: s.token });
     }

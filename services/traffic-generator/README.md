@@ -188,7 +188,7 @@ then topped up to the floors (plan §7). Example counts shown for `N=300`.
 | `cartWallConversion`| 1    | returning (guest→login) | guest `create_cart` **401** → `login` → `create_cart` **200** → buy/abandon (`wallBounce` ends at the 401) |
 | `stockOutCheckout` | 1     | returning         | login → view low-stock product → add `stock+1` → **400 insufficient inventory** → recover (add 1) / abandon |
 | `newCheckout`      | 1     | new               | HOLDOUT — LLM-varied `register → login → checkout`            |
-| `profileMgmt`      | 1     | returning         | login → view/update profile → maybe add address               |
+| `profileMgmt`      | 1     | returning         | login → view profile (`GET /store/customers/me`) → maybe browse (the storefront profile page is read-only; no profile-update/address API) |
 | `adminCatalog`     | 1     | admin             | list/view/update products + `chance(0.4)` **create product**   |
 | `edge`             | 1     | —                 | intentional 4xx/5xx edge cases                                |
 | `orderStatus`      | 2     | returning         | login → view orders → view specific order → maybe reorder     |

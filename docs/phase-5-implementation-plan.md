@@ -120,7 +120,7 @@ at `N=300` (weights sum to ≈99, so count ≈ weight × 3).
 | **D** | **Account / post-purchase, no new order** | returning 100 | **11%** | ~33 | |
 | | `orderStatus` | returning 100 | 5% | ~15 | login → view orders → view order → maybe reorder |
 | | `repeatOrderCheck` | returning 100 | 3% | ~9 | **view same order 3–5×** (tracking anxiety) |
-| | `profileMgmt` | returning 100 | 3% | ~9 | login → update profile/address |
+| | `profileMgmt` | returning 100 | 3% | ~9 | login → view profile (`GET /store/customers/me`) → maybe browse — read-only; the storefront profile page has no profile-update or add-address API (saved addresses are localStorage-only), so the only authenticated footprint is the profile read |
 | **E** | **Return inquiry** (references a real order) | returning 100 | **3%** | ~9 | login → view orders → **view a fulfilled order** (read-only; storefront has no customer return endpoint, so this only flags the order for admin settlement) |
 | **F** | **Admin operations** | admin | **8%** | ~24 | |
 | | `adminCatalog` | admin | 2% | ~6 | list/view/update products + `chance(0.4)` **create product** (`POST /admin/products`) |

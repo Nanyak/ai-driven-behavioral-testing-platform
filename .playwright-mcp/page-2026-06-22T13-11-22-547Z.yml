@@ -1,0 +1,101 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - link "B Behavior Storefront" [ref=e6] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e7]: B
+        - generic [ref=e8]: Behavior Storefront
+      - navigation "Store navigation" [ref=e9]:
+        - link "Shop" [ref=e10] [cursor=pointer]:
+          - /url: /
+        - link "Deals" [ref=e11] [cursor=pointer]:
+          - /url: /deals
+      - generic "Search products" [ref=e12]:
+        - img [ref=e13]
+        - textbox "Search products" [ref=e16]:
+          - /placeholder: Search products...
+      - generic [ref=e17]:
+        - link "Sign in" [ref=e18] [cursor=pointer]:
+          - /url: /signin
+          - img [ref=e19]
+          - generic [ref=e22]: Sign in
+        - link [ref=e23] [cursor=pointer]:
+          - /url: /wishlist
+          - img [ref=e24]
+        - link "1" [ref=e26] [cursor=pointer]:
+          - /url: /notifications
+          - img [ref=e27]
+          - generic [ref=e30]: "1"
+        - link "Cart 0" [ref=e31] [cursor=pointer]:
+          - /url: /cart
+          - img [ref=e32]
+          - generic [ref=e35]: Cart
+          - generic [ref=e36]: "0"
+  - region "Everyday gear, checkout ready." [ref=e37]:
+    - generic:
+      - generic: Scroll
+      - img
+    - generic [ref=e38]:
+      - generic [ref=e39]:
+        - img
+        - text: New season test catalog
+      - heading "Everyday gear, checkout ready." [level=1] [ref=e40]:
+        - text: Everyday gear,
+        - text: checkout ready.
+      - paragraph [ref=e41]: Browse seeded Medusa products, sign in as a shopper, add variants, and complete a full checkout — all from a storefront built for fast product discovery.
+      - generic [ref=e42]:
+        - link "Shop featured" [ref=e43] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e44]: Shop featured
+          - img [ref=e45]
+        - link "View cart" [ref=e47] [cursor=pointer]:
+          - /url: /cart
+    - generic [ref=e48]:
+      - generic [ref=e49]:
+        - generic [ref=e50]:
+          - img [ref=e51]
+          - generic [ref=e53]: Seeded arrivals
+        - strong [ref=e54]: Cart-ready variants
+        - paragraph [ref=e55]: Catalog, customer, shipping, and payment paths in one guided flow — ready for behavioral analysis.
+      - generic [ref=e56]:
+        - img [ref=e57]
+        - text: Variant selection
+      - generic [ref=e62]:
+        - img [ref=e63]
+        - text: Shipping validation
+      - generic [ref=e68]:
+        - img [ref=e69]
+        - text: Checkout flow online
+  - main "Storefront shopping flow" [ref=e72]:
+    - generic [ref=e73]:
+      - generic [ref=e74]:
+        - generic [ref=e75]:
+          - paragraph [ref=e76]: Shop by category
+          - heading "Quick discovery" [level=2] [ref=e77]
+        - generic [ref=e78]: 0 products available
+      - button "All" [ref=e80]
+    - generic [ref=e81]:
+      - generic [ref=e82]:
+        - paragraph [ref=e83]: Results
+        - heading "0 of 0 products" [level=2] [ref=e84]
+      - generic [ref=e85]:
+        - button "Featured" [ref=e86]:
+          - img
+          - generic [ref=e87]: Featured
+        - button "Price low" [ref=e88]:
+          - img
+          - generic [ref=e89]: Price low
+        - button "Price high" [ref=e90]:
+          - img
+          - generic [ref=e91]: Price high
+        - button "A-Z" [ref=e92]:
+          - img
+          - generic [ref=e93]: A-Z
+    - region "Featured products" [ref=e94]:
+      - generic [ref=e95]:
+        - generic [ref=e96]:
+          - paragraph [ref=e97]: Catalog
+          - heading "Featured products" [level=2] [ref=e98]
+        - button "Refresh" [disabled]:
+          - img
+          - generic: Refresh

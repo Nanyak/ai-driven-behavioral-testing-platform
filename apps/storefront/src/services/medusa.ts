@@ -117,6 +117,7 @@ export const medusaStore = {
 
     const created = await medusaJson<{ cart: Cart }>("/store/carts", {
       method: "POST",
+      auth: true,
       body: JSON.stringify({ region_id: regionId }),
     });
 
@@ -143,6 +144,7 @@ export const medusaStore = {
   async addLineItem(cartId: string, variantId: string, quantity = 1) {
     const updated = await medusaJson<{ cart: Cart }>(`/store/carts/${cartId}/line-items`, {
       method: "POST",
+      auth: true,
       body: JSON.stringify({
         variant_id: variantId,
         quantity,
@@ -155,6 +157,7 @@ export const medusaStore = {
   async updateLineItem(cartId: string, lineItemId: string, quantity: number) {
     const updated = await medusaJson<{ cart: Cart }>(`/store/carts/${cartId}/line-items/${lineItemId}`, {
       method: "POST",
+      auth: true,
       body: JSON.stringify({ quantity }),
     });
 
@@ -164,6 +167,7 @@ export const medusaStore = {
   async deleteLineItem(cartId: string, lineItemId: string) {
     const updated = await medusaJson<{ cart: Cart }>(`/store/carts/${cartId}/line-items/${lineItemId}`, {
       method: "DELETE",
+      auth: true,
     });
 
     return updated.cart;
@@ -186,6 +190,7 @@ export const medusaStore = {
   async updateCheckoutAddress(cartId: string, address: CheckoutAddress) {
     const withAddress = await medusaJson<{ cart: Cart }>(`/store/carts/${cartId}`, {
       method: "POST",
+      auth: true,
       body: JSON.stringify({
         email: address.email,
         shipping_address: {
@@ -215,6 +220,7 @@ export const medusaStore = {
   async applyPromoCode(cartId: string, promoCode: string) {
     const withPromo = await medusaJson<{ cart: Cart }>(`/store/carts/${cartId}`, {
       method: "POST",
+      auth: true,
       body: JSON.stringify({
         promo_codes: promoCode ? [promoCode] : [],
       }),
@@ -226,6 +232,7 @@ export const medusaStore = {
   async addShippingMethod(cartId: string, optionId: string) {
     const withShipping = await medusaJson<{ cart: Cart }>(`/store/carts/${cartId}/shipping-methods`, {
       method: "POST",
+      auth: true,
       body: JSON.stringify({ option_id: optionId }),
     });
     return withShipping.cart;
@@ -236,6 +243,7 @@ export const medusaStore = {
       "/store/payment-collections",
       {
         method: "POST",
+        auth: true,
         body: JSON.stringify({ cart_id: cartId }),
       }
     );
@@ -248,6 +256,7 @@ export const medusaStore = {
       `/store/payment-collections/${collectionId}/payment-sessions`,
       {
         method: "POST",
+        auth: true,
         body: JSON.stringify({ provider_id: providerId, data: {} }),
       }
     );
@@ -258,7 +267,7 @@ export const medusaStore = {
   async completeCart(cartId: string) {
     return medusaJson<{ type: string; order?: { id: string }; cart?: Cart; error?: { message: string } }>(
       `/store/carts/${cartId}/complete`,
-      { method: "POST" }
+      { method: "POST", auth: true }
     );
   },
 };

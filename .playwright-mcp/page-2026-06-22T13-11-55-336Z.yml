@@ -1,0 +1,73 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - link "B Behavior Storefront" [ref=e6] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e7]: B
+        - generic [ref=e8]: Behavior Storefront
+      - navigation "Store navigation" [ref=e9]:
+        - link "Shop" [ref=e10] [cursor=pointer]:
+          - /url: /
+        - link "Deals" [ref=e11] [cursor=pointer]:
+          - /url: /deals
+        - link "Orders" [ref=e184] [cursor=pointer]:
+          - /url: /orders
+      - generic "Search products" [ref=e12]:
+        - img [ref=e13]
+        - textbox "Search products" [ref=e16]:
+          - /placeholder: Search products...
+      - generic [ref=e17]:
+        - link "playwright-probe-001@example.com" [ref=e185] [cursor=pointer]:
+          - /url: /profile
+          - img [ref=e19]
+          - generic [ref=e22]: playwright-probe-001@example.com
+        - link [ref=e23] [cursor=pointer]:
+          - /url: /wishlist
+          - img [ref=e24]
+        - link "4" [ref=e313] [cursor=pointer]:
+          - /url: /notifications
+          - img [ref=e27]
+          - generic [ref=e30]: "4"
+        - link "Cart 0" [ref=e314] [cursor=pointer]:
+          - /url: /cart
+          - img [ref=e32]
+          - generic [ref=e35]: Cart
+          - generic [ref=e36]: "0"
+  - main [ref=e315]:
+    - generic [ref=e316]:
+      - link "← Back to my purchases" [ref=e317] [cursor=pointer]:
+        - /url: /orders
+      - generic [ref=e318]:
+        - 'heading "Order #769" [level=1] [ref=e319]'
+        - generic [ref=e320]: To ship
+    - generic [ref=e322]:
+      - generic [ref=e323]:
+        - generic [ref=e324]:
+          - img [ref=e326]
+          - generic [ref=e329]: Placed
+        - generic [ref=e330]:
+          - img [ref=e332]
+          - generic [ref=e335]: Processing
+        - generic [ref=e336]:
+          - img [ref=e338]
+          - generic [ref=e343]: Shipped
+        - generic [ref=e344]:
+          - img [ref=e346]
+          - generic [ref=e351]: Delivered
+      - generic [ref=e353]:
+        - generic [ref=e354]: Medusa Sweatshirt
+        - generic [ref=e355]: 1 x €10.00
+      - generic [ref=e356]:
+        - generic [ref=e357]:
+          - generic [ref=e358]: Subtotal
+          - strong [ref=e359]: €20.00
+        - generic [ref=e360]:
+          - generic [ref=e361]: Shipping
+          - strong [ref=e362]: €10.00
+        - generic [ref=e363]:
+          - generic [ref=e364]: Tax
+          - strong [ref=e365]: €0.00
+        - separator [ref=e366]
+        - generic [ref=e367]:
+          - generic [ref=e368]: Total
+          - strong [ref=e369]: €20.00
