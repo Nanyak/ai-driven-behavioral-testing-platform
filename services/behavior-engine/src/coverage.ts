@@ -25,7 +25,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const SERVICE_ROOT = resolve(__dirname, "..");
 const REPO_ROOT = resolve(SERVICE_ROOT, "..", "..");
 
-/** Default locations of the two coverage sources (repo-root, clean-checkout safe). */
 const GENERATED_TESTS_DIR = resolve(REPO_ROOT, "generated-tests");
 const HITL_STORE = resolve(REPO_ROOT, "data", "hitl", "approvals.json");
 
@@ -34,7 +33,6 @@ const HITL_STORE = resolve(REPO_ROOT, "data", "hitl", "approvals.json");
 // in the stamp does not silently empty the manifest.
 const SIGNATURE_STAMP = /flow_signature["'\s:=]+([0-9a-f]{64})/i;
 
-/** Recursively list `*.spec.ts` files under a dir; [] if the dir is absent. */
 function listSpecFiles(dir: string): string[] {
   if (!existsSync(dir)) {
     return [];
@@ -52,7 +50,6 @@ function listSpecFiles(dir: string): string[] {
   return out;
 }
 
-/** Signatures stamped into the generated-tests corpus. Empty if absent. */
 function fromGeneratedTests(dir: string): Set<string> {
   const sigs = new Set<string>();
   for (const file of listSpecFiles(dir)) {
@@ -64,7 +61,6 @@ function fromGeneratedTests(dir: string): Set<string> {
   return sigs;
 }
 
-/** Signatures from the HITL store (approved + discarded). Empty if absent. */
 function fromHitlStore(path: string): Set<string> {
   const sigs = new Set<string>();
   if (!existsSync(path)) {
@@ -105,7 +101,6 @@ export interface CoverageSources {
   hitlStore?: string;
 }
 
-/** Build the coverage manifest (best-effort; empty on a clean checkout). */
 export function buildCoverageManifest(sources: CoverageSources = {}): CoverageManifest {
   const testsSigs = fromGeneratedTests(sources.generatedTestsDir ?? GENERATED_TESTS_DIR);
   const hitlSigs = fromHitlStore(sources.hitlStore ?? HITL_STORE);

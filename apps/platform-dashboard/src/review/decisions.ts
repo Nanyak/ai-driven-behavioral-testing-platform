@@ -1,10 +1,8 @@
-// Client-side bindings for the HITL review endpoint (Phase 15).
-
 export type Decision = "approved" | "discarded";
 
 /**
- * Where a flow sits in the review pipeline (mirrors the server). The test file is
- * generated BEFORE review (Phase 9) — approve/discard never create or delete it.
+ * The test file is generated BEFORE review (Phase 9) — approve/discard never
+ * create or delete it.
  */
 export type Lifecycle = "approved" | "discarded" | "awaiting_review" | "discovered";
 

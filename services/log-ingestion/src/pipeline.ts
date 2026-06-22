@@ -1,14 +1,4 @@
 /**
- * The TRANSFORM stage (Phase 6 steps 2–6): raw log docs → session-flow records
- * + candidate golden responses. Pure functions, no I/O.
- *
- * Sections:
- *   1. normalize  — collapse dynamic path segments to `{id}`
- *   2. denoise    — drop infra-noise endpoints
- *   3. group      — bucket by session_id, sort by timestamp
- *   4. sessions   — build the session-flow records
- *   5. golden     — snapshot observed response schemas
- *
  * Output is LABEL-FREE by design: no persona is assigned here. Phase 7 derives
  * persona as an emergent attribute (plan §10.3), so ingestion must never
  * pre-label sessions or the discovery claim collapses.
@@ -23,15 +13,6 @@ import type {
   SessionFlow,
 } from "./types.js";
 
-// ===========================================================================
-// 1. Normalize (Phase 6 step 3)
-// ===========================================================================
-//
-// The Phase 2 middleware already emits a pre-normalized `endpoint` (every
-// dynamic segment collapsed to `{id}`), so for current logs this is mostly a
-// safety re-normalization for anything that slipped through with a concrete id.
-// It is deliberately *idempotent* on already-templated endpoints.
-//
 // NORMALIZATION IS LOAD-BEARING (ADR 0002): the canonical flow signature is a
 // hash of `METHOD <normalized endpoint>` tokens, so these rules must stay
 // stable. A cosmetic change here re-keys every signature and makes previously
@@ -39,11 +20,10 @@ import type {
 
 const PLACEHOLDER = "{id}";
 
-// Segment matches a concrete dynamic value that must collapse to a placeholder.
 const DYNAMIC_SEGMENT_PATTERNS: RegExp[] = [
-  /^\d+$/, // pure numeric id
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i, // uuid
-  /^[0-9a-f]{24,}$/i, // long hex id
+  /^\d+$/,
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+  /^[0-9a-f]{24,}$/i,
   // Medusa prefixed id, e.g. cart_01H..., prod_..., li_... — underscores never
   // appear in real route segments (Medusa uses hyphens: line-items,
   // payment-collections), so a `<word>_<rest>` segment is always an id. This
@@ -51,7 +31,6 @@ const DYNAMIC_SEGMENT_PATTERNS: RegExp[] = [
   /^[a-zA-Z]+_[a-zA-Z0-9_]+$/,
 ];
 
-// Middleware placeholder variants we treat as the canonical `{id}`.
 const PLACEHOLDER_SEGMENT = /^(\{[^}]+\}|:[A-Za-z_]+)$/;
 
 function normalizeSegment(segment: string): string {
@@ -69,32 +48,16 @@ function normalizeSegment(segment: string): string {
   return segment;
 }
 
-/** Strip query string and collapse all dynamic path segments to `{id}`. */
 export function normalizeEndpoint(rawEndpoint: string): string {
   const pathname = (rawEndpoint.split("?")[0] || "/").replace(/\/+$/, "") || "/";
   return pathname.split("/").map(normalizeSegment).join("/");
 }
 
-// ===========================================================================
-// 2. Denoise (Phase 6 step 4)
-// ===========================================================================
-//
-// Drop requests that carry no behavioral signal — health probes, static assets,
-// favicon, the admin UI bundle — so mined sequences are about user intent, not
-// infrastructure chatter. The deny list is kept here, in one auditable place,
-// as required by the plan. Matching is on the *normalized* endpoint.
-
-// Exact normalized endpoints to drop.
+// Matching is on the *normalized* endpoint.
 const DENY_EXACT = new Set<string>(["/", "/health", "/favicon.ico", "/robots.txt"]);
-
-// Normalized-endpoint prefixes to drop (admin UI bundle, framework internals,
-// static asset roots).
 const DENY_PREFIXES: string[] = ["/health", "/app", "/_next", "/assets", "/static"];
-
-// File extensions that indicate a static asset rather than an API call.
 const STATIC_ASSET_EXT = /\.(?:js|mjs|css|map|png|jpe?g|gif|svg|ico|woff2?|ttf|webp)$/i;
 
-/** True when this endpoint is infrastructure noise and should be dropped. */
 export function isNoiseEndpoint(endpoint: string): boolean {
   const normalized = normalizeEndpoint(endpoint);
 
@@ -112,14 +75,6 @@ export function isNoiseEndpoint(endpoint: string): boolean {
   return false;
 }
 
-// ===========================================================================
-// 3. Group + sort (Phase 6 step 2)
-// ===========================================================================
-//
-// Bucket raw docs by `session_id` and order each bucket by `timestamp` ascending
-// so each bucket is a chronological sequence. Docs without a `session_id` cannot
-// be attributed to a behavioral session and are dropped (counted separately).
-
 export interface SessionBucket {
   sessionId: string;
   docs: RawLogDoc[];
@@ -127,7 +82,6 @@ export interface SessionBucket {
 
 export interface GroupResult {
   buckets: SessionBucket[];
-  /** Docs discarded because they had no session_id. */
   droppedNoSession: number;
 }
 
@@ -158,18 +112,10 @@ export function groupBySession(docs: RawLogDoc[]): GroupResult {
   return { buckets, droppedNoSession };
 }
 
-// ===========================================================================
-// 4. Build session-flow records (Phase 6 step 5)
-// ===========================================================================
-//
-// Per the data contract: normalize each step's endpoint, drop noise steps, and
-// record `role_observed` as VALIDATION GROUND TRUTH ONLY (never a classifier
-// input — plan §10.3). No persona field is ever written.
-
-// Highest-privilege last, so role_observed can be sorted into rank order.
+// `role_observed` is VALIDATION GROUND TRUTH ONLY (never a classifier input —
+// plan §10.3). No persona field is ever written here.
 const ROLE_RANK: Record<ObservedRole, number> = { guest: 0, customer: 1, admin: 2 };
 
-/** Map the raw JWT `actor_type` (or null) onto a normalized observed role. */
 function toObservedRole(userRole: string | null | undefined): ObservedRole {
   switch (userRole) {
     case "customer":
@@ -198,7 +144,6 @@ function toStep(doc: RawLogDoc): FlowStep {
 
 export interface BuildResult {
   sessions: SessionFlow[];
-  /** Sessions dropped as a single non-error step (no sequence to mine). */
   droppedSingleStep: number;
 }
 
@@ -245,19 +190,10 @@ export function buildSessionFlows(buckets: SessionBucket[]): BuildResult {
   return { sessions, droppedSingleStep };
 }
 
-// ===========================================================================
-// 5. Candidate golden responses (Phase 6 step 6)
-// ===========================================================================
-//
-// The OBSERVED HALF of the ADR 0001 intersection. For each unique
-// `(METHOD endpoint, status)` we snapshot the SHAPE (field names + leaf types)
-// of the response body, flag dynamic fields as `ignored`, and merge across
-// sessions to surface optional fields. Read-only: it snapshots schemas, it does
-// not compare (comparison is Phase 8/10). With bodies-off logs there are no
+// OBSERVED HALF of the ADR 0001 intersection — snapshots schemas only, never
+// compares (comparison is Phase 8/10). With bodies-off logs there are no
 // response bodies, so this contributes nothing and Phase 8 falls back to
 // spec-only goldens — expected, not an error (ADR 0001).
-
-// Dynamic fields excluded from schema comparison (plan §11.2).
 const IGNORE_FIELDS = [
   "id",
   "created_at",
@@ -272,7 +208,6 @@ const IGNORE_FIELDS = [
 ];
 const IGNORE_SET = new Set(IGNORE_FIELDS);
 
-/** Classify one JSON value into a recursive shape/type snapshot. */
 function describe(value: unknown): SchemaNode {
   if (value === null || value === undefined) {
     return "null";
@@ -303,7 +238,6 @@ function isObjectNode(node: SchemaNode): node is { [key: string]: SchemaNode } {
   return typeof node === "object";
 }
 
-/** Merge two snapshots of the same endpoint: union object keys (optional fields). */
 function mergeSchema(a: SchemaNode, b: SchemaNode): SchemaNode {
   if (isObjectNode(a) && isObjectNode(b)) {
     const merged: { [key: string]: SchemaNode } = { ...a };
@@ -323,10 +257,6 @@ interface Accumulator {
   sessions: Set<string>;
 }
 
-/**
- * Build candidate goldens from raw docs that carry a response body. Docs without
- * a body (bodies-off) are skipped, as are noise endpoints.
- */
 export function extractGoldenCandidates(
   docs: RawLogDoc[],
   capturedAt: string
@@ -380,7 +310,6 @@ export function extractGoldenCandidates(
     );
 }
 
-/** Filesystem-safe slug for a `METHOD /endpoint` + status golden filename. */
 export function goldenFileName(candidate: GoldenCandidate): string {
   const slug = `${candidate.endpoint}-${candidate.expected_status}`
     .toLowerCase()

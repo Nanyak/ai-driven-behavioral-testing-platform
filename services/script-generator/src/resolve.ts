@@ -1,15 +1,6 @@
-/**
- * Request building & data threading (plan §"Request building & data
- * threading"). Walks a candidate's step list IN ORDER and turns it into a
- * sequence of `StepPlan`s: how to resolve the path (runtime IDs captured from
- * earlier steps or a standalone GET), how to resolve the body (observed ->
- * OAS-synthesized -> empty -> unresolvable), and what to capture into scope
- * for later steps.
- *
- * Never hardcodes a seeded ID (CLAUDE.md §5) — every `{id}` in a path is
- * either captured from a prior response in the SAME flow or fetched via a
- * standalone GET emitted just before the step that needs it.
- */
+// Never hardcodes a seeded ID (CLAUDE.md §5) — every `{id}` in a path is
+// either captured from a prior response in the SAME flow or fetched via a
+// standalone GET emitted just before the step that needs it.
 import type { OasDocument, OasMethod, OasSchema } from "../../golden/src/oas-types.js";
 import { isRefSchema } from "../../golden/src/oas-types.js";
 import type { CandidateStep } from "./load.js";
@@ -19,7 +10,6 @@ export interface OasSpecs {
   admin: OasDocument;
 }
 
-/** One synthesized request-body field: a literal, a reference to a captured runtime value, or a raw emitted expression. */
 export type BodyFieldValue =
   | { kind: "literal"; value: string | number | boolean }
   | { kind: "runtime"; ref: string }
@@ -34,18 +24,14 @@ export type BodyPlan =
   | { kind: "empty" }
   | { kind: "unresolvable"; reason: string };
 
-/** A path segment resolved either from a literal (non-`{}` part) or a captured runtime variable. */
 export type PathPlan = { template: string; params: Record<string, string> };
 
 /** A resolve call emitted BEFORE the step's main request, to populate scope. */
 export interface ResolveCall {
-  /** Variable name bound to the resolved value, e.g. "variantId". */
   bindTo: string;
   method: string;
   endpoint: string;
-  /** JSON path into the response body to extract, e.g. "products[0].variants[0].id". */
   extract: string;
-  /** Headers this resolve call needs. */
   auth: AuthRequirement;
   /** Inline request body for a bootstrap mutation (e.g. `POST /store/carts` needs `region_id`). */
   body?: SynthesizedBody;
@@ -63,7 +49,6 @@ export interface StepPlan {
   query: SynthesizedBody;
   body: BodyPlan;
   auth: AuthRequirement;
-  /** Variable names this step's response binds into scope for later steps, e.g. { cartId: "cart.id" }. */
   captures: Record<string, string>;
 }
 
@@ -78,14 +63,12 @@ const CUSTOMER = "customer-token" as const;
 const ADMIN = "admin-token" as const;
 const NONE = "none" as const;
 
-/** Resolve the auth requirement for an endpoint, per the step-builder table + CLAUDE.md (publishable key for store, JWT for admin). */
 function authFor(endpoint: string, requiresAuth: boolean): AuthRequirement {
   if (endpoint.startsWith("/admin/")) return ADMIN;
   if (endpoint.startsWith("/auth/")) return NONE;
   return requiresAuth ? CUSTOMER : PUBLISHABLE;
 }
 
-/** Extract `{param}` names from an endpoint template, in order. */
 function pathParamNames(endpoint: string): string[] {
   const names: string[] = [];
   const re = /\{([^}]+)\}/g;
@@ -96,7 +79,6 @@ function pathParamNames(endpoint: string): string[] {
   return names;
 }
 
-/** Known capture rules: which step (method+endpoint) responses bind which scope variables. */
 function captureRulesFor(method: string, endpoint: string): Record<string, string> {
   if (method === "GET" && endpoint === "/store/products")
     return { productId: "products[0].id", variantId: "products[0].variants[0].id" };
@@ -115,7 +97,6 @@ function captureRulesFor(method: string, endpoint: string): Record<string, strin
   return {};
 }
 
-/** Map a `{param}` name to the scope variable that should fill it. */
 function scopeVarForParam(param: string, endpoint: string): string {
   if (endpoint.startsWith("/admin/orders")) return "orderId";
   if (endpoint.startsWith("/store/orders")) return "orderId";
@@ -134,14 +115,9 @@ type ResolveStep = {
   query?: SynthesizedBody;
 };
 
-/**
- * Standalone resolution for a scope variable not yet produced by any prior
- * step in this flow. Most are a single GET; `cartId` is a short bootstrap
- * chain (`GET /store/regions` -> `POST /store/carts`) since a cart is a
- * runtime-created resource, never a literal/seeded id (CLAUDE.md §5), mirroring
- * the plan's `region -> cart -> line-item -> shipping -> payment -> complete`
- * threading example.
- */
+// Most scope variables resolve via a single GET; `cartId` is a short bootstrap
+// chain (`GET /store/regions` -> `POST /store/carts`) since a cart is a
+// runtime-created resource, never a literal/seeded id (CLAUDE.md §5).
 function standaloneResolverFor(varName: string, auth: AuthRequirement): ResolveStep[] | null {
   switch (varName) {
     case "regionId":
@@ -149,7 +125,6 @@ function standaloneResolverFor(varName: string, auth: AuthRequirement): ResolveS
     case "productId":
       return [{ bindTo: varName, method: "GET", endpoint: "/store/products", extract: "products[0].id" }];
     case "variantId":
-      // A line-item needs a real variant; pull the first product's first variant.
       return [{ bindTo: varName, method: "GET", endpoint: "/store/products", extract: "products[0].variants[0].id" }];
     case "orderId":
       return auth === ADMIN
@@ -167,9 +142,8 @@ function standaloneResolverFor(varName: string, auth: AuthRequirement): ResolveS
         },
       ];
     case "paymentCollectionId":
-      // A payment collection is created against a cart. The cart need only
-      // exist (no line items required to open a collection), so the standard
-      // `regions -> carts` bootstrap above suffices as the prerequisite.
+      // The cart need only exist (no line items required to open a payment
+      // collection), so the standard `regions -> carts` bootstrap suffices.
       return [
         ...standaloneResolverFor("cartId", auth)!,
         {
@@ -181,8 +155,8 @@ function standaloneResolverFor(varName: string, auth: AuthRequirement): ResolveS
         },
       ];
     case "paymentProviderId":
-      // Payment providers are scoped to a region; the listing endpoint takes
-      // `region_id` as a required query param (filled from runtime scope).
+      // Payment providers are scoped to a region; the listing endpoint requires
+      // `region_id` as a query param.
       return [
         { bindTo: "regionId", method: "GET", endpoint: "/store/regions", extract: "regions[0].id" },
         {
@@ -198,7 +172,6 @@ function standaloneResolverFor(varName: string, auth: AuthRequirement): ResolveS
   }
 }
 
-/** Resolve the OAS request-body schema for `(method, endpoint)`, if the spec documents one. */
 function requestSchemaFor(
   specs: OasSpecs,
   method: string,
@@ -215,7 +188,6 @@ function requestSchemaFor(
   return null;
 }
 
-/** Resolve a `$ref`/`allOf`/`oneOf` OAS schema into a flat list of (name, required, type) fields. */
 interface FlatField {
   name: string;
   required: boolean;
@@ -230,7 +202,7 @@ function resolveSchemaRef(doc: OasDocument, schema: OasSchema): { properties: Re
     return resolveSchemaRef(doc, resolved);
   }
   if ("oneOf" in schema && schema.oneOf) {
-    // Edge/alternate request shapes: the first branch is the canonical minimal one.
+    // Treat the first branch as the canonical minimal shape.
     return resolveSchemaRef(doc, schema.oneOf[0]);
   }
   if ("allOf" in schema && schema.allOf) {
@@ -269,7 +241,6 @@ function flattenRequiredFields(doc: OasDocument, schema: OasSchema): FlatField[]
     .map(([name, child]) => ({ name, required: true, type: leafTypeOf(doc, child) }));
 }
 
-/** ID-typed field names that should be filled from runtime-resolved values, never a literal. */
 const ID_FIELD_TO_SCOPE: Record<string, string> = {
   region_id: "regionId",
   variant_id: "variantId",
@@ -279,18 +250,16 @@ const ID_FIELD_TO_SCOPE: Record<string, string> = {
 };
 
 /**
- * Synthesize a minimal request body from the OAS schema (priority 2: payload
- * policy). Required ID-typed fields resolve to runtime scope variables —
- * bootstrapping them via `ensure` (a standalone GET or the `regions -> carts`
- * cart chain) exactly as path and query params do, so e.g. a customer
+ * Required ID-typed fields resolve to runtime scope variables — bootstrapping
+ * them via `ensure` (a standalone GET or the `regions -> carts` cart chain)
+ * exactly as path and query params do, so e.g. a customer
  * `POST /store/payment-collections` fragment that needs a `cart_id` in its BODY
- * gets a real runtime cart instead of bailing out. Other required scalars get
- * deterministic literals. Returns `unresolvable` only when a required ID field
- * can be neither captured nor bootstrapped — UNLESS `edgeOmitOnFailure` is set
- * (the step's logged `expected_status` is itself a 4xx/5xx), in which case an
- * unsynthesizable required field is deliberately OMITTED: that is the
- * reproducible structural condition (a missing OAS-required field) that the
- * plan's edge-case section calls for, not a guessed malformed value.
+ * gets a real runtime cart instead of bailing out. Returns `unresolvable` only
+ * when a required ID field can be neither captured nor bootstrapped — UNLESS
+ * `edgeOmitOnFailure` is set (the step's logged `expected_status` is itself a
+ * 4xx/5xx), in which case an unsynthesizable required field is deliberately
+ * OMITTED: that reproduces the logged missing-required-field condition rather
+ * than guessing a malformed value.
  */
 function synthesizeBody(
   specs: OasSpecs,
@@ -343,11 +312,11 @@ function synthesizeBody(
 
 /**
  * Auth-login endpoints are NOT documented in the store/admin OAS, so the schema
- * synthesizer yields an empty body and the login is sent with no credentials ->
- * 401. These three endpoints need REAL credentials, threaded deterministically:
- *   - admin login reads the same env the shared fixture uses;
- *   - customer register/login reuse the in-scope generated `email`/`password`
- *     consts the emit setup declares, so a later login matches the registration.
+ * synthesizer would yield an empty body and the login would be sent with no
+ * credentials -> 401. These three endpoints need REAL credentials, threaded
+ * deterministically: admin login reads the same env the shared fixture uses;
+ * customer register/login reuse the in-scope generated `email`/`password`
+ * consts the emit setup declares, so a later login matches the registration.
  * Returns null for non-auth endpoints (fall through to OAS body synthesis).
  */
 function authCredentialBody(method: string, endpoint: string): BodyPlan | null {
@@ -367,18 +336,17 @@ function authCredentialBody(method: string, endpoint: string): BodyPlan | null {
       fields: { email: { kind: "raw", expr: "email" }, password: { kind: "raw", expr: "password" } },
     };
   }
-  // Creating the customer entity (step 2 of the Medusa v2 handshake) needs the
-  // SAME generated `email` the register/login steps use, or the new customer
-  // record won't match the authenticated identity. The generic synthesizer would
-  // emit an empty body (no id-typed required field) -> 400. Thread the in-scope
-  // `email` const, mirroring the auto-register setup.
+  // Creating the customer entity needs the SAME generated `email` the
+  // register/login steps use, or the new customer record won't match the
+  // authenticated identity. The generic synthesizer would emit an empty body
+  // (no id-typed required field) -> 400. Thread the in-scope `email` const,
+  // mirroring the auto-register setup.
   if (endpoint === "/store/customers") {
     return { kind: "synthesized", fields: { email: { kind: "raw", expr: "email" } } };
   }
   return null;
 }
 
-/** Names of REQUIRED `in: query` params the OAS documents for `(method, endpoint)`. */
 function requiredQueryParamsFor(specs: OasSpecs, method: string, endpoint: string): string[] {
   for (const doc of [specs.store, specs.admin]) {
     const operation = doc.paths[endpoint]?.[method.toLowerCase() as OasMethod];
@@ -390,11 +358,6 @@ function requiredQueryParamsFor(specs: OasSpecs, method: string, endpoint: strin
   return [];
 }
 
-/**
- * Build the full step-by-step plan for one candidate's flow, in order:
- * for each step, emit resolve calls for any path/query inputs not already in
- * scope, then the body plan, capturing every ID a later step might need.
- */
 export function buildFlowPlan(
   steps: CandidateStep[],
   specs: OasSpecs,
@@ -441,11 +404,9 @@ export function buildFlowPlan(
       continue;
     }
 
-    // Required query params (OAS-driven): fill ID-typed ones (cart_id, region_id,
-    // ...) from runtime scope, resolving via a standalone GET/bootstrap when not
-    // already in scope. A step whose OWN expected_status is a 4xx/5xx omits an
-    // unresolvable required query param — that omission is the reproducible
-    // structural condition the edge-case rule calls for, not a guessed value.
+    // A step whose OWN expected_status is a 4xx/5xx omits an unresolvable
+    // required query param instead of erroring — that omission reproduces the
+    // logged structural condition rather than guessing a value.
     const query: SynthesizedBody = {};
     for (const name of requiredQueryParamsFor(specs, step.method, step.endpoint)) {
       const scopeVar = ID_FIELD_TO_SCOPE[name];
@@ -464,11 +425,9 @@ export function buildFlowPlan(
       continue;
     }
 
-    // Body resolution: observed -> auth-credentials -> OAS-synthesized -> empty
-    // -> unresolvable (priority order). A step whose OWN logged expected_status
-    // is already a 4xx/5xx reproduces that failure structurally (an omitted
-    // OAS-required field), per the plan's edge-case rule — never invents a new
-    // malformation.
+    // A step whose OWN logged expected_status is already a 4xx/5xx reproduces
+    // that failure structurally (an omitted OAS-required field) — never invents
+    // a new malformation.
     let body: BodyPlan;
     if (step.request_payload !== undefined) {
       body = { kind: "observed", payload: step.request_payload };

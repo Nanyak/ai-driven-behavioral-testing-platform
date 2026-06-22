@@ -26,7 +26,6 @@
  * lookup is permitted), so a 2xx there does not prove a token.
  */
 
-/** The only fields the classifier may read. */
 export interface AttrStep {
   method: string;
   endpoint: string;
@@ -110,9 +109,6 @@ export function deriveAttributes(
     if (isAuthEndpoint(step.endpoint)) {
       requiresAuth = true;
     }
-    // The cart/read signals count ONLY when 2xx (plan §attributes.ts impl note,
-    // ADR 0006). A guest's failed attempt is a 4xx and carries has_errors
-    // instead, which is correct.
     if (
       useCartSignal &&
       isSuccess(step.status) &&

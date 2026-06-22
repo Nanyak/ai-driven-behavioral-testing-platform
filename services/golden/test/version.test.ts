@@ -1,6 +1,3 @@
-/**
- * Unit test for version.ts. Run via `npm test` (test/run-all.ts).
- */
 import { strict as assert } from "node:assert";
 import { compareResponse } from "../src/compare.js";
 import { checkOasDrift, decideRefresh, stampCapturedAt } from "../src/version.js";
@@ -38,7 +35,7 @@ check("a passing comparison never triggers a refresh", () => {
 });
 
 check("an intentional schema change is flagged as a regression by default (no refresh)", () => {
-  const result = compareResponse(golden, 200, { currency_code: "usd" }); // items removed
+  const result = compareResponse(golden, 200, { currency_code: "usd" });
   assert.equal(result.pass, false);
   const decision = decideRefresh(result, false);
   assert.equal(decision.refresh, false);
@@ -46,7 +43,7 @@ check("an intentional schema change is flagged as a regression by default (no re
 });
 
 check("explicit refresh updates the baseline only when requested", () => {
-  const result = compareResponse(golden, 200, { currency_code: "usd" }); // items removed
+  const result = compareResponse(golden, 200, { currency_code: "usd" });
   const decision = decideRefresh(result, true);
   assert.equal(decision.refresh, true);
 });

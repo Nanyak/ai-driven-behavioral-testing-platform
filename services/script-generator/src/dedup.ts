@@ -1,17 +1,9 @@
-/**
- * Defensive dedup re-pass (plan §Implementation steps #2). Candidates are
- * already deduped within-run by Phase 7 (`behavior-engine/src/dedup.ts`), but
- * Phase 9 re-applies the same rules defensively since it is a separate process
- * boundary reading a JSON artifact, not a guarantee enforced by a type system:
- *
- *   1. Identical canonical signature -> keep highest support.
- *   2. Common prefix >= 3 tokens (within the same persona) -> keep the
- *      longest representative.
- *   3. Cap at 10 per persona.
- *
- * Reuses the SAME canonical flow signature (ADR 0002) via behavior-engine's
- * `signature.ts` — this module defines no second "same flow?" key.
- */
+// Candidates are already deduped within-run by behavior-engine's dedup.ts, but
+// this module re-applies the same rules defensively since it is a separate
+// process boundary reading a JSON artifact, not a guarantee enforced by a type
+// system. Reuses the SAME canonical flow signature (ADR 0002) via
+// behavior-engine's `signature.ts` — this module defines no second "same
+// flow?" key.
 import { canonicalTokens, type SignatureStep } from "../../behavior-engine/src/signature.js";
 import type { Candidate } from "./load.js";
 
@@ -21,7 +13,6 @@ function tokensOf(candidate: Candidate): string[] {
   return canonicalTokens(candidate.steps as SignatureStep[]);
 }
 
-/** 1. Collapse identical-signature candidates, keeping the highest-support one. */
 function collapseIdentical(candidates: Candidate[]): Candidate[] {
   const bySig = new Map<string, Candidate>();
   for (const candidate of candidates) {
@@ -33,7 +24,6 @@ function collapseIdentical(candidates: Candidate[]): Candidate[] {
   return [...bySig.values()];
 }
 
-/** True when `shorter`'s tokens are a prefix (length >= 3) of `longer`'s tokens. */
 function isPrefixOf(shorter: string[], longer: string[]): boolean {
   if (shorter.length < 3 || shorter.length >= longer.length) {
     return false;
@@ -46,7 +36,6 @@ function isPrefixOf(shorter: string[], longer: string[]): boolean {
   return true;
 }
 
-/** 2. Cluster by >=3-token common prefix per persona; keep the longest representative. */
 function clusterByPrefix(candidates: Candidate[]): Candidate[] {
   const withTokens = candidates.map((c) => ({ candidate: c, tokens: tokensOf(c) }));
   const ordered = [...withTokens].sort(
@@ -65,7 +54,6 @@ function clusterByPrefix(candidates: Candidate[]): Candidate[] {
   return kept.map((e) => e.candidate);
 }
 
-/** 3. Cap at PER_PERSONA_CAP per persona, keeping the highest-support candidates. */
 function capPerPersona(candidates: Candidate[]): Candidate[] {
   const counts = new Map<string, number>();
   const kept: Candidate[] = [];
@@ -90,7 +78,6 @@ export interface DedupResult {
   cappedOut: number;
 }
 
-/** Full defensive dedup re-pass. Steps 1 -> 2 -> 3 in order. */
 export function dedup(candidates: Candidate[]): DedupResult {
   const afterIdentical = collapseIdentical(candidates);
   const afterPrefix = clusterByPrefix(afterIdentical);

@@ -1,6 +1,5 @@
 import type { Weights } from "./config.js";
 
-/** One leaf of the situation taxonomy (plan §4). Mirrors the Weights keys. */
 export type SessionType = keyof Weights;
 
 export const SESSION_TYPES: SessionType[] = [
@@ -32,7 +31,6 @@ export const SESSION_TYPES: SessionType[] = [
 
 export type Identity = "guest" | "returning" | "new";
 
-/** Which stage a session type runs in (plan §5). */
 export const STAGE_OF: Record<SessionType, 1 | 2> = {
   bounce: 1,
   browse: 1,
@@ -50,7 +48,7 @@ export const STAGE_OF: Record<SessionType, 1 | 2> = {
   profileMgmt: 1,
   adminCatalog: 1,
   edge: 1,
-  // Stage 2 — needs prior orders/accounts.
+  // Stage 2 needs prior orders/accounts populated by Stage 1.
   orderStatus: 2,
   repeatOrderCheck: 2,
   returns: 2,
@@ -61,10 +59,7 @@ export const STAGE_OF: Record<SessionType, 1 | 2> = {
   adminSupport: 2,
 };
 
-/**
- * Allocate `total` sessions across the taxonomy proportional to weights, using
- * the largest-remainder method so rounding never loses/gains a session.
- */
+/** Uses the largest-remainder method so rounding never loses/gains a session. */
 export function weightedAllocation(weights: Weights, total: number): Record<SessionType, number> {
   const sum = SESSION_TYPES.reduce((s, t) => s + Math.max(0, weights[t]), 0) || 1;
   const exact = SESSION_TYPES.map((t) => ({ type: t, raw: (Math.max(0, weights[t]) / sum) * total }));
@@ -84,10 +79,7 @@ export function weightedAllocation(weights: Weights, total: number): Record<Sess
   return counts;
 }
 
-/**
- * Pick an identity from a weighted split, e.g. { guest: 50, returning: 38, new: 12 }.
- * Missing identities are treated as weight 0.
- */
+/** Missing identities are treated as weight 0. */
 export function splitIdentity(split: Partial<Record<Identity, number>>): Identity {
   const entries = (Object.entries(split) as [Identity, number][]).filter(([, w]) => w > 0);
   const sum = entries.reduce((s, [, w]) => s + w, 0) || 1;
@@ -100,7 +92,6 @@ export function splitIdentity(split: Partial<Record<Identity, number>>): Identit
 }
 
 /**
- * Per-type identity split for the leaves where identity isn't fixed by type (plan §4).
  * Cart-bearing leaves (cartAbandon, checkoutAbandon, multiItemCheckout) are always
  * returning — the storefront requires auth to add to cart. directLanding guest identity
  * applies only to bounce/browse intents; cart intents force auth in dispatch.
@@ -116,7 +107,6 @@ const IDENTITY_SPLIT: Partial<Record<SessionType, Partial<Record<Identity, numbe
   multiItemCheckout: { returning: 100 },
 };
 
-/** Resolve the identity to drive a session of the given type. */
 export function identityFor(type: SessionType): Identity {
   const split = IDENTITY_SPLIT[type];
   if (split) return splitIdentity(split);

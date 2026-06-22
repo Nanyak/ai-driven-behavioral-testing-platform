@@ -33,7 +33,6 @@ export interface SignatureStep {
   endpoint: string;
 }
 
-/** One canonical `METHOD endpoint` token. */
 function tokenOf(step: SignatureStep): string {
   return `${step.method.toUpperCase()} ${step.endpoint}`;
 }

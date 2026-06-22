@@ -4,7 +4,6 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// services/traffic-generator/src/config -> service root is two levels up.
 const SERVICE_ROOT = resolve(__dirname, "..", "..");
 const REPO_ROOT = resolve(SERVICE_ROOT, "..", "..");
 
@@ -52,38 +51,36 @@ function getInt(key: string, fallback: number): number {
 export type MixProfile = "realistic" | "signal-rich" | "smoke";
 
 /**
- * Relative weights over the situation taxonomy (plan §4). Values are relative —
- * they are normalized to the configured total session count, then floored
- * (plan §7). One key per taxonomy leaf.
+ * Values are relative — they are normalized to the configured total session
+ * count, then floored (plan §7).
  */
 export interface Weights {
-  bounce: number;            // A1
-  browse: number;            // A2
-  cartAbandon: number;       // B1
-  checkoutAbandon: number;   // B2
-  returningCheckout: number; // C1 — auth-required checkout (anonymous cart removed)
-  newCheckout: number;       // C2 (holdout, LLM-only)
-  directLanding: number;     // C3 — share-link / ad product landing
-  comparisonBrowse: number;  // A3 — high product-view research session
-  categoryBrowse: number;    // A4 — category-led discovery (categories + sort + pagination)
-  multiItemCheckout: number; // C4 — multi-browse-add-checkout
-  cartWallConversion: number; // C5 — guest hits auth wall, signs in, converts (401→login→200)
-  stockOutCheckout: number;  // C6 — returning customer hits insufficient-inventory 400 (Theme 3)
-  cartReviseAbandon: number; // B3 — returning curates cart (update + remove line-item), abandons
-  orderStatus: number;       // D1
-  repeatOrderCheck: number;  // D1b — repeated status checks (post-purchase anxiety)
-  profileMgmt: number;       // D2
-  returns: number;           // E
-  adminCatalog: number;      // F1
-  adminFulfill: number;      // F2
-  adminRefund: number;       // F3 — return + refund a fulfilled order
-  adminReturnReject: number; // F6 — reject (cancel) a requested return (Theme 4c)
-  adminCancel: number;       // F5 — cancel + refund an unfulfilled order
-  adminSupport: number;      // F4
-  edge: number;              // G
+  bounce: number;
+  browse: number;
+  cartAbandon: number;
+  checkoutAbandon: number;
+  returningCheckout: number; // auth-required checkout (anonymous cart removed)
+  newCheckout: number; // holdout, LLM-only
+  directLanding: number;
+  comparisonBrowse: number;
+  categoryBrowse: number;
+  multiItemCheckout: number;
+  cartWallConversion: number; // guest hits auth wall, signs in, converts (401→login→200)
+  stockOutCheckout: number; // returning customer hits insufficient-inventory 400 (Theme 3)
+  cartReviseAbandon: number; // returning curates cart (update + remove line-item), abandons
+  orderStatus: number;
+  repeatOrderCheck: number;
+  profileMgmt: number;
+  returns: number;
+  adminCatalog: number;
+  adminFulfill: number;
+  adminRefund: number; // return + refund a fulfilled order
+  adminReturnReject: number; // reject (cancel) a requested return (Theme 4c)
+  adminCancel: number; // cancel + refund an unfulfilled order
+  adminSupport: number;
+  edge: number;
 }
 
-/** Conditional event probabilities within a flow (plan §4.1). */
 export interface EventProbs {
   search: number;
   filter: number;
@@ -99,7 +96,7 @@ export interface EventProbs {
   contaminate: number;
 }
 
-/** Minimum counts of key terminal flows, guaranteed by floor top-up (plan §7). */
+/** Floors are minimums topped up by applyFloors, not desired/target counts (plan §7). */
 export interface Floors {
   holdout: number;
   returningCheckout: number;
@@ -122,24 +119,18 @@ export interface TrafficConfig {
   weights: Weights;
   eventProbs: EventProbs;
   floors: Floors;
-  /** Promo codes used by the deal-seeker event path (plan §4.1, §5). */
   validPromoCode: string;
   invalidPromoCode: string;
   concurrency: number;
 }
 
-/**
- * Realistic traffic shape modelled on Shopee/Lazada behaviour (plan §4).
- * New types added: directLanding (share-link), comparisonBrowse (researcher),
- * multiItemCheckout (bulk-add), repeatOrderCheck (tracking anxiety).
- * Counts shown are proportional; actual sessions = weight/sum × totalSessions.
- */
+/** Counts are proportional; actual sessions = weight/sum × totalSessions. */
 const REALISTIC_WEIGHTS: Weights = {
   bounce: 15,
   browse: 12,
   cartAbandon: 11,
   checkoutAbandon: 8,
-  returningCheckout: 12, // absorbed former guestCheckout weight (7 → +7)
+  returningCheckout: 12,
   newCheckout: 2,
   directLanding: 7,
   comparisonBrowse: 6,
@@ -164,18 +155,18 @@ const REALISTIC_WEIGHTS: Weights = {
 /** Signal-rich: purchase/return/refund leaves boosted for behavioural mining. */
 const SIGNAL_RICH_WEIGHTS: Weights = {
   ...REALISTIC_WEIGHTS,
-  returningCheckout: 22, // absorbed former guestCheckout boost (12 → +10 from original returning)
+  returningCheckout: 22,
   newCheckout: 4,
   multiItemCheckout: 7,
-  categoryBrowse: 12, // boost category/sort/pagination coverage for mining
-  cartWallConversion: 10, // boost the 401→login→200 guest-conversion pivot for mining
-  stockOutCheckout: 5, // boost the insufficient-inventory 400 for mining
+  categoryBrowse: 12,
+  cartWallConversion: 10,
+  stockOutCheckout: 5,
 
   returns: 7,
   repeatOrderCheck: 5,
   adminFulfill: 6,
   adminRefund: 3,
-  adminReturnReject: 3, // boost the return-rejection reversal archetype for mining
+  adminReturnReject: 3,
   adminCancel: 3,
 };
 

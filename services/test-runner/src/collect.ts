@@ -1,20 +1,13 @@
 /**
- * collect.ts (Phase 10 plan step #4). Parses Playwright's JSON reporter output
- * into a NORMALIZED run result keyed persona → flow → step. This normalized
- * object is the contract Phase 11 reporting consumes (docs/phase-11-...md) —
- * keep it a clean exported type, do not leak Playwright reporter shapes past
- * this module.
- *
- * Provenance travels WITH the test (Phase 10 key decision): persona, flow_name,
- * and source_sessions are LIFTED from the Playwright annotations the Phase 9
- * generator stamps (services/script-generator/src/emit.ts), never reconstructed
- * from the candidates file here.
+ * Persona, flow_name, and source_sessions are LIFTED from the Playwright
+ * annotations the Phase 9 generator stamps (services/script-generator/src/emit.ts),
+ * never reconstructed from the candidates file here — keep this a clean exported
+ * type, do not leak Playwright reporter shapes past this module.
  *
  * `trace_id` does NOT exist upstream: behavior-engine candidates carry
  * `source_sessions` but no trace_id, and a step is only {method, endpoint,
  * expected_status}. It is therefore OPTIONAL on the normalized result — emitted
- * only if an annotation ever supplies one, never invented. (This bumps the
- * Phase 11 checklist "Include source trace_id" item — see docs/phase-10 plan.)
+ * only if an annotation ever supplies one, never invented.
  */
 
 import { readFileSync } from "node:fs";
@@ -30,9 +23,7 @@ interface PwAnnotation {
 interface PwAttachment {
   name: string;
   contentType?: string;
-  /** Inline body (base64 when binary; JSON reporter inlines small text bodies). */
   body?: string;
-  /** Path to an on-disk attachment, used for larger payloads. */
   path?: string;
 }
 
@@ -54,7 +45,6 @@ interface PwTestResult {
 }
 
 interface PwTest {
-  /** Per-project: which Playwright project (== persona folder) this ran under. */
   projectName?: string;
   status?: string;
   annotations?: PwAnnotation[];
@@ -81,16 +71,13 @@ export interface PlaywrightJsonReport {
 /* ---- Normalized run result (Phase 11 input) ---- */
 
 export interface NormalizedStep {
-  /** "<METHOD endpoint>" — matches the test.step() title the generator emits. */
   endpoint: string;
   method: string;
   expected_status: number | null;
   actual_status: number | null;
   status: "passed" | "failed" | "skipped" | "timedOut" | "interrupted";
   duration_ms: number;
-  /** Golden schema diff lifted from the "golden-diff" attachment, when present. */
   golden_diff: SchemaDiffEntry[] | null;
-  /** Readable failure message (expected vs actual), null on pass/skip. */
   failure_message: string | null;
 }
 
@@ -101,7 +88,6 @@ export interface NormalizedTest {
   source_sessions: string[];
   /** Optional — never invented; emitted only if an annotation supplies one. */
   trace_id?: string | null;
-  /** Playwright project the test ran under (== persona folder). */
   project: string;
   file: string;
   title: string;
@@ -125,12 +111,10 @@ export interface NormalizedRunResult {
 
 /* ---- Parsing ---- */
 
-/** Pull a single annotation description by type out of a (test|result) annotation list. */
 function annotationValue(annotations: PwAnnotation[] | undefined, type: string): string | undefined {
   return annotations?.find((a) => a.type === type)?.description;
 }
 
-/** Parse the JSON-stringified source_sessions annotation; tolerate absence/malformation. */
 function parseSourceSessions(raw: string | undefined): string[] {
   if (!raw) return [];
   try {
@@ -141,7 +125,6 @@ function parseSourceSessions(raw: string | undefined): string[] {
   }
 }
 
-/** Read the "golden-diff" attachment body (inline JSON) into a SchemaDiffEntry[]. */
 function readGoldenDiff(attachments: PwAttachment[] | undefined): SchemaDiffEntry[] | null {
   const att = attachments?.find((a) => a.name === "golden-diff");
   if (!att?.body) return null;
@@ -160,7 +143,6 @@ function readGoldenDiff(attachments: PwAttachment[] | undefined): SchemaDiffEntr
   }
 }
 
-/** Map a Playwright status string onto the normalized status union. */
 function normStatus(status: string | undefined): NormalizedStep["status"] {
   switch (status) {
     case "passed":
@@ -176,7 +158,6 @@ function normStatus(status: string | undefined): NormalizedStep["status"] {
 
 const STEP_TITLE_RE = /^(GET|POST|PUT|PATCH|DELETE)\s+(\/\S+)$/;
 
-/** Extract "<METHOD> <endpoint>" request steps (the generator's test.step titles). */
 function extractRequestSteps(result: PwTestResult): NormalizedStep[] {
   const goldenDiff = readGoldenDiff(result.attachments);
   const out: NormalizedStep[] = [];
@@ -198,13 +179,11 @@ function extractRequestSteps(result: PwTestResult): NormalizedStep[] {
   return out;
 }
 
-/**
- * A Playwright `expect(resp.status(), "...").toBe(200)` failure message embeds
- * both the expected and received value. Parse them out so the report shows
- * expected vs. actual status, not a raw matcher dump (plan §5). Returns null
- * when the message is not a status-mismatch (e.g. a thrown extractPath error).
- */
-/** Strip ANSI color escapes Playwright injects into matcher messages, so the regexes match. */
+// Playwright's `expect(resp.status(), "...").toBe(200)` failure message embeds
+// both the expected and received value as text; parsed out below into
+// expected/actual status rather than surfacing a raw matcher dump. Returns null
+// when the message is not a status-mismatch (e.g. a thrown extractPath error).
+
 // eslint-disable-next-line no-control-regex
 const ANSI_RE = /\x1b\[[0-9;]*m/g;
 
@@ -220,7 +199,6 @@ function actualFromStepError(message: string | undefined): number | null {
   return m ? Number(m[1]) : null;
 }
 
-/** Walk the (nested) suite tree and yield every spec with its file + project. */
 function* iterateSpecs(suites: PwSuite[] | undefined, file: string): Generator<{ spec: PwSpec; file: string }> {
   for (const suite of suites ?? []) {
     const suiteFile = suite.file ?? file;
@@ -231,7 +209,6 @@ function* iterateSpecs(suites: PwSuite[] | undefined, file: string): Generator<{
   }
 }
 
-/** Normalize a parsed Playwright JSON report into the Phase 11 input shape. */
 export function collect(report: PlaywrightJsonReport): NormalizedRunResult {
   const tests: NormalizedTest[] = [];
 
@@ -290,7 +267,6 @@ export function collect(report: PlaywrightJsonReport): NormalizedRunResult {
   };
 }
 
-/** Parse a Playwright JSON report file into the normalized run result. */
 export function collectFromFile(jsonPath: string): NormalizedRunResult {
   const report = JSON.parse(readFileSync(jsonPath, "utf8")) as PlaywrightJsonReport;
   return collect(report);

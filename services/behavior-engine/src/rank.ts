@@ -34,7 +34,6 @@ export interface RankWeights {
 
 /** Per-endpoint importance multipliers (the merged business+endpoint signal). */
 export interface EndpointImportance {
-  /** Substring match on a token's endpoint -> importance weight in [0,1]. */
   patterns: Array<{ match: string; weight: number }>;
   /** Default weight for endpoints matching nothing above (browsing reads). */
   baseline: number;
@@ -45,7 +44,6 @@ export interface RankConfig {
   endpointImportance: EndpointImportance;
 }
 
-/** Explicit defaults — the single tunable surface for ranking. */
 export const DEFAULT_RANK_CONFIG: RankConfig = {
   weights: {
     support: 0.4,
@@ -54,22 +52,20 @@ export const DEFAULT_RANK_CONFIG: RankConfig = {
     errorCoverage: 0.15,
   },
   endpointImportance: {
-    // Revenue / identity / state-changing endpoints rank above reads.
     patterns: [
-      { match: "/store/carts/{id}/complete", weight: 1.0 }, // order placement
-      { match: "/admin/returns", weight: 0.95 }, // reversal lifecycle
-      { match: "/admin/orders", weight: 0.9 }, // admin order ops
-      { match: "/auth/customer", weight: 0.85 }, // identity
+      { match: "/store/carts/{id}/complete", weight: 1.0 },
+      { match: "/admin/returns", weight: 0.95 },
+      { match: "/admin/orders", weight: 0.9 },
+      { match: "/auth/customer", weight: 0.85 },
       { match: "/store/customers", weight: 0.85 },
       { match: "/store/payment-collections", weight: 0.8 },
-      { match: "/store/carts", weight: 0.7 }, // cart mutations
+      { match: "/store/carts", weight: 0.7 },
       { match: "/admin/", weight: 0.7 },
     ],
-    baseline: 0.2, // browsing reads (regions/products) still matter, but least.
+    baseline: 0.2,
   },
 };
 
-/** Importance of a single token's endpoint (first matching pattern wins). */
 function endpointWeight(token: string, importance: EndpointImportance): number {
   for (const { match, weight } of importance.patterns) {
     if (token.includes(match)) {
@@ -121,7 +117,6 @@ export function rankFlows(
     const personaCount = personaCounts.get(flow.persona) ?? 1;
     const personaCoverageN = maxPersonaCount > 0 ? 1 - (personaCount - 1) / maxPersonaCount : 1;
 
-    // Peak endpoint importance across the flow's steps.
     const endpointImportanceN = Math.max(
       ...flow.tokens.map((t) => endpointWeight(t, config.endpointImportance))
     );
@@ -156,7 +151,6 @@ export function rankFlows(
   return scored;
 }
 
-/** Map a score onto a coarse priority label for the candidate output. */
 export function priorityOf(flow: ScoredFlow): "high" | "medium" | "low" {
   if (flow.attributes.is_admin || flow.tokens.some((t) => t.includes("/complete"))) {
     return "high";

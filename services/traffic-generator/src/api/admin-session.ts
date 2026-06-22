@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { pick } from "../util/random.js";
 import { MISSING, recordStep, type StepResult } from "../http/step.js";
 
-/** Ids resolved from a successful createProduct(), for the stock-out arc (Theme 3). */
+/** For the stock-out arc (Theme 3). */
 export interface CreatedProduct {
   productId: string;
   variantId: string;
@@ -12,9 +12,8 @@ export interface CreatedProduct {
 }
 
 /**
- * Drives the Medusa Admin API for one operator session. Establishes the admin
- * role naturally via POST /auth/user/emailpass — the logging middleware records
- * actor_type "user" from the resulting JWT.
+ * Establishes the admin role naturally via POST /auth/user/emailpass — the
+ * logging middleware records actor_type "user" from the resulting JWT.
  */
 export class AdminSession {
   token?: string;
@@ -68,7 +67,6 @@ export class AdminSession {
     if (!id) {
       return this.record("admin_update_product", "POST", "/admin/products/{id}", MISSING);
     }
-    // Touch a metadata note — a benign admin edit that succeeds on any product.
     const res = await this.client.request("POST", `/admin/products/${id}`, {
       token: this.token,
       body: { metadata: { reviewed_at: new Date().toISOString() } },
@@ -309,7 +307,6 @@ export class AdminSession {
     return { returnId, res };
   }
 
-  /** Add line items to the draft return (plan §5 Stage 2 F3). */
   async requestReturnItems(
     returnId: string,
     items: { id: string; quantity: number }[]
@@ -321,7 +318,6 @@ export class AdminSession {
     return this.record("admin_request_return_items", "POST", "/admin/returns/{id}/request-items", res);
   }
 
-  /** Confirm the return request — the return is now "filed" against the order. */
   async confirmReturnRequest(returnId: string): Promise<ApiResponse> {
     const res = await this.client.request("POST", `/admin/returns/${returnId}/request`, {
       token: this.token,
@@ -330,7 +326,6 @@ export class AdminSession {
     return this.record("admin_request_return", "POST", "/admin/returns/{id}/request", res);
   }
 
-  /** Begin receiving the requested return (creates the order change). */
   async receiveReturn(returnId: string): Promise<ApiResponse> {
     const res = await this.client.request("POST", `/admin/returns/${returnId}/receive`, {
       token: this.token,
@@ -339,7 +334,6 @@ export class AdminSession {
     return this.record("admin_receive_return", "POST", "/admin/returns/{id}/receive", res);
   }
 
-  /** Record received quantities against the in-progress receipt. */
   async receiveReturnItems(
     returnId: string,
     items: { id: string; quantity: number }[]
@@ -351,7 +345,6 @@ export class AdminSession {
     return this.record("admin_receive_return_items", "POST", "/admin/returns/{id}/receive-items", res);
   }
 
-  /** Confirm receipt — settles the refund against the order. */
   async confirmReturnReceipt(returnId: string): Promise<ApiResponse> {
     const res = await this.client.request("POST", `/admin/returns/${returnId}/receive/confirm`, {
       token: this.token,

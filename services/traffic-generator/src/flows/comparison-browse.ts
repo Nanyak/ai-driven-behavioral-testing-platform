@@ -10,15 +10,9 @@ function pickQuery(): string {
 }
 
 /**
- * Comparison-browse flow — a user researching 4–8 products before deciding.
- * Common on Shopee/Lazada for electronics, fashion, and home goods.
- *
  * The high view_product count per session (4–8 vs. the 1–2 of regular browse)
  * is the distinguishing log signal. This is always a non-purchasing session;
  * ~20% add one item to cart but abandon (the "save for later" pattern).
- *
- * Entry is search-first ~60% of the time — matching Shopee/Lazada behaviour
- * where most users type a query rather than navigate by category.
  */
 export async function runComparisonBrowseFlow(
   client: MedusaClient,
@@ -36,24 +30,21 @@ export async function runComparisonBrowseFlow(
     }
   }
 
-  // Entry: search (60%) or category browse (40%).
   if (chance(0.6)) {
     await session.searchProducts(pickQuery());
   } else {
     await session.browseProducts();
   }
 
-  // First comparison pass: 4–6 products.
   const firstPass = 4 + Math.floor(Math.random() * 3);
   await session.viewMultipleProducts(firstPass);
 
-  // Mid-session refinement: filter, re-sort, or search again to narrow results (~50%).
   if (chance(0.5)) {
     const r = Math.random();
     if (r < 0.4) {
       await session.filterProducts();
     } else if (r < 0.7) {
-      await session.sortProducts("title"); // re-sort the comparison set
+      await session.sortProducts("title");
     } else {
       await session.searchProducts(pickQuery());
     }
@@ -61,7 +52,6 @@ export async function runComparisonBrowseFlow(
     await session.viewMultipleProducts(secondPass);
   }
 
-  // ~20%: add one item to cart then abandon ("save for later").
   if (chance(0.2)) {
     await session.createCart();
     await session.addItem();

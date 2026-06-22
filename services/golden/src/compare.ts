@@ -1,11 +1,3 @@
-/**
- * Compare (plan §"Compare"). Given a live response and a stored golden:
- * 1. Compare status code first — mismatch short-circuits as a regression.
- * 2. Strip ignored fields from the live body (`normalize.ts`).
- * 3. Compare the live schema against `expected_schema`: missing fields,
- *    unexpected new fields, type changes.
- * 4. Return a structured diff.
- */
 import { isObjectNode } from "./schema-extract.js";
 import { extractObservedSchema } from "./schema-extract.js";
 import { normalizeBody } from "./normalize.js";
@@ -62,11 +54,8 @@ function diffSchema(expected: SchemaNode, actual: SchemaNode, path: string): Sch
   return [];
 }
 
-/**
- * Compare a live `(status, body)` response against a stored golden. Strips
- * ignore-listed fields from the live body before diffing so dynamic fields
- * (id, timestamps, tokens) never cause a false failure.
- */
+// Ignore-listed fields are stripped before diffing so dynamic fields
+// (id, timestamps, tokens) never cause a false failure.
 export function compareResponse(
   golden: GoldenResponse,
   liveStatus: number,

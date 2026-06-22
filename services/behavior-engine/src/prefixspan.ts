@@ -62,7 +62,6 @@ export interface PrefixSpanOptions {
   maxPatterns?: number;
 }
 
-/** Intern tokens to integers; returns encoded sequences + the vocabulary. */
 function intern(sessionTokenLists: string[][]): {
   sequences: number[][];
   vocabulary: string[];
@@ -216,7 +215,6 @@ export function minePrefixSpan(
   return { patterns, vocabulary };
 }
 
-/** Decode a pattern's interned ids back to `METHOD endpoint` tokens. */
 export function decodePattern(pattern: SequentialPattern, vocabulary: string[]): string[] {
   return pattern.itemIds.map((id) => vocabulary[id]);
 }

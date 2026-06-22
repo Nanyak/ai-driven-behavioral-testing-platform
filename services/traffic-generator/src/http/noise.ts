@@ -2,19 +2,14 @@ import type { ApiResponse } from "./client.js";
 import { chance } from "../util/random.js";
 
 export interface NoiseConfig {
-  /** Cut the session short at a random pre-completion step. */
   abandon: boolean;
   abandonProb: number;
-  /** After a 4xx, repeat the same call once (corrected or still-wrong). */
   retry: boolean;
-  /** Occasionally fire one out-of-persona endpoint inside the session. */
   contaminate: boolean;
   contaminateProb: number;
-  /** Randomize product list/detail ordering. */
   shuffle: boolean;
 }
 
-/** Light noise: realistic background variation on an otherwise clean session. */
 export const LIGHT_NOISE: NoiseConfig = {
   abandon: true,
   abandonProb: 0.4,
@@ -26,11 +21,7 @@ export const LIGHT_NOISE: NoiseConfig = {
 
 type Step = () => Promise<ApiResponse>;
 
-/**
- * Run an ordered list of steps, applying retry-on-4xx noise. Abandonment is
- * applied by the caller (it decides where to cut). Returns once all (surviving)
- * steps have executed.
- */
+/** Abandonment is applied by the caller (it decides where to cut). */
 export async function runSteps(steps: Step[], noise: NoiseConfig): Promise<void> {
   for (const step of steps) {
     const res = await step();
@@ -50,7 +41,6 @@ export async function runSteps(steps: Step[], noise: NoiseConfig): Promise<void>
   }
 }
 
-/** Truncate a step list at a random index before the last step. */
 export function maybeAbandon(steps: Step[], noise: NoiseConfig): Step[] {
   if (!noise.abandon || steps.length <= 1 || !chance(noise.abandonProb)) {
     return steps;

@@ -1,18 +1,10 @@
-/**
- * Emit (plan §Implementation steps #3, #5, #6). Renders a candidate's
- * `FlowPlan` into a `.spec.ts` source string: resolve calls, the request,
- * status + golden assertions, threading captured IDs through `scope`.
- *
- * Filenames are derived from the candidate's signature (plan §3 / ADR 0002),
- * not an index, so regeneration is idempotent — handled by the caller
- * (`run.ts`), not here.
- */
+// Filenames are derived from the candidate's signature (ADR 0002), not an
+// index, so regeneration is idempotent — handled by the caller (run.ts), not here.
 import type { Candidate } from "./load.js";
 import type { AuthRequirement, BodyPlan, FlowPlan, ResolveCall, StepPlan, SynthesizedBody } from "./resolve.js";
 
 export interface EmitResult {
   source: string;
-  /** `test.fixme` bodies emitted, for the run summary. */
   fixmeCount: number;
 }
 
@@ -72,7 +64,6 @@ function bodyExpr(body: BodyPlan): string | null {
   return null; // unresolvable handled separately as test.fixme
 }
 
-/** Build the resolve call's URL: literal endpoint, or a template literal when query params are present. */
 function resolveUrlExpr(call: ResolveCall): string {
   const query = Object.entries(call.query ?? {});
   if (query.length === 0) return JSON.stringify(call.endpoint);
@@ -122,15 +113,14 @@ function renderCaptures(captures: Record<string, string>, respVar: string): stri
 }
 
 /**
- * Render one step (resolve calls + request + assertions) or a `test.fixme`
- * block. Non-fixme steps are wrapped in `test.step("<METHOD endpoint>", ...)`
- * so the Playwright JSON reporter carries per-step results (Phase 10 keys
- * results persona→flow→step off these step titles). The flow-level `scope`,
- * `publishableKey`, and any captured ids are declared OUTSIDE the steps (in
- * the test body), so they thread across step boundaries unchanged.
+ * Non-fixme steps are wrapped in `test.step("<METHOD endpoint>", ...)` so the
+ * Playwright JSON reporter carries per-step results (test-runner's collect.ts
+ * keys results persona→flow→step off these step titles). The flow-level
+ * `scope`, `publishableKey`, and any captured ids are declared OUTSIDE the
+ * steps (in the test body), so they thread across step boundaries unchanged.
  *
  * `test.fixme(...)` must stay at the TEST level (it skips the whole test), so a
- * fixme step is emitted unwrapped, exactly as before.
+ * fixme step is emitted unwrapped instead of inside a test.step().
  */
 function renderStep(plan: StepPlan, index: number, golden: boolean): { code: string; fixme: boolean } {
   if (plan.body.kind === "unresolvable") {
@@ -192,7 +182,6 @@ function renderStep(plan: StepPlan, index: number, golden: boolean): { code: str
   return { code, fixme: false };
 }
 
-/** Re-indent a multi-line snippet rendered at 2-space depth to sit at 4-space (inside a `test.step`). */
 function indentStepLine(snippet: string): string {
   return snippet
     .split("\n")
@@ -200,12 +189,10 @@ function indentStepLine(snippet: string): string {
     .join("\n");
 }
 
-/** Whether a flow plan needs a customer token (so the test must register/login in-test). */
 function needsCustomerAuth(plan: FlowPlan): boolean {
   return plan.steps.some((s) => s.auth === "customer-token");
 }
 
-/** Whether a flow plan needs an admin token AND has no admin-login step of its own. */
 function needsAdminFixture(plan: FlowPlan): boolean {
   const needsAdmin = plan.steps.some((s) => s.auth === "admin-token");
   const flowLogsInItself = plan.steps.some((s) => s.step.method === "POST" && s.step.endpoint === "/auth/user/emailpass");
@@ -219,7 +206,6 @@ export interface EmitOptions {
   golden: boolean;
 }
 
-/** Render a full `.spec.ts` source for one candidate's flow plan. */
 export function emitSpec({ candidate, plan, folder, golden }: EmitOptions): EmitResult {
   const needsCustomer = needsCustomerAuth(plan);
   const needsAdminViaFixture = needsAdminFixture(plan);

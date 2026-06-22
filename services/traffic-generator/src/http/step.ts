@@ -1,6 +1,6 @@
 import type { ApiResponse } from "./client.js";
 
-/** One recorded API call within a session — the unit Phase 7 mines. */
+/** The unit Phase 7 mines. */
 export interface StepResult {
   action: string;
   method: string;
@@ -16,7 +16,6 @@ export interface StepResult {
  */
 export const MISSING: ApiResponse = { status: 0, ok: false, body: null };
 
-/** Append a StepResult derived from a response and return the response. */
 export function recordStep(
   steps: StepResult[],
   action: string,

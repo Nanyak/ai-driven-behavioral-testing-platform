@@ -11,10 +11,6 @@ function pickQuery(): string {
 }
 
 /**
- * Multi-item cart flow — user adds 3–5 items across multiple browse cycles
- * before checking out. Common on Lazada for household goods and fashion where
- * shoppers combine items across categories to hit free-shipping thresholds.
- *
  * The alternating browse→add→browse→add pattern is the distinguishing log
  * signal: multiple browse_products and filter_products calls interleaved with
  * add_item calls, producing carts with 3+ line items.
@@ -37,32 +33,27 @@ export async function runMultiItemFlow(
     }
   }
 
-  // Cycle 1: search entry → view → add first item.
   await session.searchProducts(pickQuery());
   await session.viewProduct();
   await session.createCart();
   await session.addItem();
 
-  // Cycle 2: filter a different category → add second item.
   await session.filterProducts();
   await session.viewProduct();
   await session.addItem();
 
-  // Cycle 3: browse listing → view → add third item.
   await session.browseProducts();
   if (chance(0.6)) await session.viewProduct();
   await session.addItem();
 
-  // Cycle 4 (optional ~50%): one more search-and-add.
   if (chance(0.5)) {
     await session.searchProducts(pickQuery());
     if (chance(0.5)) await session.viewProduct();
     await session.addItem();
   }
 
-  // Post-add cart actions.
-  if (chance(0.35)) await session.updateItem();               // adjust quantity
-  if (chance(0.2)) {                                          // swap variant
+  if (chance(0.35)) await session.updateItem();
+  if (chance(0.2)) {
     await session.removeItem();
     await session.addItem();
   }

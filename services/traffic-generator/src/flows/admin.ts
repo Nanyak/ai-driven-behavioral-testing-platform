@@ -3,14 +3,7 @@ import type { MedusaClient } from "../http/client.js";
 import { maybeAbandon, runSteps, type NoiseConfig } from "../http/noise.js";
 import { chance } from "../util/random.js";
 
-/**
- * Scripted admin backbone (plan §8.5):
- *   POST /auth/user/emailpass -> list/view/update products -> list orders ->
- *   list customers.
- *
- * The admin role is established naturally by the auth endpoint; no role header
- * is sent. Subsequent /admin/* calls carry the operator JWT.
- */
+/** The admin role is established naturally by the auth endpoint; no role header is sent. */
 export async function runAdminFlow(
   client: MedusaClient,
   email: string,
@@ -21,7 +14,6 @@ export async function runAdminFlow(
 
   const login = await session.login();
   if (!login.ok) {
-    // Without a token the rest cannot proceed; the failed login is logged.
     return session;
   }
 
@@ -34,9 +26,7 @@ export async function runAdminFlow(
   if (chance(0.5)) {
     operations.push(() => session.updateProduct());
   }
-  // The seller's core catalog loop also creates products (plan §8.5). Exercises
-  // POST /admin/products on the normal admin path (Theme 3). createProduct
-  // returns a richer result; only its ApiResponse matters to the noise runner.
+  // createProduct returns a richer result; only its ApiResponse matters to the noise runner.
   if (chance(0.4)) {
     operations.push(async () => (await session.createProduct()).res);
   }
@@ -46,12 +36,7 @@ export async function runAdminFlow(
   return session;
 }
 
-/**
- * Order fulfillment (plan §4 F2 / §5 Stage 2a). Fulfills a real pooled order —
- * the prerequisite that makes the order returnable in the F3 path. Reports
- * whether the fulfillment succeeded so the orchestrator can mark the order
- * fulfilled.
- */
+/** Fulfills a real pooled order — the prerequisite that makes the order returnable in the F3 path. */
 export async function runAdminFulfillFlow(
   client: MedusaClient,
   email: string,
@@ -68,19 +53,11 @@ export async function runAdminFulfillFlow(
 }
 
 /**
- * Return/refund processing for a FULFILLED order (plan §4 F3 / §5 Stage 2b). The
- * admin operates the full return lifecycle on a real order the customer inquired
- * about in the E flow — the cross-role linkage Phase 7 joins on. The storefront
- * has no customer return endpoint, so filing the return is itself an admin
- * action here. The order is already fulfilled (Stage 2a F2) — a return cannot
- * cover more than was fulfilled. Each step degrades to a logged non-2xx rather
- * than crashing (version-sensitive).
- *
- *   begin return (+location) -> request-items -> request   [return filed]
- *     -> receive -> receive-items -> receive/confirm        [refund settled]
- *
- * Returns whether a return was `filed` (request confirmed) and `refunded`
- * (receipt confirmed) plus the `returnId` for pool linkage.
+ * The admin operates the full return lifecycle on a real order the customer
+ * inquired about in the E flow — the cross-role linkage Phase 7 joins on. The
+ * storefront has no customer return endpoint, so filing the return is itself
+ * an admin action here. Each step degrades to a logged non-2xx rather than
+ * crashing (version-sensitive).
  */
 export async function runAdminRefundFlow(
   client: MedusaClient,
@@ -97,7 +74,7 @@ export async function runAdminRefundFlow(
 
   // Resolve order line-item ids fresh — cart line-item ids in the pool differ.
   const order = await session.getOrder(orderId);
-  const items: any[] = order.ok ? order.body?.order?.items ?? [] : []; // admin order shape; only id/quantity used
+  const items: any[] = order.ok ? order.body?.order?.items ?? [] : [];
   if (items.length === 0) {
     return { session, filed: false, refunded: false };
   }
@@ -120,19 +97,12 @@ export async function runAdminRefundFlow(
 }
 
 /**
- * Return REJECTION for a FULFILLED order (Theme 4c / ADR 0003) — the third admin
- * reversal archetype next to refund (F3) and cancel (F5): the operator declines a
- * requested return instead of receiving and refunding it. Reuses the F3 begin →
- * request-items → request sequence to put the return into `requested` state, then
- * `cancelReturn(...)` rather than the receive/refund tail. Like F3 it runs on a
- * fulfilled, pooled order so the rejected return links cross-role on order_id.
- * Each step degrades to a logged non-2xx rather than crashing.
- *
- *   begin return (+location) -> request-items -> request   [return requested]
- *     -> cancel                                             [return rejected]
- *
- * Returns whether the return was `filed` (request confirmed) and `rejected`
- * (cancel succeeded) plus the `returnId` for pool linkage.
+ * ADR 0003: the third admin reversal archetype next to refund (F3) and cancel
+ * (F5) — the operator declines a requested return instead of receiving and
+ * refunding it. Reuses the F3 begin → request-items → request sequence to put
+ * the return into `requested` state, then `cancelReturn(...)` rather than the
+ * receive/refund tail. Each step degrades to a logged non-2xx rather than
+ * crashing.
  */
 export async function runAdminReturnRejectFlow(
   client: MedusaClient,
@@ -149,7 +119,7 @@ export async function runAdminReturnRejectFlow(
 
   // Resolve order line-item ids fresh — cart line-item ids in the pool differ.
   const order = await session.getOrder(orderId);
-  const items: any[] = order.ok ? order.body?.order?.items ?? [] : []; // admin order shape; only id/quantity used
+  const items: any[] = order.ok ? order.body?.order?.items ?? [] : [];
   if (items.length === 0) {
     return { session, filed: false, rejected: false };
   }
@@ -169,12 +139,7 @@ export async function runAdminReturnRejectFlow(
   return { session, returnId, filed, rejected };
 }
 
-/**
- * Order cancellation for an UNFULFILLED order (plan §4 F5 / §5 Stage 2b). The
- * reversal path for "customer changed their mind before it shipped": the admin
- * cancels the order, which reverses the authorized payment. A fulfilled order
- * cannot be canceled directly on this build, so callers pass unfulfilled orders.
- */
+/** A fulfilled order cannot be canceled directly on this build, so callers pass unfulfilled orders. */
 export async function runAdminCancelFlow(
   client: MedusaClient,
   email: string,
@@ -191,7 +156,6 @@ export async function runAdminCancelFlow(
   return { session, canceled };
 }
 
-/** Support lookup (plan §4 F4 / §5 Stage 2): find a customer/order by query. */
 export async function runAdminSupportFlow(
   client: MedusaClient,
   email: string,

@@ -26,7 +26,6 @@ export const PERSONAS: readonly Persona[] = [
 
 export const PERSONA_SOURCE = "emergent_attributes" as const;
 
-/** Resolve persona from already-derived attributes (highest privilege wins). */
 export function resolvePersona(attrs: FlowAttributes): Persona {
   if (attrs.is_admin) {
     return "admin_operator";
@@ -42,7 +41,6 @@ export interface Classification {
   persona: Persona;
 }
 
-/** Convenience: derive attributes (under a rule variant) then resolve persona. */
 export function classify(
   steps: AttrStep[],
   useCartSignal: boolean,

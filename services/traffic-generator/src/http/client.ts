@@ -10,15 +10,12 @@ export interface ApiResponse<T = any> {
 interface RequestOptions {
   body?: unknown;
   token?: string;
-  /** Force-enable/disable the publishable key. Defaults to auto by path. */
   publishable?: boolean;
 }
 
 /**
- * Thin HTTP wrapper bound to a single session_id. It injects the behavior
- * headers (x-session-id, fresh x-trace-id per request) and the store
- * publishable key, and surfaces 4xx/5xx as values instead of throwing so the
- * noise/retry logic can react to failures (plan §5 step 1).
+ * Surfaces 4xx/5xx as values instead of throwing so the noise/retry logic can
+ * react to failures (plan §5 step 1).
  *
  * It deliberately attaches NO persona or role header — role is established by
  * which auth endpoints a session hits, recorded by the Medusa logging
@@ -34,7 +31,7 @@ export class MedusaClient {
     if (typeof override === "boolean") {
       return override;
     }
-    // Store + auth endpoints expect the publishable key; admin does not.
+    // Store + auth use the publishable key; admin uses the JWT instead.
     return path.startsWith("/store") || path.startsWith("/auth");
   }
 
@@ -65,7 +62,6 @@ export class MedusaClient {
         signal: AbortSignal.timeout(30_000),
       });
     } catch (error) {
-      // Network failure / timeout — treat as a non-throwing 0 status.
       return {
         status: 0,
         ok: false,

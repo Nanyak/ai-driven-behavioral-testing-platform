@@ -29,7 +29,6 @@ import type { ScoredFlow } from "./rank.js";
 import { rareTransitions, type MarkovModel } from "./markov.js";
 import { getEnv } from "./env.js";
 
-/** Naming model (judgment only). Sonnet 4.6 by default; override via env. */
 export const MODEL = getEnv("BEHAVIOR_LLM_MODEL", "claude-sonnet-4-6");
 const API_HOST = "api.anthropic.com";
 const API_PATH = "/v1/messages";
@@ -47,7 +46,6 @@ export interface AssertionHints {
 
 export interface FlowAnnotation {
   flow_name: string;
-  /** LLM contamination/anomaly note, or null when nothing flagged. */
   anomaly_note: string | null;
   assertion_hints: AssertionHints;
 }
@@ -62,7 +60,6 @@ function apiKey(): string | undefined {
   return getEnv("ANTHROPIC_API_KEY") || undefined;
 }
 
-/** Deterministic local name from persona + salient endpoints (offline fallback). */
 function fallbackName(flow: ScoredFlow): string {
   const tokens = flow.tokens;
   const has = (frag: string) => tokens.some((t) => t.includes(frag));
@@ -91,7 +88,6 @@ function fallbackName(flow: ScoredFlow): string {
   return `${persona} browses the catalog`;
 }
 
-/** Deterministic advisory hints from endpoint kind (offline fallback). */
 function fallbackAssertionFields(flow: ScoredFlow): string[] {
   const tokens = flow.tokens;
   const fields = new Set<string>();
@@ -114,7 +110,6 @@ function fallbackAssertionFields(flow: ScoredFlow): string[] {
   return [...fields];
 }
 
-/** Build the JSON instruction for one flow. */
 function promptFor(flow: ScoredFlow, anomalyContext: string): string {
   const steps = flow.steps
     .map((s) => `${s.method} ${s.endpoint} -> ${s.expected_status}`)
@@ -144,7 +139,6 @@ interface AnthropicResponse {
   content?: Array<{ type: string; text?: string }>;
 }
 
-/** One raw Messages API call. Returns the assistant text, or null on any error. */
 function callMessages(prompt: string, key: string): Promise<string | null> {
   const body = JSON.stringify({
     model: MODEL,
@@ -201,14 +195,12 @@ function parseNaming(text: string): Partial<NamingResult> | null {
     return null;
   }
   try {
-    // The model is asked for a JSON object; tolerate surrounding text/fences.
     return JSON.parse(text.slice(start, end + 1)) as Partial<NamingResult>;
   } catch {
     return null;
   }
 }
 
-/** Deterministic offline annotation for one flow (no LLM call). */
 function fallbackAnnotation(flow: ScoredFlow): FlowAnnotation {
   return {
     flow_name: fallbackName(flow),
@@ -217,7 +209,6 @@ function fallbackAnnotation(flow: ScoredFlow): FlowAnnotation {
   };
 }
 
-/** One flow's annotation: a single Messages call, falling back on any failure/unusable output. */
 async function annotateOne(
   flow: ScoredFlow,
   key: string,
@@ -275,7 +266,6 @@ export async function annotateFlows(
   return out;
 }
 
-/** True when the engine will reach the live LLM (key present). */
 export function llmEnabled(): boolean {
   return apiKey() !== undefined;
 }

@@ -49,7 +49,6 @@ export interface OasOperation {
   responses: Record<string, OasResponse>;
 }
 
-/** Methods we read/write across the base + augmented specs. */
 export type OasMethod = "get" | "post" | "patch" | "put" | "delete";
 
 export type OasPathItem = Partial<Record<OasMethod, OasOperation>>;

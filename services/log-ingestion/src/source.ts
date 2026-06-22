@@ -1,20 +1,5 @@
-/**
- * Log retrieval (Phase 6 step 1) — the INPUT stage.
- *
- * Two interchangeable sources produce the same `RawLogDoc[]`:
- *  - `fetchFromElasticsearch` — the production path. Reads `behavior-logs-*` by
- *    time range and `source = medusa`, paging stably with a point-in-time +
- *    search_after so result sets larger than the 10k window read cleanly.
- *  - `readFromFile` — an offline path over a raw JSONL log file (the same lines
- *    Filebeat ships to ES), for when the ELK stack is not running.
- *
- * `ESClient` is a minimal client over native `fetch` — no SDK dependency.
- */
-
 import { readFileSync } from "node:fs";
 import type { RawLogDoc } from "./types.js";
-
-// --- Elasticsearch client ---------------------------------------------------
 
 interface ESHit<T> {
   _source: T;
@@ -54,7 +39,6 @@ export class ESClient {
     }
   }
 
-  /** Open a point-in-time over an index pattern; returns the PIT id. */
   async openPit(index: string, keepAlive = "1m"): Promise<string> {
     const r = await this.request<{ id: string }>(
       `/${encodeURIComponent(index)}/_pit?keep_alive=${keepAlive}`,
@@ -73,9 +57,6 @@ export class ESClient {
   }
 }
 
-// --- Fetching ---------------------------------------------------------------
-
-// Only the fields ingestion actually consumes — keeps the ES response light.
 const SOURCE_FIELDS = [
   "timestamp",
   "session_id",
@@ -95,7 +76,6 @@ const SOURCE_FIELDS = [
 const PAGE_SIZE = 1000;
 
 export interface TimeWindow {
-  /** ISO timestamps; inclusive lower / upper bounds. */
   from: string;
   to: string;
 }
@@ -113,8 +93,7 @@ export async function fetchFromElasticsearch(
   const docs: RawLogDoc[] = [];
   try {
     let searchAfter: unknown[] | undefined;
-    // Sort by timestamp, then _shard_doc as the PIT tiebreaker required for
-    // stable search_after paging.
+    // _shard_doc as tiebreaker is required for stable search_after paging with a PIT.
     const sort = [{ timestamp: "asc" }, { _shard_doc: "asc" }];
 
     while (true) {
@@ -154,7 +133,6 @@ export async function fetchFromElasticsearch(
   return docs;
 }
 
-/** Read raw Medusa logs from a JSONL file, applying the same source/time filter. */
 export function readFromFile(path: string, window: TimeWindow): RawLogDoc[] {
   const docs: RawLogDoc[] = [];
   for (const line of readFileSync(path, "utf8").split("\n")) {
@@ -166,7 +144,7 @@ export function readFromFile(path: string, window: TimeWindow): RawLogDoc[] {
     try {
       doc = JSON.parse(trimmed) as RawLogDoc;
     } catch {
-      continue; // skip non-JSON noise lines
+      continue;
     }
     if (doc.source !== "medusa" || !doc.timestamp) {
       continue;

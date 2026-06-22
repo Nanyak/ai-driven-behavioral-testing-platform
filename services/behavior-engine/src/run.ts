@@ -104,7 +104,6 @@ function modalStatuses(sessions: SessionFlow[]): Map<string, number> {
   return modal;
 }
 
-/** Token "METHOD endpoint" -> {method, endpoint}. */
 function splitToken(token: string): { method: string; endpoint: string } {
   const sp = token.indexOf(" ");
   return { method: token.slice(0, sp), endpoint: token.slice(sp + 1) };
@@ -198,18 +197,15 @@ async function main(): Promise<void> {
     }
   };
 
-  // --- Load (repo-root data/sessions, newest by default) -------------------
   const { file, sessions } = loadSessions(args.file);
   log(`[behavior-engine] loaded ${sessions.length} session flows from ${file}`);
 
-  // --- Canonical token lists (consecutive dups collapsed by signature.ts) --
   const sessionTokens = sessions.map((s) => ({
     id: s.session_id,
     tokens: canonicalTokens(s.steps),
   }));
   const tokenLists = sessionTokens.map((s) => s.tokens);
 
-  // --- Mine -----------------------------------------------------------------
   const ngrams = mineNGrams(tokenLists, [2, 3, 4], args.minSupport);
   const prefixspan = minePrefixSpan(tokenLists, { minSupport: args.minSupport });
   const markov = buildMarkov(tokenLists);
@@ -218,7 +214,6 @@ async function main(): Promise<void> {
       `${prefixspan.patterns.length} PrefixSpan patterns (minSupport=${args.minSupport})`
   );
 
-  // --- Assemble + classify mined flows -------------------------------------
   // Expected status per token is computed from the flow's OWN supporting
   // sessions, NOT globally: a token like `POST /store/carts` is 401 globally
   // (guests attempt it far more than customers succeed), but inside a customer
@@ -240,19 +235,18 @@ async function main(): Promise<void> {
       return toMinedFlow(tokens, p.support, flowModal(supporting), supporting);
     });
 
-  // --- Dedup (within-run: collapse identical + prune subsumed) --------------
   const deduped = dedup(minedFlows);
   log(
     `[behavior-engine] dedup: ${minedFlows.length} -> ${deduped.flows.length} ` +
       `(collapsed ${deduped.collapsedIdentical}, subsumed ${deduped.subsumed})`
   );
 
-  // --- Rank, THEN cap per persona by score (highest-value survives) ---------
+  // Rank, THEN cap per persona by score, so the cap keeps the highest-value
+  // flows rather than whichever fragments have the most raw volume.
   const rankedAll: ScoredFlow[] = rankFlows(deduped.flows);
   const { kept: ranked, cappedOut } = capRankedPerPersona(rankedAll);
   log(`[behavior-engine] per-persona cap: ${rankedAll.length} -> ${ranked.length} (capped ${cappedOut})`);
 
-  // --- Cross-run skip gate (ADR 0002) — before LLM -------------------------
   const manifest = buildCoverageManifest();
   const { kept, skipped } = applySkipGate(ranked, manifest);
   log(
@@ -260,14 +254,12 @@ async function main(): Promise<void> {
       `(manifest: ${manifest.fromTests} from tests, ${manifest.fromHitl} from HITL)`
   );
 
-  // --- LLM naming / anomaly / advisory hints (judgment only) ---------------
   log(
     `[behavior-engine] naming ${kept.length} flows ` +
       `(${llmEnabled() ? `LLM: ${NAMING_MODEL}` : "offline fallback — ANTHROPIC_API_KEY unset"})`
   );
   const annotations = await annotateFlows(kept, markov);
 
-  // --- Build candidates -----------------------------------------------------
   const candidates: Candidate[] = kept.map((flow) => {
     const ann = annotations.get(flow.signature)!;
     return {
@@ -286,10 +278,8 @@ async function main(): Promise<void> {
     };
   });
 
-  // --- Validation report ----------------------------------------------------
   const validation = buildValidationReport(runId, sessions, prefixspan, args.minSupport);
 
-  // --- Write outputs --------------------------------------------------------
   mkdirSync(CANDIDATES_DIR, { recursive: true });
   mkdirSync(VALIDATION_DIR, { recursive: true });
   const candidatesPath = resolve(CANDIDATES_DIR, `test-candidates-${runId}.json`);
@@ -327,7 +317,6 @@ async function main(): Promise<void> {
   );
   writeFileSync(validationPath, `${JSON.stringify(validation, null, 2)}\n`, "utf8");
 
-  // --- Summary + acceptance gates ------------------------------------------
   const cls = validation.classification;
   const gates = {
     "candidates >= 5": candidates.length >= 5,

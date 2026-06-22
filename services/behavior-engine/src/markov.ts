@@ -42,7 +42,6 @@ export function buildMarkov(sessionTokenLists: string[][]): MarkovModel {
   return { counts, totals };
 }
 
-/** P(to | from), or 0 if `from` was never observed as a source. */
 export function transitionProbability(model: MarkovModel, from: string, to: string): number {
   const total = model.totals.get(from);
   if (!total) {

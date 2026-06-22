@@ -21,13 +21,11 @@ export interface NGram {
 
 export const NGRAM_SIZES = [2, 3, 4] as const;
 
-/** Count session-support for every n-gram of the given sizes. */
 export function mineNGrams(
   sessionTokenLists: string[][],
   sizes: readonly number[] = NGRAM_SIZES,
   minSupport = 3
 ): NGram[] {
-  // window-key -> set of session indices it appeared in.
   const support = new Map<string, Set<number>>();
 
   sessionTokenLists.forEach((tokens, sessionIdx) => {

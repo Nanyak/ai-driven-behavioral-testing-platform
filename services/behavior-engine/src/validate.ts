@@ -35,7 +35,6 @@ import { decodePattern } from "./prefixspan.js";
 // Ground truth (VALIDATION ONLY)
 // ---------------------------------------------------------------------------
 
-/** Map a session's `role_observed` (highest-privilege last) to a persona label. */
 function groundTruthPersona(roles: SessionFlow["role_observed"]): Persona {
   if (roles.includes("admin")) {
     return "admin_operator";
@@ -59,7 +58,6 @@ export interface PersonaScore {
 
 export interface VariantReport {
   variant: "endpoint_only" | "cart_signal" | "cart_read_signal";
-  /** confusion[truth][predicted] = count. */
   confusion: Record<Persona, Record<Persona, number>>;
   perPersona: Record<Persona, PersonaScore>;
   macroF1: number;
@@ -142,7 +140,6 @@ const HOLDOUT_BACKBONE = [
 
 export const HOLDOUT_SUPPORT_FLOOR = 6; // Phase 5 holdout floor (BA-F2).
 
-/** True if `pattern`'s decoded tokens contain `target` as an ordered subsequence. */
 function containsSubsequence(patternTokens: string[], target: string[]): boolean {
   let i = 0;
   for (const token of patternTokens) {
@@ -419,6 +416,5 @@ export function buildValidationReport(
   };
 }
 
-/** Canonical-token helper re-export so run.ts builds tokens through one path. */
 export { canonicalTokens };
 export type { SequentialPattern };

@@ -1,6 +1,3 @@
-/**
- * Unit test for schema-merge.ts. Run via `npm test` (test/run-all.ts).
- */
 import { strict as assert } from "node:assert";
 import { buildGolden, tightenWithObserved, unionSchema } from "../src/schema-merge.js";
 import type { OasResolution } from "../src/oas-source.js";
@@ -16,7 +13,6 @@ check("tightenWithObserved narrows an under-specified spec leaf using observed s
   const oas = { metadata: "object" as const, items: "array" as const, currency_code: "string" as const };
   const observed = { metadata: { foo: "string" as const }, items: { sku: "string" as const }, currency_code: "string" as const };
   const tightened = tightenWithObserved(oas, observed);
-  // items (declared "array") is narrowed by the observed element shape.
   assert.deepEqual(tightened, {
     metadata: { foo: "string" },
     items: { sku: "string" },

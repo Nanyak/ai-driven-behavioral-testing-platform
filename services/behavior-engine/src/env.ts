@@ -15,7 +15,6 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// services/behavior-engine/src -> service root one up, repo root two more.
 const SERVICE_ROOT = resolve(__dirname, "..");
 const REPO_ROOT = resolve(SERVICE_ROOT, "..", "..");
 

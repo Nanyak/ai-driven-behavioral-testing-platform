@@ -1,17 +1,4 @@
 #!/usr/bin/env node
-/**
- * cli.ts (Phase 10 plan step #3). Subcommands:
- *   all | guest | customer | admin | edge
- *
- * Each runs the Phase 9 generated Playwright suite for that persona project (or
- * all), writes JSON + HTML under reports/playwright/, then normalizes the JSON
- * (collect.ts) into the Phase 11 input shape, persisting it to
- * reports/playwright/normalized.json. Prints a readable pass/fail summary and a
- * clear expected-vs-actual + golden-diff block for any failures (plan §5).
- *
- *   npx tsx src/cli.ts guest
- *   npm run test:guest        (root package.json delegates here)
- */
 import { writeFileSync } from "node:fs";
 import { resolve as resolvePath } from "node:path";
 import { collectFromFile, type NormalizedRunResult } from "./collect.js";
@@ -34,7 +21,6 @@ function printSummary(result: NormalizedRunResult, target: Target): void {
   console.log(`\nPhase 10 — Test Runner (${target})`);
   console.log(`  Executed: ${totals.executed}  Passed: ${totals.passed}  Failed: ${totals.failed}  Skipped: ${totals.skipped}`);
 
-  // Per-persona rollup, so a regression is attributable to guest vs customer vs admin.
   const byPersona = new Map<string, { passed: number; failed: number; skipped: number }>();
   for (const t of result.tests) {
     const row = byPersona.get(t.persona) ?? { passed: 0, failed: 0, skipped: 0 };
@@ -66,7 +52,6 @@ function main(): void {
 
   printSummary(result, target);
 
-  // Phase 11: build + write the stakeholder report (report.json + report.html).
   const { report, jsonPath, htmlPath } = writeReports(result, REPO_REPORTS_DIR);
   console.log(`\n${formatReportSummary(report)}`);
 
@@ -76,7 +61,6 @@ function main(): void {
   console.log(`  Report (JSON):     ${jsonPath}`);
   console.log(`  Report (HTML):     ${htmlPath}`);
 
-  // Exit non-zero if Playwright reported failures, so CI/`npm run` surfaces it.
   process.exit(run.status);
 }
 

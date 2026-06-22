@@ -50,7 +50,6 @@ export interface MinedFlow {
 
 export const PER_PERSONA_CAP = 10;
 
-/** 1. Collapse identical-signature flows, keeping the highest-support one. */
 function collapseIdentical(flows: MinedFlow[]): MinedFlow[] {
   const bySig = new Map<string, MinedFlow>();
   for (const flow of flows) {
@@ -160,7 +159,6 @@ export function capRankedPerPersona<T extends MinedFlow>(
       if (keepSet.size >= cap) break;
       keepSet.add(f);
     }
-    // Emit in rank order, hard-capped at `cap`.
     kept.push(...flows.filter((f) => keepSet.has(f)).slice(0, cap));
   }
   return { kept, cappedOut: rankedFlows.length - kept.length };
@@ -187,5 +185,4 @@ export function dedup(flows: MinedFlow[]): DedupResult {
   };
 }
 
-/** Re-export so callers build signatures/tokens through the single source. */
 export { canonicalTokens, flowSignature };

@@ -3,13 +3,11 @@ import type { MedusaClient } from "../http/client.js";
 import type { PoolAccount, PoolOrder } from "../orchestration/state.js";
 
 /**
- * Customer return INQUIRY against a REAL completed order (plan §4 E / §5 Stage
- * 2). Returning identity. The storefront exposes no customer-facing
- * return/refund endpoint — order lifecycle is admin-operated (see
- * docs/adr + the order-action decision) — so the customer can only log in and
- * look at the order they want to return. The orchestrator flags that order so an
- * admin refund session (F3) settles the SAME order_id: the cross-role linkage
- * Phase 7 discovers (customer placed + inquired, admin refunded).
+ * The storefront exposes no customer-facing return/refund endpoint — order
+ * lifecycle is admin-operated (see docs/adr) — so the customer can only log in
+ * and look at the order they want to return. The orchestrator flags that order
+ * so an admin refund session (F3) settles the SAME order_id: the cross-role
+ * linkage Phase 7 discovers (customer placed + inquired, admin refunded).
  */
 export async function runReturnInquiryFlow(
   client: MedusaClient,

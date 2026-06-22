@@ -1,14 +1,7 @@
-/**
- * write.ts (Phase 11 plan step #5 wiring). Build the report from a normalized
- * run result and persist both `reports/report.json` and `reports/report.html`
- * to the repo-root reports/ directory. Returns the built report so the caller
- * can print the console summary.
- *
- * Each run is ALSO archived under `reports/runs/<run_id>.{json,html}` so history
- * accumulates instead of every run clobbering the single latest file. The
- * canonical `report.json` / `report.html` remain the "latest" pointer (read by
- * check:phase11/14 and the dashboard's /api/report).
- */
+// Each run is ALSO archived under `reports/runs/<run_id>.{json,html}` so history
+// accumulates instead of every run clobbering the single latest file. The
+// canonical `report.json` / `report.html` remain the "latest" pointer (read by
+// check:phase11/14 and the dashboard's /api/report).
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve as resolvePath } from "node:path";
 import type { NormalizedRunResult } from "../collect.js";
@@ -24,13 +17,11 @@ export interface WriteReportsResult {
   archiveHtmlPath: string;
 }
 
-/** Filesystem-safe slug for a run_id used as an archive filename. */
 function runSlug(runId: string): string {
   const slug = runId.replace(/[^A-Za-z0-9._-]/g, "-");
   return slug.length > 0 ? slug : "run";
 }
 
-/** Build + write report.json/html (latest) plus a per-run archive copy. */
 export function writeReports(
   result: NormalizedRunResult,
   reportsDir: string,

@@ -1,9 +1,4 @@
 /**
- * Unit test for oas-source.ts. Run via `npm test` (test/run-all.ts).
- *
- * Requires the augmented spec to exist (`npm run build-oas`). `run-all.ts`
- * builds it before running tests so this is never stale.
- *
  * Asserts against the REAL bundled Medusa v2 spec (openapi/base/, ADR 0004
  * augmented): real $ref names (`StoreCartResponse`/`StoreProductListResponse`,
  * not the old hand-authored `StoreCart` fixture name), real `info.version`

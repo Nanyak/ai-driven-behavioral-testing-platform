@@ -1,15 +1,3 @@
-/**
- * Phase 6 ingestion CLI.
- *
- *   npm run ingest -- [--from <iso>] [--to <iso>] [--file <path>] [--quiet]
- *
- * Reads raw Medusa logs (from Elasticsearch, or a JSONL file with --file),
- * groups them into session-flow records, normalizes/denoises endpoints, and
- * extracts candidate golden responses. Writes:
- *   data/sessions/session-flows-<runId>.json
- *   golden-responses/<endpoint-status>.json   (only when bodies were logged)
- */
-
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { loadConfig } from "./config.js";
@@ -106,12 +94,10 @@ async function main(): Promise<void> {
   const { sessions, droppedSingleStep } = buildSessionFlows(buckets);
   const goldens = extractGoldenCandidates(docs, new Date().toISOString());
 
-  // Write session flows.
   mkdirSync(config.sessionsDir, { recursive: true });
   const sessionsPath = resolve(config.sessionsDir, `session-flows-${runId}.json`);
   writeFileSync(sessionsPath, `${JSON.stringify(sessions, null, 2)}\n`, "utf8");
 
-  // Write golden candidates (one file per endpoint+status).
   mkdirSync(config.goldenDir, { recursive: true });
   for (const candidate of goldens) {
     const goldenPath = resolve(config.goldenDir, goldenFileName(candidate));

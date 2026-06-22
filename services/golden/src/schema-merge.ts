@@ -1,23 +1,20 @@
 /**
- * Intersect + merge (plan §"Intersect + merge").
+ * `tightenWithObserved`: the spec is authoritative on field EXISTENCE; an
+ * under-specified spec leaf (e.g. `"object"` for `metadata`) is narrowed by
+ * a more specific observed shape for the SAME field. Fields the spec
+ * declares are never removed by observation.
  *
- * Two distinct operations live here:
- *  - `tightenWithObserved`: the spec is authoritative on field EXISTENCE; an
- *    under-specified spec leaf (e.g. `"object"` for `metadata`) is narrowed by
- *    a more specific observed shape for the SAME field. Fields the spec
- *    declares are never removed by observation.
- *  - `unionSchema`: union of keys across two schemas of the same shape — used
- *    (a) to merge observed schemas across multiple sessions of the same
- *    endpoint, so optional fields are captured rather than treated as
- *    regressions, and (b) by `build-oas.ts` for the ADR 0004 `oneOf` collision
- *    union. Type conflicts on the same key are recorded, not silently dropped.
+ * `unionSchema`: union of keys across two schemas of the same shape — used
+ * (a) to merge observed schemas across multiple sessions of the same
+ * endpoint, so optional fields are captured rather than treated as
+ * regressions, and (b) by `build-oas.ts` for the ADR 0004 `oneOf` collision
+ * union. Type conflicts on the same key are recorded, not silently dropped.
  */
 import { isObjectNode } from "./schema-extract.js";
 import { ignoreFieldsFor } from "./ignore-fields.js";
 import type { OasResolution } from "./oas-source.js";
 import type { GoldenResponse, SchemaNode, SchemaSource } from "./types.js";
 
-/** A key present in both schemas with irreconcilable leaf types. */
 export interface TypeConflict {
   path: string;
   a: SchemaNode;

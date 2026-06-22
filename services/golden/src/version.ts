@@ -9,24 +9,18 @@
 import type { CompareResult } from "./compare.js";
 import type { GoldenResponse } from "./types.js";
 
-/** ISO-8601 stamp for a newly captured/refreshed golden. */
 export function stampCapturedAt(now: Date = new Date()): string {
   return now.toISOString();
 }
 
 export interface RefreshDecision {
-  /** Whether the stored golden should be replaced by the new candidate. */
   refresh: boolean;
   reason: string;
 }
 
-/**
- * Decide whether a golden baseline may be refreshed. Refresh is regression-
- * by-default: a schema/status change is NEVER auto-applied. The caller must
- * pass `explicitRefresh: true` (e.g. a `--refresh` CLI flag) to update the
- * stored baseline; otherwise a diff is reported as a regression and the
- * existing golden is left untouched.
- */
+// Regression-by-default: a schema/status change is NEVER auto-applied.
+// The caller must pass `explicitRefresh: true` to update the stored baseline;
+// otherwise the diff is reported as a regression and the golden is untouched.
 export function decideRefresh(
   compareResult: CompareResult,
   explicitRefresh: boolean

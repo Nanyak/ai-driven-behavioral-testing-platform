@@ -1,12 +1,5 @@
-/**
- * html.ts (Phase 11 plan step #3). Render a single self-contained
- * `reports/report.html` — inline CSS, no server, openable by double-click —
- * with a red/green summary header, a per-persona table, a "most-failing
- * endpoint" callout, and a failures table with the golden diff inline.
- */
 import type { FailureEntry, GoldenDiffSummary, Report } from "./schema.js";
 
-/** Minimal HTML-escape for text interpolated into the document. */
 function esc(value: unknown): string {
   return String(value)
     .replace(/&/g, "&amp;")

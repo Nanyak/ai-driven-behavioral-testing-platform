@@ -14,17 +14,16 @@ export type { SortOrder };
 export const DEFAULT_PASSWORD = "Password123!";
 
 /**
- * Drives the Medusa Store API for one shopping session. Every method records a
- * StepResult and is self-healing (lazily resolves region/products/cart) so it
- * works whether called as a scripted backbone or in an arbitrary LLM-chosen
- * order. IDs are always resolved at runtime — never hardcoded (plan §risks).
+ * Every method records a StepResult and is self-healing (lazily resolves
+ * region/products/cart) so it works whether called as a scripted backbone or
+ * in an arbitrary LLM-chosen order. IDs are always resolved at runtime — never
+ * hardcoded (plan §risks).
  */
 export class StoreSession {
   regionId?: string;
   /** First ISO-2 country of the cart's region — address country must be in-region. */
   countryCode?: string;
   products: ProductLite[] = [];
-  /** Category ids resolved by listCategories() — never hardcoded. */
   categories: string[] = [];
   cartId?: string;
   items: { id: string; variantId: string }[] = [];
@@ -66,8 +65,8 @@ export class StoreSession {
       this.regionId = region?.id;
       // The cart address country must be within the cart's region, or
       // POST /store/carts/{id} 400s ("Country ... is not within region").
-      // Resolve it from the live region instead of hardcoding — the seed ships a
-      // single non-US (European) region, so a hardcoded "us" always failed.
+      // Resolve it from the live region — the seed ships a single non-US
+      // (European) region, so a hardcoded "us" always failed.
       this.countryCode = region?.countries?.[0]?.iso_2 ?? this.countryCode;
     }
     return this.record("load_regions", "GET", "/store/regions", res);
@@ -94,8 +93,8 @@ export class StoreSession {
     return this.record("view_product", "GET", "/store/products/{id}", res);
   }
 
-  /** View a specific product detail page by id (the stock-out arc lands on the
-   * dedicated low-stock product, which isn't in the random browse list). */
+  /** The stock-out arc lands on the dedicated low-stock product, which isn't
+   * in the random browse list. */
   async viewProductById(productId: string): Promise<ApiResponse> {
     await this.ensureRegion();
     const params = productListParams(this.regionId);
@@ -122,7 +121,6 @@ export class StoreSession {
 
   async login(): Promise<ApiResponse> {
     if (!this.email) {
-      // No prior registration in this session — register first.
       await this.register();
     }
     const res = await this.client.request("POST", "/auth/customer/emailpass", {
@@ -152,10 +150,10 @@ export class StoreSession {
   }
 
   /**
-   * Add a line item. With no args it picks a random in-stock variant (the
-   * default browse→cart path); `variantId`/`quantity` target a specific variant
-   * and amount — used by the stock-out arc to add `stock + 1` of the low-stock
-   * variant (expecting a 400) and then a recovering quantity of 1.
+   * With no args it picks a random in-stock variant; `variantId`/`quantity`
+   * target a specific variant and amount — used by the stock-out arc to add
+   * `stock + 1` of the low-stock variant (expecting a 400) and then a
+   * recovering quantity of 1.
    */
   async addItem(variantId?: string, quantity = 1): Promise<ApiResponse> {
     await this.ensureCart();
@@ -302,7 +300,6 @@ export class StoreSession {
     );
   }
 
-  /** Runs the full checkout prerequisite chain (address -> shipping -> payment). */
   async ensureCheckoutReady(): Promise<void> {
     await this.setAddress();
     await this.addShipping();
@@ -419,7 +416,6 @@ export class StoreSession {
 
   // --- Catalog discovery (Theme 2): categories, pagination, sort ---
 
-  /** List product categories — the category-led discovery entry point. */
   async listCategories(): Promise<ApiResponse> {
     const res = await this.client.request("GET", "/store/product-categories?limit=10");
     if (res.ok && Array.isArray(res.body?.product_categories)) {
@@ -429,7 +425,6 @@ export class StoreSession {
     return this.record("list_categories", "GET", "/store/product-categories", res);
   }
 
-  /** Browse products scoped to one category — `?category_id[]=<id>`. */
   async browseByCategory(categoryId: string): Promise<ApiResponse> {
     await this.ensureRegion();
     const params = productListParams(this.regionId, { limit: "20", "category_id[]": categoryId });
@@ -440,7 +435,6 @@ export class StoreSession {
     return this.record("browse_by_category", "GET", "/store/products", res);
   }
 
-  /** Paginate the catalog — `?limit=<l>&offset=<o>` ("load more" / page N). */
   async browsePage(offset: number, limit: number): Promise<ApiResponse> {
     await this.ensureRegion();
     const params = productListParams(this.regionId, {
@@ -454,7 +448,6 @@ export class StoreSession {
     return this.record("browse_page", "GET", "/store/products", res);
   }
 
-  /** Sort the catalog — `?order=<order>` with order ∈ {title,-title,created_at,-created_at}. */
   async sortProducts(order: SortOrder): Promise<ApiResponse> {
     await this.ensureRegion();
     const params = productListParams(this.regionId, { limit: "20", order });
@@ -466,7 +459,6 @@ export class StoreSession {
   }
 
   /**
-   * Apply a specific promo code (valid or invalid) the way the storefront does:
    * `POST /store/carts/{id} { promo_codes }` — the same cart-update endpoint used
    * for the address step, not a dedicated `/promotions` route (verified against
    * the live storefront, which has no promotions call). A valid order-level code
@@ -486,7 +478,6 @@ export class StoreSession {
 
   // --- Stage-2 additions (plan §6.5) ---
 
-  /** Reorder a previously purchased variant into a fresh cart (status-check reorder). */
   async reorder(variantId: string): Promise<ApiResponse> {
     await this.createCart();
     if (!this.cartId) {

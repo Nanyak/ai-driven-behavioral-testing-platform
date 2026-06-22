@@ -1,8 +1,3 @@
-/**
- * summary.ts (Phase 11 plan step #4). One-screen console summary printed after a
- * run: red/green verdict, pass/fail/skip totals, the top failing endpoint, and a
- * one-line-per-failure attribution (persona / flow / endpoint / expected→actual).
- */
 import type { Report } from "./schema.js";
 
 export function formatReportSummary(report: Report): string {

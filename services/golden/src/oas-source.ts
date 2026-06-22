@@ -1,15 +1,7 @@
-/**
- * Source from OAS (plan §"Source from OAS").
- *
- * Loads the AUGMENTED Store/Admin OpenAPI spec (`openapi/augmented/`, written
- * by `build-oas.ts`) and, for a `(method, endpoint, status)`, resolves the
- * operation's response schema into a flat typed `SchemaNode` skeleton plus
- * provenance (`operationId`, resolved `$ref`, spec `info.version`).
- *
- * This is the authoritative skeleton for spec-sourced goldens (ADR 0001/0004).
- * If the augmented spec has no entry for the operation/status, callers fall
- * back to `schema_source: "observed"`.
- */
+// Resolves against the AUGMENTED Store/Admin OpenAPI spec (`openapi/augmented/`,
+// written by `build-oas.ts`) — the authoritative skeleton for spec-sourced
+// goldens (ADR 0001/0004). If the augmented spec has no entry for the
+// operation/status, callers fall back to `schema_source: "observed"`.
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname, resolve as resolvePath } from "node:path";
@@ -28,7 +20,6 @@ import type { SchemaNode } from "./types.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const AUGMENTED_DIR = resolvePath(__dirname, "..", "openapi", "augmented");
 
-/** A resolved (operation, status) schema lookup result. */
 export interface OasResolution {
   schema: SchemaNode;
   operationId: string;
@@ -40,7 +31,6 @@ function loadJson(path: string): OasDocument {
   return JSON.parse(readFileSync(path, "utf8")) as OasDocument;
 }
 
-/** Load both augmented specs (Store + Admin) keyed by a stable source name. */
 export function loadAugmentedSpecs(
   dir: string = AUGMENTED_DIR
 ): Record<"store" | "admin", OasDocument> {
@@ -50,12 +40,12 @@ export function loadAugmentedSpecs(
   };
 }
 
-/** Content hash of a spec document, used as `oas_version` fallback when unversioned. */
+// Used as `oas_version` fallback when the spec doesn't declare info.version.
 export function oasContentHash(doc: OasDocument): string {
   return createHash("sha256").update(stableStringify(doc)).digest("hex").slice(0, 16);
 }
 
-/** Deterministic JSON stringify (sorted keys) — used for hashing and byte-identical output. */
+// Sorted keys so the same document always hashes/serializes identically.
 export function stableStringify(value: unknown): string {
   return JSON.stringify(sortKeysDeep(value));
 }
@@ -108,7 +98,6 @@ function firstMediaType(
   return key ? content[key] : undefined;
 }
 
-/** Resolve a response, following a response-level `$ref` (`components/responses/*`) if present. */
 function resolveResponseRef(
   doc: OasDocument,
   response: { $ref: string } | OasInlineResponse
@@ -121,26 +110,21 @@ function resolveResponseRef(
   return resolved;
 }
 
-/** Flatten an OAS (possibly $ref'd) schema into a typed SchemaNode skeleton. */
 function flatten(doc: OasDocument, schema: OasSchema): SchemaNode {
   if (isRefSchema(schema)) {
     return flatten(doc, resolveRef(doc, schema.$ref));
   }
   if (schema.oneOf) {
-    // Union: flatten each branch and union the resulting node shapes so the
-    // skeleton reflects fields from any branch (schema-merge handles the
-    // actual oneOf union during build-oas; here we just need a comparable
-    // flat shape for compare.ts).
+    // schema-merge handles the actual oneOf union during build-oas; here we
+    // just need a comparable flat shape for compare.ts.
     return schema.oneOf
       .map((branch) => flatten(doc, branch))
       .reduce((acc, node) => unionFlat(acc, node));
   }
   if (schema.allOf) {
-    // Composition: flatten each fragment and merge their fields into one
-    // flat shape (e.g. StoreProductListResponse = pagination fragment allOf
-    // products fragment). Same flattening strategy as oneOf — the typed
-    // skeleton only needs a comparable merged shape, not the distinction
-    // between "any of" and "all of" (compare.ts diffs the flat result).
+    // Same flattening strategy as oneOf — the typed skeleton only needs a
+    // comparable merged shape, not the distinction between "any of" and "all
+    // of" (compare.ts diffs the flat result either way).
     return schema.allOf
       .map((branch) => flatten(doc, branch))
       .reduce((acc, node) => unionFlat(acc, node));
@@ -203,10 +187,6 @@ function findRef(schema: OasSchema): string | null {
   return null;
 }
 
-/**
- * Resolve `(method, endpoint, status)` against an augmented spec document.
- * Returns `null` if the spec has no operation or no response for that status.
- */
 export function resolveFromDoc(
   doc: OasDocument,
   method: string,
@@ -232,11 +212,8 @@ export function resolveFromDoc(
   };
 }
 
-/**
- * Resolve `(method, endpoint, status)` across both Store and Admin augmented
- * specs. Tries Store first, then Admin (the two path namespaces never
- * collide in practice — `/store/*` vs `/admin/*`).
- */
+// Tries Store first, then Admin — the two path namespaces never collide in
+// practice (`/store/*` vs `/admin/*`).
 export function resolveOperation(
   specs: Record<"store" | "admin", OasDocument>,
   method: string,

@@ -3,11 +3,7 @@ import type { MedusaClient } from "../http/client.js";
 import type { PoolAccount, PoolOrder } from "../orchestration/state.js";
 import { chance } from "../util/random.js";
 
-/**
- * Order-status / track-order flow (plan §4 D1). Returning identity: login →
- * view_orders → view a REAL prior order → (sometimes) reorder. References an
- * actual pooled order, never a fabricated id.
- */
+/** References an actual pooled order, never a fabricated id. */
 export async function runOrderStatusFlow(
   client: MedusaClient,
   account: PoolAccount,
@@ -35,12 +31,7 @@ export async function runOrderStatusFlow(
   return session;
 }
 
-/**
- * Repeat order-status flow — user checks delivery progress 3–5 times in one
- * session. Common on Shopee/Lazada immediately after placing an order (tracking
- * anxiety). The repeated view_order calls against the same order_id are the
- * distinguishing log signal vs. the single-check orderStatus flow.
- */
+/** The repeated view_order calls against the same order_id are the distinguishing log signal vs. the single-check orderStatus flow. */
 export async function runRepeatOrderStatusFlow(
   client: MedusaClient,
   account: PoolAccount,
@@ -58,7 +49,6 @@ export async function runRepeatOrderStatusFlow(
 
   session.lastOrderId = order.orderId;
 
-  // Check order list once, then poll the specific order 3–5 times.
   await session.viewOrders();
   const checkCount = 3 + Math.floor(Math.random() * 3);
   for (let i = 0; i < checkCount; i++) {
@@ -69,12 +59,9 @@ export async function runRepeatOrderStatusFlow(
 }
 
 /**
- * Profile & address management (plan §4 D2). Returning identity, no purchase:
- * login → view profile → (sometimes) browse the catalog. The storefront profile
- * page is read-only: saved addresses live in localStorage and there is no
- * profile-update or add-address API call (verified against the live storefront),
- * so the only authenticated footprint is GET /store/customers/me. A returning
- * shopper often also glances at the catalog, so optionally emit a browse.
+ * The storefront profile page is read-only: saved addresses live in localStorage
+ * and there is no profile-update or add-address API call (verified against the
+ * live storefront), so the only authenticated footprint is GET /store/customers/me.
  */
 export async function runProfileMgmtFlow(
   client: MedusaClient,
