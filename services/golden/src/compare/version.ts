@@ -7,7 +7,7 @@
  * can be flagged for human review.
  */
 import type { CompareResult } from "./compare.js";
-import type { GoldenResponse } from "./types.js";
+import type { GoldenResponse } from "../types.js";
 
 export function stampCapturedAt(now: Date = new Date()): string {
   return now.toISOString();

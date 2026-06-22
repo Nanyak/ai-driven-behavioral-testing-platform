@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import { normalizeBody } from "../src/normalize.js";
+import { normalizeBody } from "../src/compare/normalize.js";
 
 let passed = 0;
 function check(name: string, fn: () => void): void {

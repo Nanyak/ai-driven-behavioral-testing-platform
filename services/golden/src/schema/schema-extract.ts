@@ -5,8 +5,8 @@
  * `services/log-ingestion/src/pipeline.ts` `describe()`, generalized to take
  * an endpoint so per-endpoint ignore additions (dotted paths) apply too.
  */
-import { GLOBAL_IGNORE_FIELDS, PER_ENDPOINT_IGNORE_FIELDS } from "./ignore-fields.js";
-import type { SchemaNode } from "./types.js";
+import { GLOBAL_IGNORE_FIELDS, PER_ENDPOINT_IGNORE_FIELDS } from "../ignore-fields.js";
+import type { SchemaNode } from "../types.js";
 
 const GLOBAL_IGNORE_SET = new Set(GLOBAL_IGNORE_FIELDS);
 

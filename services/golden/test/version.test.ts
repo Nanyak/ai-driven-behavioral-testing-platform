@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
-import { compareResponse } from "../src/compare.js";
-import { checkOasDrift, decideRefresh, stampCapturedAt } from "../src/version.js";
+import { compareResponse } from "../src/compare/compare.js";
+import { checkOasDrift, decideRefresh, stampCapturedAt } from "../src/compare/version.js";
 import type { GoldenResponse } from "../src/types.js";
 
 let passed = 0;

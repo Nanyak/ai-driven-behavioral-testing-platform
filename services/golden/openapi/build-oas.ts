@@ -25,10 +25,10 @@ import {
   GATE_METHODS,
   GATE_UNAUTHORIZED_STATUS,
 } from "../../../apps/medusa/apps/backend/src/api/gate-contract.js";
-import { unionSchema } from "../src/schema-merge.js";
-import { stableStringify } from "../src/oas-source.js";
-import { isRefResponse } from "../src/oas-types.js";
-import type { OasDocument, OasInlineResponse, OasMethod, OasResponse, OasSchema } from "../src/oas-types.js";
+import { unionSchema } from "../src/schema/schema-merge.js";
+import { stableStringify } from "../src/oas/oas-source.js";
+import { isRefResponse } from "../src/oas/oas-types.js";
+import type { OasDocument, OasInlineResponse, OasMethod, OasResponse, OasSchema } from "../src/oas/oas-types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const BASE_DIR = resolvePath(__dirname, "base");

@@ -11,9 +11,9 @@
  * union. Type conflicts on the same key are recorded, not silently dropped.
  */
 import { isObjectNode } from "./schema-extract.js";
-import { ignoreFieldsFor } from "./ignore-fields.js";
-import type { OasResolution } from "./oas-source.js";
-import type { GoldenResponse, SchemaNode, SchemaSource } from "./types.js";
+import { ignoreFieldsFor } from "../ignore-fields.js";
+import type { OasResolution } from "../oas/oas-source.js";
+import type { GoldenResponse, SchemaNode, SchemaSource } from "../types.js";
 
 export interface TypeConflict {
   path: string;

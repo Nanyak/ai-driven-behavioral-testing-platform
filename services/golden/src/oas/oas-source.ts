@@ -15,10 +15,10 @@ import {
   type OasMethod,
   type OasSchema,
 } from "./oas-types.js";
-import type { SchemaNode } from "./types.js";
+import type { SchemaNode } from "../types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-export const AUGMENTED_DIR = resolvePath(__dirname, "..", "openapi", "augmented");
+export const AUGMENTED_DIR = resolvePath(__dirname, "..", "..", "openapi", "augmented");
 
 export interface OasResolution {
   schema: SchemaNode;

@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import { compareResponse } from "../src/compare.js";
+import { compareResponse } from "../src/compare/compare.js";
 import type { GoldenResponse } from "../src/types.js";
 
 let passed = 0;

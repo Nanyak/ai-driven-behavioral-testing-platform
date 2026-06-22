@@ -1,6 +1,6 @@
 // Mirrors schema-extract.ts's walk so ignore handling stays consistent
 // between schema extraction and live-body normalization.
-import { GLOBAL_IGNORE_FIELDS, PER_ENDPOINT_IGNORE_FIELDS } from "./ignore-fields.js";
+import { GLOBAL_IGNORE_FIELDS, PER_ENDPOINT_IGNORE_FIELDS } from "../ignore-fields.js";
 
 const GLOBAL_IGNORE_SET = new Set(GLOBAL_IGNORE_FIELDS);
 

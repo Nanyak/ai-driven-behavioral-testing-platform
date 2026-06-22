@@ -18,8 +18,8 @@
  */
 import { strict as assert } from "node:assert";
 import { applyGateOverlay, buildAugmentedSpec, type OverlayReport } from "../openapi/build-oas.js";
-import { stableStringify } from "../src/oas-source.js";
-import type { OasDocument } from "../src/oas-types.js";
+import { stableStringify } from "../src/oas/oas-source.js";
+import type { OasDocument } from "../src/oas/oas-types.js";
 
 let passed = 0;
 function check(name: string, fn: () => void): void {

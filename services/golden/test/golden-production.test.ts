@@ -9,10 +9,10 @@
  * across sessions instead.
  */
 import { strict as assert } from "node:assert";
-import { loadAugmentedSpecs, resolveOperation } from "../src/oas-source.js";
-import { extractObservedSchema } from "../src/schema-extract.js";
-import { buildGolden, unionSchema } from "../src/schema-merge.js";
-import { checkOasDrift } from "../src/version.js";
+import { loadAugmentedSpecs, resolveOperation } from "../src/oas/oas-source.js";
+import { extractObservedSchema } from "../src/schema/schema-extract.js";
+import { buildGolden, unionSchema } from "../src/schema/schema-merge.js";
+import { checkOasDrift } from "../src/compare/version.js";
 
 let passed = 0;
 function check(name: string, fn: () => void): void {

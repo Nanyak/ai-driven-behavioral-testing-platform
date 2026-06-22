@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import { extractObservedSchema } from "../src/schema-extract.js";
+import { extractObservedSchema } from "../src/schema/schema-extract.js";
 
 let passed = 0;
 function check(name: string, fn: () => void): void {

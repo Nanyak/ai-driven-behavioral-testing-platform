@@ -43,19 +43,22 @@ comes from the **OpenAPI contract**, intersected with observed responses:
 ```
 services/golden/
   src/
-    types.ts          GoldenResponse format + SchemaNode (canonical home now;
-                       log-ingestion's identical-shaped type is NOT refactored
-                       to import it yet — deferred, see note below)
-    ignore-fields.ts   GLOBAL_IGNORE_FIELDS (single auditable source) + per-endpoint hook
-    oas-types.ts       Minimal OpenAPI 3 document types shared by oas-source.ts/build-oas.ts
-    oas-source.ts      Load the AUGMENTED spec; resolve (method,endpoint,status) -> typed
-                       schema + provenance (operationId, $ref, oas_version/content-hash)
-    schema-extract.ts  Walk an observed response body -> SchemaNode (the observed half)
-    schema-merge.ts    tightenWithObserved (intersect), unionSchema (oneOf/optional-field
-                       merge), buildGolden (stamps schema_source + provenance)
-    normalize.ts       Strip ignored fields from a live body before compare
-    compare.ts         Status compare (short-circuit) + schema diff (missing/unexpected/type-changed)
-    version.ts         captured_at stamping, regression-by-default refresh gate, oas_version drift flag
+    types.ts            GoldenResponse format + SchemaNode (canonical home now;
+                        log-ingestion's identical-shaped type is NOT refactored
+                        to import it yet — deferred, see note below)
+    ignore-fields.ts    GLOBAL_IGNORE_FIELDS (single auditable source) + per-endpoint hook
+    oas/
+      oas-types.ts      Minimal OpenAPI 3 document types shared by oas-source.ts/build-oas.ts
+      oas-source.ts     Load the AUGMENTED spec; resolve (method,endpoint,status) -> typed
+                        schema + provenance (operationId, $ref, oas_version/content-hash)
+    schema/
+      schema-extract.ts Walk an observed response body -> SchemaNode (the observed half)
+      schema-merge.ts   tightenWithObserved (intersect), unionSchema (oneOf/optional-field
+                        merge), buildGolden (stamps schema_source + provenance)
+    compare/
+      normalize.ts      Strip ignored fields from a live body before compare
+      compare.ts        Status compare (short-circuit) + schema diff (missing/unexpected/type-changed)
+      version.ts        captured_at stamping, regression-by-default refresh gate, oas_version drift flag
   openapi/
     build-oas.ts        ADR 0004 deterministic overlay (CLI entry: `npm run build-oas`).
                        OFFLINE — reads only the committed `base/`, never the network.

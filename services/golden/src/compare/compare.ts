@@ -1,7 +1,7 @@
-import { isObjectNode } from "./schema-extract.js";
-import { extractObservedSchema } from "./schema-extract.js";
+import { isObjectNode } from "../schema/schema-extract.js";
+import { extractObservedSchema } from "../schema/schema-extract.js";
 import { normalizeBody } from "./normalize.js";
-import type { GoldenResponse, SchemaNode } from "./types.js";
+import type { GoldenResponse, SchemaNode } from "../types.js";
 
 export type DiffKind = "missing_field" | "unexpected_field" | "type_changed";
 

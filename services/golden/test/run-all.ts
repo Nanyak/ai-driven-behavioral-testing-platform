@@ -7,7 +7,7 @@ import { readdirSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildAugmentedSpec } from "../openapi/build-oas.js";
-import { stableStringify } from "../src/oas-source.js";
+import { stableStringify } from "../src/oas/oas-source.js";
 import { mkdirSync, writeFileSync } from "node:fs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

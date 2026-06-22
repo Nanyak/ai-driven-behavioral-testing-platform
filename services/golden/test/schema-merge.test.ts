@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
-import { buildGolden, tightenWithObserved, unionSchema } from "../src/schema-merge.js";
-import type { OasResolution } from "../src/oas-source.js";
+import { buildGolden, tightenWithObserved, unionSchema } from "../src/schema/schema-merge.js";
+import type { OasResolution } from "../src/oas/oas-source.js";
 
 let passed = 0;
 function check(name: string, fn: () => void): void {

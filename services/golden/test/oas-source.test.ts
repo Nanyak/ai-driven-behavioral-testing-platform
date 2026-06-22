@@ -5,7 +5,7 @@
  * ("2.0.0"), and the real union shape on gated 401s.
  */
 import { strict as assert } from "node:assert";
-import { loadAugmentedSpecs, resolveOperation } from "../src/oas-source.js";
+import { loadAugmentedSpecs, resolveOperation } from "../src/oas/oas-source.js";
 
 let passed = 0;
 function check(name: string, fn: () => void): void {
