@@ -213,6 +213,20 @@ Returning-identity sessions draw a pooled account seeded in Stage 0. Roughly
 55% of those sessions skip the auth endpoint entirely because the JWT is still
 live — these sessions emit a synthetic `resume_session` step instead of `login`.
 The remaining 45% call `POST /auth/customer/emailpass` normally (token expired).
+
+**Auth-required session types only ever use a REAL pooled account.** Cart,
+checkout, and profile flows (`returningCheckout`, `multiItemCheckout`,
+`cartAbandon`, `checkoutAbandon`, `stockOutCheckout`, `profileMgmt`, returning
+`bounce`/`browse`, cart-bearing `directLanding`) call `state.drawAccount()` and
+**degrade to a guest browse when the pool is empty** — they never synthesize an
+account. A synthesized email was never registered, so `loginExisting` would `401`,
+the session would run cart/checkout/`customers/me` calls with no token (a cascade
+of `401`s and `/store/carts/undefined/...`), and Phase 7 would then mine that
+unauthenticated traffic as a spurious `guest_shopper` "broken checkout" flow.
+Persona is derived from observed auth behaviour, so the only correct fix is to
+stop emitting traffic that lies about its identity — never to teach the classifier
+the session-type tag (a debug-only field, hard constraint #2). This mirrors the
+long-standing `cartWallConversion` rule.
 This produces three distinct log patterns for Phase 7 to distinguish:
 
 1. `register` only (Stage-0 signup-only sessions)

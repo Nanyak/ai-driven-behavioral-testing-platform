@@ -14,6 +14,7 @@ import {
   Store,
 } from "lucide-react";
 import { ReviewView } from "./review/ReviewView.js";
+import { ReportsView } from "./reports/ReportsView.js";
 import "./styles.css";
 
 type CheckState = "checking" | "online" | "offline";
@@ -96,7 +97,7 @@ function App() {
     { label: "Admin auth", state: "checking", detail: "Waiting for token" },
   ]);
   const [lastChecked, setLastChecked] = useState("Not checked yet");
-  const [view, setView] = useState<"status" | "review">("status");
+  const [view, setView] = useState<"status" | "review" | "reports">("status");
   const [summary, setSummary] = useState<{
     flows?: { total: number; with_test: number; approved: number; discarded: number };
     report?: { executed: number; passed: number; failed: number; status: "green" | "red" } | null;
@@ -160,7 +161,7 @@ function App() {
       sub: summary.flows ? `${summary.flows.with_test} generated` : "Run script-generator",
       onClick: () => setView("review"),
     },
-    { label: "Reports", icon: FileJson, sub: reportSub, href: "/api/report" },
+    { label: "Reports", icon: FileJson, sub: reportSub, onClick: () => setView("reports") },
   ];
 
   return (
@@ -198,6 +199,14 @@ function App() {
           <Route size={16} aria-hidden="true" />
           <span>Flow Review</span>
         </button>
+        <button
+          type="button"
+          className={view === "reports" ? "active" : ""}
+          onClick={() => setView("reports")}
+        >
+          <FileJson size={16} aria-hidden="true" />
+          <span>Reports</span>
+        </button>
       </nav>
 
       {view === "review" ? (
@@ -212,6 +221,19 @@ function App() {
             discard each flow — the decision feeds the Phase 7 skip gate.
           </p>
           <ReviewView />
+        </section>
+      ) : view === "reports" ? (
+        <section className="review-section" aria-label="Test run reports">
+          <div className="workbench-heading">
+            <FileJson size={22} aria-hidden="true" />
+            <h1>Test Run Reports</h1>
+          </div>
+          <p className="review-intro">
+            Every <code>npm run test:all</code> run is archived under{" "}
+            <code>reports/runs/</code>. Pick a run to view its self-contained report; the
+            newest is selected by default.
+          </p>
+          <ReportsView />
         </section>
       ) : (
         <>

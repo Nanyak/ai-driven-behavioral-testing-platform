@@ -3,6 +3,11 @@
  * run result and persist both `reports/report.json` and `reports/report.html`
  * to the repo-root reports/ directory. Returns the built report so the caller
  * can print the console summary.
+ *
+ * Each run is ALSO archived under `reports/runs/<run_id>.{json,html}` so history
+ * accumulates instead of every run clobbering the single latest file. The
+ * canonical `report.json` / `report.html` remain the "latest" pointer (read by
+ * check:phase11/14 and the dashboard's /api/report).
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve as resolvePath } from "node:path";
@@ -15,9 +20,17 @@ export interface WriteReportsResult {
   report: Report;
   jsonPath: string;
   htmlPath: string;
+  archiveJsonPath: string;
+  archiveHtmlPath: string;
 }
 
-/** Build + write report.json and report.html into `reportsDir`. */
+/** Filesystem-safe slug for a run_id used as an archive filename. */
+function runSlug(runId: string): string {
+  const slug = runId.replace(/[^A-Za-z0-9._-]/g, "-");
+  return slug.length > 0 ? slug : "run";
+}
+
+/** Build + write report.json/html (latest) plus a per-run archive copy. */
 export function writeReports(
   result: NormalizedRunResult,
   reportsDir: string,
@@ -26,10 +39,21 @@ export function writeReports(
   const report = buildReport(result, opts);
   mkdirSync(reportsDir, { recursive: true });
 
+  const json = JSON.stringify(report, null, 2);
+  const html = renderHtml(report);
+
   const jsonPath = resolvePath(reportsDir, "report.json");
   const htmlPath = resolvePath(reportsDir, "report.html");
-  writeFileSync(jsonPath, JSON.stringify(report, null, 2));
-  writeFileSync(htmlPath, renderHtml(report));
+  writeFileSync(jsonPath, json);
+  writeFileSync(htmlPath, html);
 
-  return { report, jsonPath, htmlPath };
+  const runsDir = resolvePath(reportsDir, "runs");
+  mkdirSync(runsDir, { recursive: true });
+  const slug = runSlug(report.run_id);
+  const archiveJsonPath = resolvePath(runsDir, `${slug}.json`);
+  const archiveHtmlPath = resolvePath(runsDir, `${slug}.html`);
+  writeFileSync(archiveJsonPath, json);
+  writeFileSync(archiveHtmlPath, html);
+
+  return { report, jsonPath, htmlPath, archiveJsonPath, archiveHtmlPath };
 }

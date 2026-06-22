@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchFlows, postDecision, type Decision, type FlowsPayload } from "./decisions.js";
+import {
+  fetchFlows,
+  postDecision,
+  type Decision,
+  type FlowsPayload,
+  type ReviewFlow,
+} from "./decisions.js";
 
 type LoadState = "loading" | "ready" | "error";
 
@@ -25,8 +31,8 @@ export function useFlows() {
   }, [reload]);
 
   const decide = useCallback(
-    async (signature: string, status: Decision, testPath: string | null) => {
-      await postDecision(signature, status, testPath);
+    async (flow: ReviewFlow, status: Decision) => {
+      await postDecision(flow, status);
       await reload();
     },
     [reload]

@@ -97,12 +97,17 @@ Reporter output paths are wired in the generated config via
   failures tables.
 - `summary.ts` — `formatReportSummary(report)` console block (verdict + totals +
   top endpoint + one line per failure).
-- `write.ts` — `writeReports(normalized, dir)` → writes `report.json` +
-  `report.html`, returns the built report.
+- `write.ts` — `writeReports(normalized, dir)` → writes the latest `report.json` +
+  `report.html` AND archives a per-run copy under `reports/runs/<run_id>.{json,html}`
+  so history accumulates instead of every run clobbering the single latest file.
+  Returns the built report (+ archive paths).
 
-The CLI wires this in: every `npm run test:*` ends by writing both report files
-to repo-root `reports/` and printing the summary. Verify offline:
-`npm run check:phase11`.
+The CLI wires this in: every `npm run test:*` ends by writing both latest report
+files to repo-root `reports/`, archiving the run under `reports/runs/`, and
+printing the summary. The platform dashboard's **Reports** tab lists the archived
+runs (`/api/reports`) and views any one (`/api/reports/view?run=<id>`); the
+canonical `report.json`/`report.html` stay the "latest" pointer read by
+`check:phase11`/`check:phase14`. Verify offline: `npm run check:phase11`.
 
 ## Phase 12 — regression demo toggle
 

@@ -64,10 +64,72 @@ const GENERATED_TESTS_DIR = resolve(REPO_ROOT, "generated-tests");
 const HITL_STORE = resolve(REPO_ROOT, "data", "hitl", "approvals.json");
 const REPORT_HTML = resolve(REPO_ROOT, "reports", "report.html");
 const REPORT_JSON = resolve(REPO_ROOT, "reports", "report.json");
+const REPORTS_RUNS_DIR = resolve(REPO_ROOT, "reports", "runs");
 
 /** The self-contained Phase 11 report HTML, or null if no run has produced one. */
 export function readReportHtml(): string | null {
   return existsSync(REPORT_HTML) ? readFileSync(REPORT_HTML, "utf8") : null;
+}
+
+/** One archived run in reports/runs/ (history). */
+export interface ReportRow {
+  /** report.run_id as recorded in the JSON. */
+  run_id: string;
+  /** Archive filename stem — the id used by /api/reports/view?run=<slug>. */
+  slug: string;
+  generated_at: string | null;
+  status: "green" | "red";
+  totals: { executed: number; passed: number; failed: number; skipped: number };
+}
+
+function parseTotals(r: {
+  status?: string;
+  totals?: { executed?: number; passed?: number; failed?: number; skipped?: number };
+}): { status: "green" | "red"; totals: ReportRow["totals"] } {
+  const executed = r.totals?.executed ?? 0;
+  const passed = r.totals?.passed ?? 0;
+  const failed = r.totals?.failed ?? 0;
+  const skipped = r.totals?.skipped ?? 0;
+  return {
+    status: r.status === "red" || failed > 0 ? "red" : "green",
+    totals: { executed, passed, failed, skipped },
+  };
+}
+
+/** Archived runs, newest first. Empty if none archived yet. */
+export function listReports(): ReportRow[] {
+  if (!existsSync(REPORTS_RUNS_DIR)) {
+    return [];
+  }
+  const rows: ReportRow[] = [];
+  for (const file of readdirSync(REPORTS_RUNS_DIR)) {
+    if (!file.endsWith(".json")) continue;
+    const slug = file.slice(0, -".json".length);
+    try {
+      const r = JSON.parse(readFileSync(join(REPORTS_RUNS_DIR, file), "utf8")) as {
+        run_id?: string;
+        generated_at?: string;
+        status?: string;
+        totals?: { executed?: number; passed?: number; failed?: number; skipped?: number };
+      };
+      const { status, totals } = parseTotals(r);
+      rows.push({ run_id: r.run_id ?? slug, slug, generated_at: r.generated_at ?? null, status, totals });
+    } catch {
+      // skip a malformed archive, never fatal
+    }
+  }
+  rows.sort(
+    (a, b) =>
+      (b.generated_at ?? "").localeCompare(a.generated_at ?? "") || b.slug.localeCompare(a.slug)
+  );
+  return rows;
+}
+
+/** The HTML of one archived run, or null. Slug is sanitized to stay in runs/. */
+export function readReportHtmlById(slug: string): string | null {
+  const safe = slug.replace(/[^A-Za-z0-9._-]/g, "-");
+  const path = join(REPORTS_RUNS_DIR, `${safe}.html`);
+  return existsSync(path) ? readFileSync(path, "utf8") : null;
 }
 
 /** Headline totals from the Phase 11 report, or null if absent/malformed. */
@@ -101,18 +163,57 @@ const SIGNATURE_STAMP = /flow_signature["'\s:=]+([0-9a-f]{64})/i;
 
 export type Decision = "approved" | "discarded";
 
+/**
+ * Where a flow sits in the review pipeline. Independent of the test file, which
+ * Phase 9 generates BEFORE review — approve/discard never create or delete it.
+ *   - approved        : a human blessed it (kept; skipped next mine).
+ *   - discarded       : a human rejected it (won't re-surface next mine).
+ *   - awaiting_review : generated test exists, no decision yet ("new test scanned").
+ *   - discovered      : mined candidate with no generated test yet (e.g. capped out).
+ */
+export type Lifecycle = "approved" | "discarded" | "awaiting_review" | "discovered";
+
 export interface DecisionEntry {
   flow_signature: string;
   status: Decision;
   test_path?: string;
   decided_by?: string;
   decided_at?: string;
+  // Enrichment so the review surface can show a prior decision and detect drift
+  // even after the flow drops out of the latest candidates file. All optional —
+  // older stores (and coverage.ts) ignore them; only signature+status are load-bearing.
+  flow_name?: string;
+  persona?: string;
+  route_key?: string;
+  status_signature?: string;
+  step_count?: number;
 }
 
 export interface FlowStep {
   method: string;
   endpoint: string;
   expected_status: number;
+}
+
+/**
+ * Identity of a flow's *shape* (persona + ordered method/endpoint sequence),
+ * independent of expected statuses. Two flows with the same route_key but
+ * different `status_signature` describe the same journey expecting different
+ * outcomes — i.e. one contradicts the other (a drift/regression signal).
+ */
+function routeKey(persona: string, steps: FlowStep[]): string {
+  return `${persona}|${steps.map((s) => `${s.method} ${s.endpoint}`).join(" > ")}`;
+}
+
+/** The ordered expected-status sequence — the "outcome" half of a flow. */
+function statusSignature(steps: FlowStep[]): string {
+  return steps.map((s) => s.expected_status).join(",");
+}
+
+function lifecycleOf(decision: Decision | null, hasTest: boolean): Lifecycle {
+  if (decision === "approved") return "approved";
+  if (decision === "discarded") return "discarded";
+  return hasTest ? "awaiting_review" : "discovered";
 }
 
 export interface ReviewFlow {
@@ -131,6 +232,35 @@ export interface ReviewFlow {
   decision: Decision | null;
   /** Already covered by the skip gate (has a generated test and/or a decision). */
   covered: boolean;
+  /** Persona + ordered method/endpoint sequence (outcome-independent). */
+  route_key: string;
+  /** Ordered expected-status sequence — the "outcome" half. */
+  status_signature: string;
+  /** Where this flow sits in the review pipeline (test exists ≠ decided). */
+  lifecycle: Lifecycle;
+  /**
+   * True when an APPROVED flow exists for the same route_key but a different
+   * signature — i.e. this newly-scanned flow contradicts a blessed baseline.
+   */
+  conflicts_with_approved: boolean;
+  /** Signatures of the approved baseline(s) this flow contradicts. */
+  conflict_signatures: string[];
+}
+
+/**
+ * A decision in the store whose flow is NOT in the latest candidates file — a
+ * previously approved/discarded flow that the newest mine no longer surfaced.
+ * Carried so the UI can show review history and explain a conflict's other side.
+ */
+export interface PriorDecision {
+  signature: string;
+  status: Decision;
+  flow_name: string;
+  persona: string;
+  route_key: string;
+  status_signature: string;
+  step_count: number;
+  decided_at?: string;
 }
 
 export interface FlowsPayload {
@@ -138,6 +268,8 @@ export interface FlowsPayload {
   source_candidates: string | null;
   generated_at: string | null;
   flows: ReviewFlow[];
+  /** Decisions not present in the latest scan (history + conflict context). */
+  prior_decisions: PriorDecision[];
   counts: {
     total: number;
     approved: number;
@@ -145,6 +277,9 @@ export interface FlowsPayload {
     undecided: number;
     with_test: number;
     covered: number;
+    awaiting_review: number;
+    discovered: number;
+    conflicts: number;
   };
 }
 
@@ -216,12 +351,18 @@ export function readDecisions(): Map<string, DecisionEntry> {
       (status === "approved" || status === "discarded")
     ) {
       const sig = signature.toLowerCase();
+      const str = (v: unknown) => (typeof v === "string" ? v : undefined);
       map.set(sig, {
         flow_signature: sig,
         status,
-        test_path: typeof raw.test_path === "string" ? raw.test_path : undefined,
-        decided_by: typeof raw.decided_by === "string" ? raw.decided_by : undefined,
-        decided_at: typeof raw.decided_at === "string" ? raw.decided_at : undefined,
+        test_path: str(raw.test_path),
+        decided_by: str(raw.decided_by),
+        decided_at: str(raw.decided_at),
+        flow_name: str(raw.flow_name),
+        persona: str(raw.persona),
+        route_key: str(raw.route_key),
+        status_signature: str(raw.status_signature),
+        step_count: typeof raw.step_count === "number" ? raw.step_count : undefined,
       });
     }
   }
@@ -238,6 +379,11 @@ export function upsertDecision(input: {
   status: Decision;
   test_path?: string | null;
   decided_by?: string;
+  flow_name?: string;
+  persona?: string;
+  route_key?: string;
+  status_signature?: string;
+  step_count?: number;
 }): DecisionEntry {
   const sig = input.flow_signature.toLowerCase();
   const decisions = readDecisions();
@@ -247,6 +393,11 @@ export function upsertDecision(input: {
     test_path: input.test_path ?? undefined,
     decided_by: input.decided_by ?? "operator",
     decided_at: new Date().toISOString(),
+    flow_name: input.flow_name,
+    persona: input.persona,
+    route_key: input.route_key,
+    status_signature: input.status_signature,
+    step_count: input.step_count,
   };
   decisions.set(sig, entry);
 
@@ -272,13 +423,28 @@ interface RawCandidate {
 /** Load discovered flows, joined with their generated test and current decision. */
 export function loadFlows(): FlowsPayload {
   const file = newestCandidatesFile();
+  const decisions = readDecisions();
   if (!file) {
+    // No latest scan, but prior decisions may still exist — surface them so the
+    // history isn't lost (and the counts stay honest).
+    const prior = priorDecisions(decisions, new Set());
     return {
       run_id: null,
       source_candidates: null,
       generated_at: null,
       flows: [],
-      counts: { total: 0, approved: 0, discarded: 0, undecided: 0, with_test: 0, covered: 0 },
+      prior_decisions: prior,
+      counts: {
+        total: 0,
+        approved: prior.filter((p) => p.status === "approved").length,
+        discarded: prior.filter((p) => p.status === "discarded").length,
+        undecided: 0,
+        with_test: 0,
+        covered: 0,
+        awaiting_review: 0,
+        discovered: 0,
+        conflicts: 0,
+      },
     };
   }
 
@@ -288,8 +454,8 @@ export function loadFlows(): FlowsPayload {
     candidates?: RawCandidate[];
   };
   const specs = specsBySignature();
-  const decisions = readDecisions();
 
+  // First pass: build flows with route_key/status_signature/lifecycle.
   const flows: ReviewFlow[] = (doc.candidates ?? []).map((c) => {
     const sig = c.signature.toLowerCase();
     const testPath = specs.get(sig) ?? null;
@@ -314,16 +480,53 @@ export function loadFlows(): FlowsPayload {
       test_path: testPath,
       decision,
       covered: Boolean(testPath) || decision !== null,
+      route_key: routeKey(c.persona, steps),
+      status_signature: statusSignature(steps),
+      lifecycle: lifecycleOf(decision, Boolean(testPath)),
+      conflicts_with_approved: false,
+      conflict_signatures: [],
     };
   });
 
+  // Second pass: map every approved route_key -> its signatures, from BOTH the
+  // current scan and prior decisions, so a new flow is flagged when it shares a
+  // journey with an approved baseline but expects a different outcome.
+  const approvedByRoute = new Map<string, Set<string>>();
+  const addApproved = (rk: string | undefined, sig: string) => {
+    if (!rk) return;
+    const set = approvedByRoute.get(rk) ?? new Set<string>();
+    set.add(sig);
+    approvedByRoute.set(rk, set);
+  };
+  for (const f of flows) if (f.lifecycle === "approved") addApproved(f.route_key, f.signature);
+  for (const d of decisions.values()) {
+    if (d.status === "approved") addApproved(d.route_key, d.flow_signature);
+  }
+
+  for (const f of flows) {
+    if (f.lifecycle === "approved") continue;
+    const sigs = approvedByRoute.get(f.route_key);
+    if (!sigs) continue;
+    const others = [...sigs].filter((s) => s !== f.signature);
+    if (others.length > 0) {
+      f.conflicts_with_approved = true;
+      f.conflict_signatures = others;
+    }
+  }
+
+  const currentSigs = new Set(flows.map((f) => f.signature));
+  const prior = priorDecisions(decisions, currentSigs);
+
   const counts = {
     total: flows.length,
-    approved: flows.filter((f) => f.decision === "approved").length,
-    discarded: flows.filter((f) => f.decision === "discarded").length,
+    approved: flows.filter((f) => f.lifecycle === "approved").length,
+    discarded: flows.filter((f) => f.lifecycle === "discarded").length,
     undecided: flows.filter((f) => f.decision === null).length,
     with_test: flows.filter((f) => f.test_path !== null).length,
     covered: flows.filter((f) => f.covered).length,
+    awaiting_review: flows.filter((f) => f.lifecycle === "awaiting_review").length,
+    discovered: flows.filter((f) => f.lifecycle === "discovered").length,
+    conflicts: flows.filter((f) => f.conflicts_with_approved).length,
   };
 
   return {
@@ -331,6 +534,32 @@ export function loadFlows(): FlowsPayload {
     source_candidates: file.slice(REPO_ROOT.length + 1),
     generated_at: doc.generated_at ?? null,
     flows,
+    prior_decisions: prior,
     counts,
   };
+}
+
+/** Decisions whose flow isn't in the latest scan, with enough metadata to show. */
+function priorDecisions(
+  decisions: Map<string, DecisionEntry>,
+  currentSigs: Set<string>
+): PriorDecision[] {
+  const out: PriorDecision[] = [];
+  for (const d of decisions.values()) {
+    if (currentSigs.has(d.flow_signature)) continue;
+    // Pre-enrichment entries lack route_key/persona; they still gate the skip
+    // list but can't be rendered as history, so skip them here.
+    if (!d.route_key || !d.persona) continue;
+    out.push({
+      signature: d.flow_signature,
+      status: d.status,
+      flow_name: d.flow_name ?? d.flow_signature.slice(0, 12),
+      persona: d.persona,
+      route_key: d.route_key,
+      status_signature: d.status_signature ?? "",
+      step_count: d.step_count ?? 0,
+      decided_at: d.decided_at,
+    });
+  }
+  return out;
 }

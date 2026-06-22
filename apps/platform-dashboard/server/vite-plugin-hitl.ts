@@ -11,8 +11,10 @@
 
 import type { Plugin } from "vite";
 import {
+  listReports,
   loadFlows,
   readReportHtml,
+  readReportHtmlById,
   readReportSummary,
   upsertDecision,
   type Decision,
@@ -66,7 +68,39 @@ export function hitlApiPlugin(): Plugin {
         }
       });
 
-      // Serve the self-contained Phase 11 report so the Reports card can open it.
+      // Archived run history (newest first). Registered BEFORE /api/reports/view
+      // would be too greedy, so the view route is registered first below.
+      server.middlewares.use("/api/reports/view", (req, res, next) => {
+        if (req.method !== "GET") {
+          next();
+          return;
+        }
+        const run = new URL(req.url ?? "", "http://localhost").searchParams.get("run");
+        const html = run ? readReportHtmlById(run) : null;
+        if (html === null) {
+          res.statusCode = 404;
+          res.setHeader("Content-Type", "text/html");
+          res.end("<h1>Report not found</h1>");
+          return;
+        }
+        res.statusCode = 200;
+        res.setHeader("Content-Type", "text/html");
+        res.end(html);
+      });
+
+      server.middlewares.use("/api/reports", (req, res, next) => {
+        if (req.method !== "GET") {
+          next();
+          return;
+        }
+        try {
+          sendJson(res, 200, { reports: listReports() });
+        } catch (error) {
+          sendJson(res, 500, { error: error instanceof Error ? error.message : "list failed" });
+        }
+      });
+
+      // Serve the latest self-contained Phase 11 report (back-compat).
       server.middlewares.use("/api/report", (req, res, next) => {
         if (req.method !== "GET") {
           next();
@@ -95,6 +129,11 @@ export function hitlApiPlugin(): Plugin {
               flow_signature?: string;
               status?: string;
               test_path?: string | null;
+              flow_name?: string;
+              persona?: string;
+              route_key?: string;
+              status_signature?: string;
+              step_count?: number;
             };
             const signature = body.flow_signature;
             const status = body.status as Decision | undefined;
@@ -108,6 +147,11 @@ export function hitlApiPlugin(): Plugin {
               flow_signature: signature,
               status,
               test_path: body.test_path ?? null,
+              flow_name: body.flow_name,
+              persona: body.persona,
+              route_key: body.route_key,
+              status_signature: body.status_signature,
+              step_count: body.step_count,
             });
             sendJson(res, 200, { entry });
           } catch (error) {

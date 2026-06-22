@@ -15,8 +15,11 @@ services/test-runner/            # reporting lives alongside execution
       html.ts            # report.json -> report.html (self-contained)
       summary.ts         # console summary
 reports/
-  report.json
-  report.html
+  report.json            # latest run (canonical pointer; read by check:phase11/14)
+  report.html            # latest run (self-contained)
+  runs/
+    <run_id>.json        # per-run archive — history accumulates, never clobbered
+    <run_id>.html        # browsed via the dashboard Reports tab (/api/reports)
 ```
 
 ## Report JSON schema (top level)
