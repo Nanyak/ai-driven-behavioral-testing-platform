@@ -66,6 +66,21 @@ export const medusaStore = {
     return data.products ?? [];
   },
 
+  async getProductById(productId: string) {
+    const regions = await this.listRegions();
+    const regionId = regions[0]?.id;
+    const params = new URLSearchParams({
+      fields: "*variants.calculated_price,+variants.inventory_quantity,+variants.manage_inventory,*collection,*tags,*images",
+    });
+
+    if (regionId) {
+      params.set("region_id", regionId);
+    }
+
+    const data = await medusaJson<{ product: Product }>(`/store/products/${productId}?${params.toString()}`);
+    return data.product;
+  },
+
   async registerCustomer(email: string, password: string) {
     const auth = await medusaJson<{ token: string }>("/auth/customer/emailpass/register", {
       method: "POST",

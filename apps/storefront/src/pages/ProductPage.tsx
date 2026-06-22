@@ -22,6 +22,7 @@ export function ProductPage({ productId, onNavigate }: ProductPageProps) {
     hasPurchasedProduct,
     isWishlisted,
     isBusy,
+    loadProduct,
     loadProducts,
     products,
     rememberViewedProduct,
@@ -36,6 +37,10 @@ export function ProductPage({ productId, onNavigate }: ProductPageProps) {
 
   useEffect(() => {
     rememberViewedProduct(productId);
+    // Fetch the product detail (GET /store/products/{id}) on every product-page
+    // view — the real product_viewed signal — rather than only reading the
+    // cached catalog list.
+    void loadProduct(productId);
   }, [productId]);
 
   return (

@@ -4,7 +4,13 @@ import type { PoolAccount } from "../orchestration/state.js";
 import { chance } from "../util/random.js";
 import { maybeApplyPromo, type PromoConfig } from "./promo.js";
 /** Full set of intents a returning (authenticated) session can take. */
-export type ReturningIntent = "bounce" | "browse" | "cartAbandon" | "checkoutAbandon" | "buy";
+export type ReturningIntent =
+  | "bounce"
+  | "browse"
+  | "cartAbandon"
+  | "checkoutAbandon"
+  | "reviseAbandon"
+  | "buy";
 
 /**
  * Checkout abandonment cut weighted toward the payment step (Baymard Institute
@@ -54,6 +60,18 @@ export async function runReturningFlow(
 
   await session.createCart();
   await session.addItem();
+
+  if (intent === "reviseAbandon") {
+    // Cart curation: build up 2–3 lines, adjust a quantity, then drop one line
+    // and leave without checking out — the first-class update_item + remove_item
+    // (DELETE line-item) signal.
+    await session.addItem();
+    if (chance(0.5)) await session.addItem();
+    await session.updateItem();
+    await session.removeItem();
+    return session;
+  }
+
   if (chance(0.35)) await session.addItem();
   if (chance(0.25)) await session.updateItem();
   await maybeApplyPromo(session, promo);

@@ -16,6 +16,7 @@ export const SESSION_TYPES: SessionType[] = [
   "multiItemCheckout",
   "cartWallConversion",
   "stockOutCheckout",
+  "cartReviseAbandon",
   "orderStatus",
   "repeatOrderCheck",
   "profileMgmt",
@@ -45,6 +46,7 @@ export const STAGE_OF: Record<SessionType, 1 | 2> = {
   multiItemCheckout: 1,
   cartWallConversion: 1,
   stockOutCheckout: 1,
+  cartReviseAbandon: 1,
   profileMgmt: 1,
   adminCatalog: 1,
   edge: 1,
@@ -122,6 +124,7 @@ export function identityFor(type: SessionType): Identity {
     case "returningCheckout":
     case "cartWallConversion": // guest hits the wall, then logs into a pooled account
     case "stockOutCheckout": // returning customer hits the insufficient-inventory 400
+    case "cartReviseAbandon": // returning customer curates a cart, then abandons
     case "orderStatus":
     case "repeatOrderCheck":
     case "profileMgmt":

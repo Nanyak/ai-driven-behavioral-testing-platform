@@ -69,6 +69,7 @@ export interface Weights {
   multiItemCheckout: number; // C4 — multi-browse-add-checkout
   cartWallConversion: number; // C5 — guest hits auth wall, signs in, converts (401→login→200)
   stockOutCheckout: number;  // C6 — returning customer hits insufficient-inventory 400 (Theme 3)
+  cartReviseAbandon: number; // B3 — returning curates cart (update + remove line-item), abandons
   orderStatus: number;       // D1
   repeatOrderCheck: number;  // D1b — repeated status checks (post-purchase anxiety)
   profileMgmt: number;       // D2
@@ -146,6 +147,7 @@ const REALISTIC_WEIGHTS: Weights = {
   multiItemCheckout: 4,
   cartWallConversion: 6,
   stockOutCheckout: 3,
+  cartReviseAbandon: 4,
   orderStatus: 5,
   repeatOrderCheck: 3,
   profileMgmt: 3,

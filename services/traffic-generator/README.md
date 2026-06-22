@@ -58,15 +58,15 @@ src/
     reporting.ts               observed-vs-target distribution + acceptance-gate tables
   util/
     random.ts                  pick / chance / shuffleInPlace — single source for randomness
-  flows/guest.ts             guest shopper (bounce/browse/cart/checkout-abandon/buy)
-  flows/returning.ts         returning customer (login-only or JWT-reuse, no register)
+  flows/guest.ts             guest shopper (bounce/browse), browse-only
+  flows/returning.ts         returning customer (login/JWT-reuse, no register) + reviseAbandon (update+remove line-item, then abandon)
   flows/direct-landing.ts    share-link / ad product landing (view_product first)
   flows/comparison-browse.ts researcher: 4–8 product views, search-first, no purchase
   flows/category-browse.ts   category-led discovery: categories + sort + pagination, no purchase
   flows/conversion.ts        cart-wall conversion: guest 401 → login → 200 (buy/abandon/bounce)
   flows/stockout.ts          stock-out checkout: over-add a low-stock variant → 400, recover/abandon
   flows/multi-item.ts        Lazada bulk-add: 3–5 browse→add cycles then checkout
-  flows/account.ts           order-status (D1) + repeat-check (D1b) + profile/address (D2)
+  flows/account.ts           order-status (D1) + repeat-check (D1b) + profile (D2)
   flows/returns.ts           customer return INQUIRY (read-only) against a real order (E)
   flows/admin.ts             admin catalog (F1) + fulfill (F2) + return+refund (F3) + return-reject (F6) + cancel (F5) + support (F4)
   flows/promo.ts             promo-code attempt helper: valid (200 discount) vs invalid (400) per §4.1 probs
@@ -187,6 +187,7 @@ then topped up to the floors (plan §7). Example counts shown for `N=300`.
 | `multiItemCheckout`| 1     | returning         | login → **3–5 browse→add cycles**, cart has 3+ line items     |
 | `cartWallConversion`| 1    | returning (guest→login) | guest `create_cart` **401** → `login` → `create_cart` **200** → buy/abandon (`wallBounce` ends at the 401) |
 | `stockOutCheckout` | 1     | returning         | login → view low-stock product → add `stock+1` → **400 insufficient inventory** → recover (add 1) / abandon |
+| `cartReviseAbandon` | 1    | returning         | login → cart → add 2–3 → `update_item` (qty) → **`remove_item` (DELETE line-item)** → abandon |
 | `newCheckout`      | 1     | new               | HOLDOUT — LLM-varied `register → login → checkout`            |
 | `profileMgmt`      | 1     | returning         | login → view profile (`GET /store/customers/me`) → maybe browse (the storefront profile page is read-only; no profile-update/address API) |
 | `adminCatalog`     | 1     | admin             | list/view/update products + `chance(0.4)` **create product**   |

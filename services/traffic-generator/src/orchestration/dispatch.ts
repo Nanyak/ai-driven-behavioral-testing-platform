@@ -209,6 +209,12 @@ export async function dispatch(
       return s.steps;
     }
 
+    case "cartReviseAbandon": {
+      const acct = state.drawAccount();
+      if (!acct) return guestDegrade(client);
+      return (await runReturningFlow(client, acct, "reviseAbandon", promo)).steps;
+    }
+
     case "profileMgmt": {
       const acct = state.drawAccount();
       if (!acct) return guestDegrade(client);

@@ -110,6 +110,7 @@ at `N=300` (weights sum to ≈99, so count ≈ weight × 3).
 | **B** | **Cart / checkout abandonment** (auth-required) | returning 100 | **19%** | ~57 | abandon |
 | | `cartAbandon` | returning 100 | 11% | ~33 | login → cart, items added, no checkout |
 | | `checkoutAbandon` | returning 100 | 8% | ~24 | checkout started, Baymard-weighted cut |
+| | `cartReviseAbandon` | returning 100 | — | — | login → cart → add 2–3 → `update_item` (qty) → **`remove_item` (DELETE line-item)** → abandon (cart curation) |
 | **C** | **Completed purchase / landing** | mixed | **25%** | ~75 | order placed (except landing bounces) |
 | | `returningCheckout` | returning 100 | 12% | ~36 | login/`resume_session` → cart → complete |
 | | `directLanding` | guest 70 / returning 30† | 7% | ~21 | **first step is `view_product`** |

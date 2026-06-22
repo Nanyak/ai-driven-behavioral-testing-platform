@@ -34,6 +34,7 @@ type StorefrontContextValue = {
   isWishlisted: (productId: string) => boolean;
   loadOrder: (orderId: string) => Promise<Order | null>;
   loadOrders: () => Promise<Order[]>;
+  loadProduct: (productId: string) => Promise<void>;
   loadProducts: () => Promise<void>;
   loginCustomer: () => Promise<boolean>;
   logoutCustomer: () => void;
@@ -262,6 +263,19 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
     }
   }
 
+  async function loadProduct(productId: string) {
+    try {
+      const product = await medusaStore.getProductById(productId);
+      setProducts((current) =>
+        current.some((existing) => existing.id === product.id)
+          ? current.map((existing) => (existing.id === product.id ? product : existing))
+          : [...current, product]
+      );
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not load product");
+    }
+  }
+
   async function registerCustomer() {
     setIsBusy(true);
     setStatus("Creating customer account");
@@ -329,6 +343,16 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
   async function addVariantToCart(variantId: string) {
     if (!variantId) {
       setStatus("Select a product variant first");
+      return;
+    }
+
+    // Cart and checkout require a signed-in customer (enforced by the API gate).
+    // Gate at the UI too: send a logged-out shopper to sign in rather than firing
+    // a doomed POST /store/carts that 401s.
+    if (!getCustomerToken()) {
+      setStatus("Please sign in to add items to your cart");
+      window.history.pushState({}, "", "/signin");
+      window.dispatchEvent(new Event("storefront:navigation"));
       return;
     }
 
@@ -618,6 +642,7 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
       isWishlisted,
       loadOrder,
       loadOrders,
+      loadProduct,
       loadProducts,
       loginCustomer,
       logoutCustomer,
