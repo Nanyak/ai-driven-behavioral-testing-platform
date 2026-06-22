@@ -5,13 +5,16 @@
  *
  * Steps:
  *   1. Collapse flows with IDENTICAL canonical signatures -> keep highest support.
- *   2. Prune SUBSUMED flows: drop a flow whose token sequence is a contiguous
- *      sub-run (>= 2 tokens) of a longer kept flow of the same persona -> keep the
- *      longest representative. This is the checklist's "prune duplicate or subsumed
- *      flows" (a prefix is just the start-anchored case); it collapses the many
- *      mid-journey fragments (e.g. `shipping-options -> payment-collections`) into
- *      the full journey that contains them, so the canonical journey is not crowded
- *      out of the cap by its own high-support sub-fragments.
+ *   2. Prune SUBSUMED flows: drop a flow whose token sequence is an order-preserving
+ *      SUBSEQUENCE (>= 2 tokens) of a longer kept flow of the same persona and
+ *      has_errors class -> keep the longest representative. This is the checklist's
+ *      "prune duplicate or subsumed flows"; it collapses the many mid-journey
+ *      fragments (e.g. a `cart -> shipping-options -> payment-collections` slice,
+ *      even when the full journey interleaves an extra `products` read) into the
+ *      complete journey that contains them, so the canonical journey is not crowded
+ *      out of the cap by its own high-support sub-fragments — and so the generator
+ *      never has to bootstrap a missing producer for a fragment the full journey
+ *      already supplies in observed order.
  *   3. Cap output at 10 canonical flows per persona -- applied by the CALLER AFTER
  *      ranking (capRankedPerPersona), so the cap keeps the highest-VALUE flows
  *      (ranking weights order placement / auth / admin), not the highest-volume
@@ -60,34 +63,46 @@ function collapseIdentical(flows: MinedFlow[]): MinedFlow[] {
 }
 
 /**
- * True when `shorter`'s tokens appear as a contiguous sub-run (length >= 2) of
- * `longer`'s tokens. A prefix is the start-anchored special case; this also
- * catches mid-journey fragments (e.g. a checkout's `shipping-options ->
- * payment-collections` middle inside the full `cart -> ... -> complete` chain).
+ * True when `shorter` is an order-preserving SUBSEQUENCE (length >= 2) of
+ * `longer` — every token of `shorter` appears in `longer` in the same order,
+ * not necessarily contiguously. A contiguous sub-run (prefix, suffix, or
+ * interior) is the special case; this additionally folds fragments whose
+ * superset journey interleaves extra steps between them. Example: the mined
+ * `cart -> shipping-options -> payment-collections -> payment-providers`
+ * fragment is subsumed by the full checkout journey even though the journey
+ * has an extra `products` read between `cart` and `shipping-options`.
+ *
+ * Greedy two-pointer: each `longer` token is consumed at most once, left to
+ * right, so repeated tokens (e.g. a guest re-`POST /store/carts`ing) must be
+ * matched by distinct occurrences.
  */
-function isContiguousSubsequenceOf(shorter: string[], longer: string[]): boolean {
+function isSubsequenceOf(shorter: string[], longer: string[]): boolean {
   if (shorter.length < 2 || shorter.length >= longer.length) {
     return false;
   }
-  for (let start = 0; start + shorter.length <= longer.length; start++) {
-    let match = true;
-    for (let i = 0; i < shorter.length; i++) {
-      if (longer[start + i] !== shorter[i]) {
-        match = false;
-        break;
+  let i = 0;
+  for (const token of longer) {
+    if (token === shorter[i]) {
+      i++;
+      if (i === shorter.length) {
+        return true;
       }
-    }
-    if (match) {
-      return true;
     }
   }
   return false;
 }
 
 /**
- * 2. Prune subsumed flows: drop a flow that is a contiguous sub-run of a longer
- * kept flow (keep the longest representative). Done per persona so a guest
- * fragment never absorbs (or is absorbed into) a customer journey.
+ * 2. Prune subsumed flows: drop a flow that is an order-preserving subsequence
+ * of a longer kept flow (keep the longest representative). Two guards keep the
+ * fold sound:
+ *   - SAME PERSONA, so a guest fragment never absorbs (or is absorbed into) a
+ *     customer journey.
+ *   - SAME has_errors CLASS, so a clean read fragment is not swallowed by an
+ *     unrelated error-laden journey that merely happens to contain its tokens
+ *     in order (guest checkout-attempt flows are error flows dense in common
+ *     `POST /store/carts` / `payment` tokens). This also preserves the
+ *     clean/edge split the per-persona cap balances over.
  */
 function pruneSubsumed(flows: MinedFlow[]): MinedFlow[] {
   // Longest first so a representative is seen before its sub-runs.
@@ -97,7 +112,10 @@ function pruneSubsumed(flows: MinedFlow[]): MinedFlow[] {
   const kept: MinedFlow[] = [];
   for (const flow of ordered) {
     const subsumed = kept.some(
-      (rep) => rep.persona === flow.persona && isContiguousSubsequenceOf(flow.tokens, rep.tokens)
+      (rep) =>
+        rep.persona === flow.persona &&
+        rep.attributes.has_errors === flow.attributes.has_errors &&
+        isSubsequenceOf(flow.tokens, rep.tokens)
     );
     if (!subsumed) {
       kept.push(flow);

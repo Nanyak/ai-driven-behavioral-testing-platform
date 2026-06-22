@@ -72,6 +72,24 @@ function bodyExpr(body: BodyPlan): string | null {
   return null; // unresolvable handled separately as test.fixme
 }
 
+/** Build the resolve call's URL: literal endpoint, or a template literal when query params are present. */
+function resolveUrlExpr(call: ResolveCall): string {
+  const query = Object.entries(call.query ?? {});
+  if (query.length === 0) return JSON.stringify(call.endpoint);
+  const qs = query
+    .map(([key, field]) => {
+      const value =
+        field.kind === "runtime"
+          ? `\${scope.${field.ref}}`
+          : field.kind === "raw"
+            ? `\${${field.expr}}`
+            : encodeURIComponent(String(field.value));
+      return `${encodeURIComponent(key)}=${value}`;
+    })
+    .join("&");
+  return `\`${call.endpoint}?${qs}\``;
+}
+
 function renderResolveCall(call: ResolveCall, index: number): string {
   const headers = authHeaderExpr(call.auth);
   const varDecl = `resolve${index}`;
@@ -80,7 +98,7 @@ function renderResolveCall(call: ResolveCall, index: number): string {
     ? `{ headers: ${headers}, data: ${synthesizedFieldsExpr(call.body)} }`
     : `{ headers: ${headers} }`;
   return [
-    `  const ${varDecl} = await request.${method}(${JSON.stringify(call.endpoint)}, ${options});`,
+    `  const ${varDecl} = await request.${method}(${resolveUrlExpr(call)}, ${options});`,
     `  expect(${varDecl}.status(), "resolve ${call.method} ${call.endpoint} for ${call.bindTo}").toBe(200);`,
     `  scope.${call.bindTo} = extractPath(await ${varDecl}.json(), ${JSON.stringify(call.extract)});`,
   ].join("\n");

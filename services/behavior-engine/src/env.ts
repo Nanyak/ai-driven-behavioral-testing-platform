@@ -49,7 +49,22 @@ const fileEnv: Record<string, string> = {
   ...parseEnvFile(resolve(SERVICE_ROOT, ".env")),
 };
 
-/** Resolve an env var, falling back through the file env then a default. */
+/**
+ * Resolve an env var, falling back through the file env then a default. A
+ * BLANK value is treated as unset: an empty `process.env[key]` (e.g. an
+ * `ANTHROPIC_API_KEY=` exported into the shell or a Docker env) must not
+ * shadow a real value in `services/behavior-engine/.env`, or the LLM silently
+ * degrades to the offline fallback with no signal. `??` alone would return the
+ * empty string; we want it to fall through.
+ */
 export function getEnv(key: string, fallback = ""): string {
-  return process.env[key] ?? fileEnv[key] ?? fallback;
+  const fromProcess = process.env[key];
+  if (fromProcess !== undefined && fromProcess !== "") {
+    return fromProcess;
+  }
+  const fromFile = fileEnv[key];
+  if (fromFile !== undefined && fromFile !== "") {
+    return fromFile;
+  }
+  return fallback;
 }

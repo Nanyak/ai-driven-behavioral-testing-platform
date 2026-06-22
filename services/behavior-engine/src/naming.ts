@@ -34,6 +34,8 @@ export const MODEL = getEnv("BEHAVIOR_LLM_MODEL", "claude-sonnet-4-6");
 const API_HOST = "api.anthropic.com";
 const API_PATH = "/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
+/** Max in-flight naming calls — bounded so 30 flows aren't 30 serial round-trips, without hammering rate limits. */
+const NAMING_CONCURRENCY = 6;
 
 /** Advisory, non-oracle metadata attached to a candidate (BA-F1). */
 export interface AssertionHints {
@@ -206,10 +208,49 @@ function parseNaming(text: string): Partial<NamingResult> | null {
   }
 }
 
+/** Deterministic offline annotation for one flow (no LLM call). */
+function fallbackAnnotation(flow: ScoredFlow): FlowAnnotation {
+  return {
+    flow_name: fallbackName(flow),
+    anomaly_note: null,
+    assertion_hints: { fields: fallbackAssertionFields(flow), source: "advisory_fallback" },
+  };
+}
+
+/** One flow's annotation: a single Messages call, falling back on any failure/unusable output. */
+async function annotateOne(
+  flow: ScoredFlow,
+  key: string,
+  markov: MarkovModel
+): Promise<FlowAnnotation> {
+  const rare = rareTransitions(markov, flow.tokens)
+    .map((t) => `${t.from} -> ${t.to} (p=${t.probability.toFixed(3)})`)
+    .join("; ");
+  const text = await callMessages(promptFor(flow, rare), key);
+  const parsed = text ? parseNaming(text) : null;
+
+  if (parsed && typeof parsed.flow_name === "string") {
+    return {
+      flow_name: parsed.flow_name,
+      anomaly_note: typeof parsed.anomaly_note === "string" ? parsed.anomaly_note : null,
+      assertion_hints: {
+        fields: Array.isArray(parsed.assertion_fields)
+          ? parsed.assertion_fields.filter((f): f is string => typeof f === "string")
+          : fallbackAssertionFields(flow),
+        source: "advisory_llm",
+      },
+    };
+  }
+  // Call failed or returned unusable output — fall back, don't crash.
+  return fallbackAnnotation(flow);
+}
+
 /**
  * Annotate ranked flows (after the skip gate). With no API key, returns
  * deterministic fallbacks for every flow so the run still completes — the
- * `source` on the hints records that they were not LLM-derived.
+ * `source` on the hints records that they were not LLM-derived. With a key,
+ * naming runs through a bounded-concurrency pool (NAMING_CONCURRENCY in flight)
+ * so N flows are not N serial round-trips.
  */
 export async function annotateFlows(
   flows: ScoredFlow[],
@@ -218,42 +259,17 @@ export async function annotateFlows(
   const key = apiKey();
   const out = new Map<string, FlowAnnotation>();
 
-  for (const flow of flows) {
-    if (!key) {
-      out.set(flow.signature, {
-        flow_name: fallbackName(flow),
-        anomaly_note: null,
-        assertion_hints: { fields: fallbackAssertionFields(flow), source: "advisory_fallback" },
-      });
-      continue;
+  if (!key) {
+    for (const flow of flows) {
+      out.set(flow.signature, fallbackAnnotation(flow));
     }
+    return out;
+  }
 
-    const rare = rareTransitions(markov, flow.tokens)
-      .map((t) => `${t.from} -> ${t.to} (p=${t.probability.toFixed(3)})`)
-      .join("; ");
-    const text = await callMessages(promptFor(flow, rare), key);
-    const parsed = text ? parseNaming(text) : null;
-
-    if (parsed && typeof parsed.flow_name === "string") {
-      out.set(flow.signature, {
-        flow_name: parsed.flow_name,
-        anomaly_note:
-          typeof parsed.anomaly_note === "string" ? parsed.anomaly_note : null,
-        assertion_hints: {
-          fields: Array.isArray(parsed.assertion_fields)
-            ? parsed.assertion_fields.filter((f): f is string => typeof f === "string")
-            : fallbackAssertionFields(flow),
-          source: "advisory_llm",
-        },
-      });
-    } else {
-      // Call failed or returned unusable output — fall back, don't crash.
-      out.set(flow.signature, {
-        flow_name: fallbackName(flow),
-        anomaly_note: null,
-        assertion_hints: { fields: fallbackAssertionFields(flow), source: "advisory_fallback" },
-      });
-    }
+  for (let i = 0; i < flows.length; i += NAMING_CONCURRENCY) {
+    const batch = flows.slice(i, i + NAMING_CONCURRENCY);
+    const annotations = await Promise.all(batch.map((flow) => annotateOne(flow, key, markov)));
+    batch.forEach((flow, j) => out.set(flow.signature, annotations[j]));
   }
 
   return out;

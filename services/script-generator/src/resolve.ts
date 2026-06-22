@@ -49,6 +49,8 @@ export interface ResolveCall {
   auth: AuthRequirement;
   /** Inline request body for a bootstrap mutation (e.g. `POST /store/carts` needs `region_id`). */
   body?: SynthesizedBody;
+  /** Required query params for a resolving GET (e.g. `GET /store/payment-providers` needs `region_id`). */
+  query?: SynthesizedBody;
 }
 
 export type AuthRequirement = "publishable-key" | "customer-token" | "admin-token" | "none";
@@ -107,8 +109,6 @@ function captureRulesFor(method: string, endpoint: string): Record<string, strin
   if (method === "GET" && endpoint === "/store/shipping-options") return { shippingOptionId: "shipping_options[0].id" };
   if (method === "GET" && endpoint === "/store/payment-providers") return { paymentProviderId: "payment_providers[0].id" };
   if (method === "POST" && endpoint === "/store/payment-collections") return { paymentCollectionId: "payment_collection.id" };
-  if (method === "POST" && endpoint === "/store/payment-collections/{id}/payment-sessions")
-    return { paymentSessionProviderId: "payment_collection.id" };
   if (method === "POST" && (endpoint === "/auth/customer/emailpass" || endpoint === "/auth/customer/emailpass/register"))
     return { customerToken: "$raw" };
   if (method === "POST" && endpoint === "/auth/user/emailpass") return { adminToken: "$raw" };
@@ -125,7 +125,14 @@ function scopeVarForParam(param: string, endpoint: string): string {
   return param;
 }
 
-type ResolveStep = { bindTo: string; method: string; endpoint: string; extract: string; body?: SynthesizedBody };
+type ResolveStep = {
+  bindTo: string;
+  method: string;
+  endpoint: string;
+  extract: string;
+  body?: SynthesizedBody;
+  query?: SynthesizedBody;
+};
 
 /**
  * Standalone resolution for a scope variable not yet produced by any prior
@@ -157,6 +164,33 @@ function standaloneResolverFor(varName: string, auth: AuthRequirement): ResolveS
           endpoint: "/store/carts",
           extract: "cart.id",
           body: { region_id: { kind: "runtime", ref: "regionId" } },
+        },
+      ];
+    case "paymentCollectionId":
+      // A payment collection is created against a cart. The cart need only
+      // exist (no line items required to open a collection), so the standard
+      // `regions -> carts` bootstrap above suffices as the prerequisite.
+      return [
+        ...standaloneResolverFor("cartId", auth)!,
+        {
+          bindTo: varName,
+          method: "POST",
+          endpoint: "/store/payment-collections",
+          extract: "payment_collection.id",
+          body: { cart_id: { kind: "runtime", ref: "cartId" } },
+        },
+      ];
+    case "paymentProviderId":
+      // Payment providers are scoped to a region; the listing endpoint takes
+      // `region_id` as a required query param (filled from runtime scope).
+      return [
+        { bindTo: "regionId", method: "GET", endpoint: "/store/regions", extract: "regions[0].id" },
+        {
+          bindTo: varName,
+          method: "GET",
+          endpoint: "/store/payment-providers",
+          extract: "payment_providers[0].id",
+          query: { region_id: { kind: "runtime", ref: "regionId" } },
         },
       ];
     default:

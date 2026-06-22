@@ -111,8 +111,10 @@ an auth header, and (for non-GET) a request body.
   treats `cartId` as a legitimate 2-step resolver chain —
   `GET /store/regions` → `POST /store/carts` (with the resolved `region_id`)
   — mirroring the plan's own documented `region → cart → line-item →
-  shipping → payment → complete` threading. This is the **only** multi-step
-  standalone resolver; it is not a general-purpose "invent any missing
+  shipping → payment → complete` threading. `paymentCollectionId` extends this
+  same chain by one step (`… → POST /store/payment-collections`), since a
+  payment collection only needs a cart to exist. These are deliberate,
+  enumerated bootstrap chains — not a general-purpose "invent any missing
   precondition" mechanism.
 - **Bootstrap applies to body fields too, not just path/query.** An ID a step
   needs in its **request body** (e.g. `cart_id` on `POST /store/payment-collections`)
@@ -127,11 +129,21 @@ an auth header, and (for non-GET) a request body.
   `GET /store/shipping-options` captures `shippingOptionId`, `GET /store/payment-providers`
   captures `paymentProviderId`, `GET /store/products` captures `variantId` (also a
   standalone resolver), and `paymentCollectionId` is captured from `POST /store/payment-collections`.
-  `POST /store/customers` threads the in-scope `email` (an empty body 400s). A
-  fragment that starts at `payment-sessions` with no payment-collection step still
-  `test.fixme`s (no standalone resolver for `paymentCollectionId`). This is what
+  `POST /store/customers` threads the in-scope `email` (an empty body 400s). This is what
   lets the Phase 12 regression flip a **generated** checkout spec red live (not
   only traffic), see the root checklist Phase 12.
+- **Standalone resolvers for checkout-fragment ids.** A mined *fragment* that
+  hits a checkout step without its producer earlier in the same flow no longer
+  dead-ends. `paymentCollectionId` resolves via the cart bootstrap above plus
+  `POST /store/payment-collections`; `paymentProviderId` resolves via
+  `GET /store/payment-providers?region_id=…` (a `ResolveCall` may now carry
+  required query params, not just a body). So a fragment starting at
+  `POST /store/payment-collections/{id}/payment-sessions` — previously a
+  `test.fixme` for an unresolvable `paymentCollectionId` — now bootstraps the
+  full chain and runs green live. `shippingOptionId` is **not** yet a standalone
+  resolver: a real shipping option requires a *populated, addressed* cart, so a
+  fragment needing `option_id` without an in-flow `GET /store/shipping-options`
+  still `test.fixme`s pending that richer bootstrap.
 - **Customer auth is setup, not a flow step.** A real session token is always
   established in the test setup (register → create customer → login with the
   in-scope `email`/`password`), and the flow's OWN handshake steps
