@@ -156,7 +156,7 @@ export type Decision = "approved" | "discarded";
 
 /**
  * Where a flow sits in the review pipeline. Independent of the test file, which
- * Phase 9 generates BEFORE review — approve/discard never create or delete it.
+ * the script-generator emits BEFORE review — approve/discard never create or delete it.
  *   - approved        : a human blessed it (kept; skipped next mine).
  *   - discarded       : a human rejected it (won't re-surface next mine).
  *   - awaiting_review : generated test exists, no decision yet ("new test scanned").

@@ -54,7 +54,7 @@ export async function runAdminFulfillFlow(
 
 /**
  * The admin operates the full return lifecycle on a real order the customer
- * inquired about in the E flow — the cross-role linkage Phase 7 joins on. The
+ * inquired about in the E flow — the cross-role linkage the behavior engine joins on. The
  * storefront has no customer return endpoint, so filing the return is itself
  * an admin action here. Each step degrades to a logged non-2xx rather than
  * crashing (version-sensitive).

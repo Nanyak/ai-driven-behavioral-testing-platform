@@ -1,4 +1,4 @@
-// Built from the Phase 10 NormalizedRunResult (collect.ts), never from
+// Built from the NormalizedRunResult (collect.ts), never from
 // Playwright shapes directly. `trace_id` is OPTIONAL and omitted when absent
 // upstream — behavior-engine candidates carry `source_sessions` but no trace
 // id; we never invent one (see collect.ts).

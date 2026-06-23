@@ -341,7 +341,7 @@ export class StoreSession {
    * Log into a PRE-EXISTING pooled account — the decoupler that finally makes
    * returning customers possible. Unlike login(), it does NOT fall
    * back to register(), so a returning session emits `login` with no `register`,
-   * which is exactly what lets Phase 7 separate signup from sign-in.
+   * which is exactly what lets the behavior engine separate signup from sign-in.
    */
   async loginExisting(email: string, password: string): Promise<ApiResponse> {
     this.email = email;

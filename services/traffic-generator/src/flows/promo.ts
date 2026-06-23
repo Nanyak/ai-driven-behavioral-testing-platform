@@ -10,7 +10,7 @@ export interface PromoConfig {
 
 /**
  * Both the valid and invalid code paths emit the same `apply_promo` event, so
- * the success/failure split is a status signal for Phase 7, not a separate
+ * the success/failure split is a status signal for the behavior engine, not a separate
  * endpoint.
  */
 export async function maybeApplyPromo(session: StoreSession, promo?: PromoConfig): Promise<void> {

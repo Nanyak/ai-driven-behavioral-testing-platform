@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Phase 8 golden response handling: OpenAPI-sourced assertion oracle (ADR 0001), augmented via a deterministic overlay (ADR 0004), intersected with observed response schemas.",
+  "description": "Golden response handling: OpenAPI-sourced assertion oracle (ADR 0001), augmented via a deterministic overlay (ADR 0004), intersected with observed response schemas.",
   "scripts": {
     "fetch-base-oas": "tsx openapi/fetch-base-oas.ts",
     "build-oas": "tsx openapi/build-oas.ts",

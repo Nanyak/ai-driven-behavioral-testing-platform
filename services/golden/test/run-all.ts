@@ -1,7 +1,7 @@
 /**
  * Builds the augmented spec first so oas-source.test.ts and everything
  * downstream of it never run against a stale artifact. An uncaught throw
- * here exits non-zero, which is what `check-phase8.mjs` gates on.
+ * here exits non-zero, which is what `check:phase8` gates on.
  */
 import { readdirSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";

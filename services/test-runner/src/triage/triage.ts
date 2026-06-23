@@ -3,7 +3,7 @@
  * evidence, classifies each unique failure (LLM or offline heuristic), and
  * writes the SIDECAR reports/triage.json (+ per-run archive). It then re-renders
  * report.html with the verdict column merged in — report.json itself is never
- * touched, so the Phase 12 gate stays byte-stable.
+ * touched, so the regression-demo gate stays byte-stable.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve as resolvePath } from "node:path";

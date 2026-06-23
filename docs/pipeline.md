@@ -17,13 +17,13 @@ artifact the next stage reads. For the component breakdown see
 | # | Stage | Command | Produces | Acceptance gate |
 | --- | --- | --- | --- | --- |
 | 0 | Install deps | `npm install` (+ per-app installs) | `node_modules` | `npm run check:phase0` |
-| 1 | Start core + seed | `npm run compose:up` → `npm run medusa:setup` → `docker-compose restart medusa` | Medusa + Postgres + Redis, seeded | Medusa health `200`; `check:phase1` |
-| 2 | Start ELK | `npm run elk:up` | Elasticsearch / Logstash / Kibana | `check:phase3`, `check:phase4` |
-| 3 | Generate traffic | `npm run traffic:generate` | Logged requests in Elasticsearch | `check:phase5` |
-| 4 | Ingest logs | `npm run ingest:run` | `data/sessions/session-flows-*.json` + golden candidates | `check:phase6` |
-| 5 | Mine behavior | `npm run behavior:mine` | Test candidates + `classification-report-<runId>.json` | `check:phase7` |
-| 6 | Generate tests | `npm run script-generator:generate` | `generated-tests/**/*.spec.ts` | `check:phase9` |
-| 7 | Run suite | `npm run test:all` | `reports/report.{json,html}` | `check:phase10`, `check:phase11` |
+| 1 | Start core + seed | `npm run compose:up` → `npm run medusa:setup` → `docker-compose restart medusa` | Medusa + Postgres + Redis, seeded | Medusa health `200`; `npm run check:phase1` |
+| 2 | Start ELK | `npm run elk:up` | Elasticsearch / Logstash / Kibana | `npm run check:phase3`, `check:phase4` |
+| 3 | Generate traffic | `npm run traffic:generate` | Logged requests in Elasticsearch | `npm run check:phase5` |
+| 4 | Ingest logs | `npm run ingest:run` | `data/sessions/session-flows-*.json` + golden candidates | `npm run check:phase6` |
+| 5 | Mine behavior | `npm run behavior:mine` | Test candidates + `classification-report-<runId>.json` | `npm run check:phase7` |
+| 6 | Generate tests | `npm run script-generator:generate` | `generated-tests/**/*.spec.ts` | `npm run check:phase9` |
+| 7 | Run suite | `npm run test:all` | `reports/report.{json,html}` | `npm run check:phase10`, `check:phase11` |
 | 8 | Read report | `open reports/report.html` | — | report is **green** |
 
 ## Clean checkout → green report (copy/paste)
@@ -97,8 +97,8 @@ caught the break.
 
 ## Offline verification (no live stack)
 
-Every phase ships a fixture-backed check that proves its logic without the running
-stack — mining, golden comparison, report build, and regression
+Every service ships a fixture-backed check that proves its logic without the
+running stack — mining, golden comparison, report build, and regression
 detection/attribution all run against committed fixtures.
 
 ```bash
@@ -115,9 +115,8 @@ npm run check:phase7    # behavioral modeling
 cd services/traffic-generator && npx tsc --noEmit
 ```
 
-`npm run check:phase14` chains the fixture-backed sign-off in order (phases
-0/2/3/6–12/15). The live-stack probes (1/4/5) are excluded — they run during the
-clean end-to-end run above.
+`npm run check:phase14` chains the fixture-backed sign-off for all offline checks.
+The live-stack probes are excluded — they run during the clean end-to-end run above.
 
 ## Re-running a single stage
 

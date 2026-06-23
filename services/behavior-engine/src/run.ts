@@ -1,5 +1,5 @@
 /**
- * Phase 7 behavior engine CLI.
+ * Behavior engine CLI.
  *
  *   npm run run -- [--file <path>] [--min-support N] [--quiet]
  *
@@ -200,7 +200,7 @@ interface Candidate {
   support: number;
   score: number;
   signature: string;
-  /** ADVISORY metadata — NOT a Phase 8/9 oracle (ADR 0001). */
+  /** ADVISORY metadata — NOT a golden oracle (ADR 0001). */
   assertion_hints: { fields: string[]; source: string };
   anomaly_note: string | null;
   source_sessions: string[];

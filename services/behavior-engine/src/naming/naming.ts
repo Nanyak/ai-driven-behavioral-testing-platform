@@ -8,7 +8,7 @@
  *      guest->customer transition as contamination vs. legitimate transfer.
  *   3. Assertion recommendation — ADVISORY hints on which response fields matter
  *      These are OPTIONAL METADATA on a candidate, explicitly NOT a
- *      Phase 8/9 oracle. ADR 0001 keeps the OpenAPI spec as the assertion
+ *      golden oracle. ADR 0001 keeps the OpenAPI spec as the assertion
  *      oracle; these hints never override it. The output contract documents
  *      `assertion_hints` as advisory.
  *

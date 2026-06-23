@@ -72,8 +72,8 @@ function vendorGoldenComparator(): void {
  * assertGolden — a thin Playwright-test wrapper around compareResponse()
  * (vendored from services/golden/src/compare.ts; see ADR 0001).
  *
- * golden-responses/ is populated only once Phase 6 ingestion + Phase 8 golden
- * generation has run end-to-end against a live, bodies-on backend; on a clean
+ * golden-responses/ is populated only once log-ingestion + golden generation has
+ * run end-to-end against a live, bodies-on backend; on a clean
  * checkout it is EMPTY (bodies-off logs yield 0 goldens, by design). When no
  * golden exists for (endpoint, status), this helper is a deliberate no-op —
  * it never throws and never fails a test. When a golden DOES exist, it loads
@@ -107,8 +107,8 @@ function loadGoldens(): GoldenResponse[] {
  * exists. No-op otherwise (golden-responses/ is empty on a clean checkout).
  *
  * When a golden DOES exist, the schema diff is ATTACHED to the test info as
- * "golden-diff" (JSON) on BOTH pass and fail, BEFORE the expect — so Phase 10's
- * collect.ts can surface the diff for every golden-asserted step, not only the
+ * "golden-diff" (JSON) on BOTH pass and fail, BEFORE the expect — so the
+ * test-runner's collect.ts can surface the diff for every golden-asserted step, not only the
  * failing ones. The expect() that follows still fails the test on a mismatch.
  */
 export async function assertGolden(endpoint: string, liveStatus: number, liveBody: unknown): Promise<void> {
@@ -301,7 +301,7 @@ function main(): void {
   const totalFixme = summary.reduce((n, s) => n + s.fixmeCount, 0);
   const totalErrors = summary.reduce((n, s) => n + s.generationErrors.length, 0);
 
-  console.log("Phase 9 — Script Generator run summary");
+  console.log("Script Generator run summary");
   console.log(`  Candidates loaded:        ${candidateFile.candidates.length}`);
   console.log(
     `  Defensive dedup:          -${dedupResult.collapsedIdentical} identical, -${dedupResult.clusteredPrefix} prefix-clustered, -${dedupResult.cappedOut} capped`

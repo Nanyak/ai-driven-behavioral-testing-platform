@@ -127,12 +127,12 @@ bodies) and classifies each failure — **real regression / contract drift / tes
 artifact / uncertain** — with a rationale and recommended action. Output is a
 **sidecar** `reports/triage.json`, merged into `report.html` as a per-failure
 verdict chip. It is strictly advisory: it never touches `report.json`, the
-golden oracle, or the gate (ADR 0001/0005), so the Phase 12 demo stays
+golden oracle, or the gate (ADR 0001/0005), so the regression demo stays
 byte-stable. With no `ANTHROPIC_API_KEY` it runs a deterministic heuristic; with
 a key it uses Sonnet 4.6 (configurable via `TRIAGE_LLM_MODEL`, e.g.
 `claude-opus-4-8`), degrading to the heuristic on any error.
 
-To see a regression caught end to end, run the Phase 12 demo: restart Medusa with
+To see a regression caught end to end, run the regression demo: restart Medusa with
 `REGRESSION_DEMO=carts_complete_500`, re-run `npm run test:customer`, watch the
 report go red with persona/flow/endpoint attribution, then unset the toggle and
 re-run to return to green. See the regression-demo section of `docs/pipeline.md`.
@@ -166,18 +166,18 @@ apps/
   storefront/          Next.js customer-facing storefront
   platform-dashboard/  Internal ops dashboard
 services/
-  traffic-generator/   Synthetic traffic (Phase 5)
-  log-ingestion/       Elasticsearch → session-flow + golden candidate extraction (Phase 6)
-  behavior-engine/     n-gram/PrefixSpan mining + emergent personas (Phase 7)
-  golden/              OpenAPI overlay + golden comparison oracle (Phase 8)
-  script-generator/    Playwright test generation (Phase 9)
-  test-runner/         Test execution (Phase 10) + reporting (Phase 11/12)
+  traffic-generator/   Synthetic traffic generator
+  log-ingestion/       Elasticsearch → session-flow + golden candidate extraction
+  behavior-engine/     n-gram/PrefixSpan mining + emergent persona classification
+  golden/              OpenAPI overlay + golden comparison oracle
+  script-generator/    Playwright test generation
+  test-runner/         Test execution + reporting + regression demo
 context/               Project-level specs (plan.md, checklist.md, problem-statement.md)
 docs/                  architecture.md, pipeline.md, limitations.md, erd.md
 generated-tests/       Emitted Playwright specs (per persona)
 golden-responses/      Golden schema snapshots
 reports/               report.json + report.html
-infra/ scripts/        Infra config + root automation (check-phaseN, setup)
+infra/ scripts/        Infra config + root automation scripts
 ```
 
 Each service's source is headed by a module-level doc comment describing its
@@ -185,7 +185,7 @@ contract — read it before the implementation.
 
 ## Verification
 
-Every phase ships an **offline** check script that proves its logic without the
+Every service ships an **offline** check script that proves its logic without the
 live stack (mining, golden comparison, report build, and the regression
 detection/attribution all run against committed fixtures):
 
@@ -196,19 +196,17 @@ npm run check:phase2    # logging middleware       npm run check:phase9   # scri
 npm run check:phase3    # ELK ingestion            npm run check:phase10  # test execution
 npm run check:phase4    # log schema + Kibana      npm run check:phase11  # reporting
 npm run check:phase5    # traffic generator        npm run check:phase12  # regression demo
-npm run check:phase6    # log ingestion            npm run check:phase14  # offline sign-off (fixture phases)
-npm run check:triage    # regression triage agent
-                                                  npm run check:phase15  # HITL review dashboard
+npm run check:phase6    # log ingestion            npm run check:phase14  # offline sign-off chain
+npm run check:triage    # regression triage agent  npm run check:phase15  # HITL review dashboard
 
 # Traffic generator must always compile clean (hard gate):
 cd services/traffic-generator && npx tsc --noEmit
 ```
 
-`npm run check:phase14` chains the fixture-backed sign-off in order (phases
-0/2/3/6–12/15; the live-stack probes 1/4/5 are excluded — they run during the
-clean run). The **live** end-to-end validation procedure (clean Docker state →
-traffic → Kibana → green report → regression → revert) is documented in
-`docs/pipeline.md`.
+`npm run check:phase14` chains the fixture-backed sign-off in order; the
+live-stack probes are excluded and run only during the full clean run. The
+**live** end-to-end validation procedure (clean Docker state → traffic → Kibana
+→ green report → regression → revert) is documented in `docs/pipeline.md`.
 
 ## Detailed setup, API examples, and troubleshooting
 

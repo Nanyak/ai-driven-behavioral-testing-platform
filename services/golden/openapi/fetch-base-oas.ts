@@ -4,7 +4,7 @@
  * `openapi/base/{store,admin}.json`.
  *
  * This is the ONLY script in `services/golden` that touches the network.
- * `build-oas.ts` (the deterministic overlay) and `check:phase8` read the
+ * `build-oas.ts` (the deterministic overlay) and `check:phase8` read only the
  * committed `openapi/base/*.json` only — re-run THIS script by hand whenever
  * the base spec needs to be refreshed against the live Medusa project.
  *

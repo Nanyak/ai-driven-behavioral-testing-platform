@@ -7,7 +7,7 @@ import type { PoolAccount, PoolOrder } from "../orchestration/state.js";
  * lifecycle is admin-operated (see docs/adr) — so the customer can only log in
  * and look at the order they want to return. The orchestrator flags that order
  * so an admin refund session (F3) settles the SAME order_id: the cross-role
- * linkage Phase 7 discovers (customer placed + inquired, admin refunded).
+ * linkage the behavior engine discovers (customer placed + inquired, admin refunded).
  */
 export async function runReturnInquiryFlow(
   client: MedusaClient,

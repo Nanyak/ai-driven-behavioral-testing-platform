@@ -189,7 +189,7 @@ export class RunState {
     this.rejectedReturnOrderIds.add(orderId);
   }
 
-  /** The cross-role linkage Phase 7 joins on (customer placed the order, admin
+  /** The cross-role linkage the behavior engine joins on (customer placed the order, admin
    * reversed it). */
   get linkedRefundCount(): number {
     const returned = new Set(this.returnPool.map((r) => r.orderId));

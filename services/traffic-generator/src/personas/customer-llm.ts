@@ -8,7 +8,7 @@ import { generateNarrative } from "../llm/narrative.js";
  *
  * This is the ONLY place the full register -> login -> browse -> cart ->
  * line-items -> checkout -> complete sequence is realized. It must never appear
- * in flows/. Phase 7 is expected to rediscover it from the combined log stream
+ * in flows/. The behavior engine is expected to rediscover it from the combined log stream
  * with no prior knowledge, proving genuine discovery.
  *
  * To avoid holdout starvation, the core checkout backbone is GUARANTEED here;

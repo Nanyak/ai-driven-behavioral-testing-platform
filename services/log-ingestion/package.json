@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Phase 6 data ingestion service: turns raw Elasticsearch logs into session-grouped behavioral sequences and candidate golden responses.",
+  "description": "Data ingestion service: turns raw Elasticsearch logs into session-grouped behavioral sequences and candidate golden responses.",
   "scripts": {
     "ingest": "tsx src/run.ts",
     "typecheck": "tsc --noEmit"

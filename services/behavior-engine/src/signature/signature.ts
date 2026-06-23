@@ -3,9 +3,9 @@
  *
  * ADR 0002: this function is the single source of the flow signature. Three
  * consumers call it and must never recompute it divergently:
- *   - dedup.ts            (within-run identical-sequence collapse, Phase 7)
- *   - the cross-run skip gate / coverage.ts (Phase 7)
- *   - Phase 9 emit.ts     (stamped into each generated test)
+ *   - dedup.ts            (within-run identical-sequence collapse)
+ *   - the cross-run skip gate / coverage.ts
+ *   - script-generator/emit.ts (stamped into each generated test)
  *
  * The signature is a stable hash of the NORMALIZED STEP SEQUENCE: the ordered
  * list of `METHOD normalized_endpoint` tokens. Two rules are load-bearing and

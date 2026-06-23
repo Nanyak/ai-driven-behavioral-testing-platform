@@ -1,6 +1,6 @@
 /**
- * Output is LABEL-FREE by design: no persona is assigned here. Phase 7 derives
- * persona as an emergent attribute, so ingestion must never
+ * Output is LABEL-FREE by design: no persona is assigned here. The behavior
+ * engine derives persona as an emergent attribute, so ingestion must never
  * pre-label sessions or the discovery claim collapses.
  */
 
@@ -191,9 +191,9 @@ export function buildSessionFlows(buckets: SessionBucket[]): BuildResult {
 }
 
 // OBSERVED HALF of the ADR 0001 intersection — snapshots schemas only, never
-// compares (comparison is Phase 8/10). With bodies-off logs there are no
-// response bodies, so this contributes nothing and Phase 8 falls back to
-// spec-only goldens — expected, not an error (ADR 0001).
+// compares (comparison is golden/test-runner). With bodies-off logs there are no
+// response bodies, so this contributes nothing and the golden service falls back
+// to spec-only goldens — expected, not an error (ADR 0001).
 const IGNORE_FIELDS = [
   "id",
   "created_at",

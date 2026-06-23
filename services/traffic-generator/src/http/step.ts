@@ -1,6 +1,6 @@
 import type { ApiResponse } from "./client.js";
 
-/** The unit Phase 7 mines. */
+/** The unit the behavior engine mines. */
 export interface StepResult {
   action: string;
   method: string;

@@ -14,7 +14,7 @@
  *      so some guest->customer reclassifications are ground-truth GAPS, not
  *      classifier errors).
  *   2. Holdout recovery: PrefixSpan support count for the registered-customer
- *      checkout backbone; acceptance is support >= 6 (the Phase 5 holdout floor,
+ *      checkout backbone; acceptance is support >= 6 (the holdout floor,
  *      floor=6), comfortably above minSupport=3.
  *   3. Negative control: a concrete fixture check — no high-support mined
  *      flow contains a *successful* `POST /store/returns` (removed by ADR 0003,
@@ -138,7 +138,7 @@ const HOLDOUT_BACKBONE = [
   "POST /store/carts/{id}/complete",
 ];
 
-export const HOLDOUT_SUPPORT_FLOOR = 6; // holdout floor for Phase 5 checkout sessions.
+export const HOLDOUT_SUPPORT_FLOOR = 6; // holdout floor for customer checkout sessions.
 
 function containsSubsequence(patternTokens: string[], target: string[]): boolean {
   let i = 0;

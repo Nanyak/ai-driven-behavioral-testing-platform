@@ -27,7 +27,7 @@ export async function runSteps(steps: Step[], noise: NoiseConfig): Promise<void>
     const res = await step();
     // Retry input-correction 4xx only. A 401/403 is an auth wall, not a
     // correctable input error — blind-retrying it produces an unrealistic
-    // `POST /store/carts 401 ×N` storm (and a junk Phase 7 negative candidate).
+    // `POST /store/carts 401 ×N` storm (and a junk negative candidate).
     if (
       noise.retry &&
       !res.ok &&

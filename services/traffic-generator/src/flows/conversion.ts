@@ -5,7 +5,7 @@ import type { PoolAccount } from "../orchestration/state.js";
 export type ConversionIntent = "convertBuy" | "convertAbandon" | "wallBounce";
 
 /**
- * Produces the `role_observed:[guest, customer]` 401→auth→200 pivot that Phase 7's
+ * Produces the `role_observed:[guest, customer]` 401→auth→200 pivot that the behavior engine's
  * "highest-privilege attribute reached" rule is built to classify.
  *
  * Holdout rule (CLAUDE.md §5 / §8 #5): this scripted flow authenticates with

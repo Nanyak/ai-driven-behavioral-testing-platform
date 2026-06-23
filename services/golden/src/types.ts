@@ -1,12 +1,10 @@
 /**
- * Phase 8 golden response types (ADR 0001, ADR 0004).
+ * Golden response types (ADR 0001, ADR 0004).
  *
  * `SchemaNode`/`SchemaLeaf` are kept type-identical to
- * `services/log-ingestion/src/types.ts` so Phase 6's observed
+ * `services/log-ingestion/src/types.ts` so the log-ingestion observed
  * `GoldenCandidate` snapshots feed straight into `schema-merge.ts` without
- * conversion. The canonical definition now lives here; log-ingestion is NOT
- * refactored to import it in this phase (the plan asks only for type
- * compatibility now — a later phase can re-point the import).
+ * conversion.
  */
 
 export type SchemaLeaf =
@@ -44,7 +42,7 @@ export interface GoldenResponse {
   source_sessions: string[];
 }
 
-/** The observed half of the ADR 0001 intersection (Phase 6 output). */
+/** The observed half of the ADR 0001 intersection (log-ingestion output). */
 export interface GoldenCandidate {
   endpoint: string;
   expected_status: number;

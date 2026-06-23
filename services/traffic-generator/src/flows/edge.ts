@@ -3,7 +3,7 @@ import type { StepResult } from "../http/step.js";
 import { newCustomerEmail } from "../config/ids.js";
 import { shuffleInPlace } from "../util/random.js";
 
-/** Deliberately triggers 4xx/5xx so Phase 7 has a healthy supply of error flows to mine. */
+/** Deliberately triggers 4xx/5xx so the behavior engine has a healthy supply of error flows to mine. */
 export async function runEdgeFlow(client: MedusaClient): Promise<StepResult[]> {
   const steps: StepResult[] = [];
   const record = (action: string, method: string, path: string, status: number, ok: boolean) =>

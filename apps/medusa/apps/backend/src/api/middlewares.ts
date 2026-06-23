@@ -521,11 +521,10 @@ function requireCustomerAuth(
 }
 
 /**
- * Phase 12 regression-demo fault injector (reversible, OFF by default).
+ * Regression-demo fault injector (reversible, OFF by default).
  *
  * Does nothing unless `REGRESSION_DEMO` is set, so production/CI behavior is
- * unchanged unless the demo explicitly opts in (docs/phase-12-implementation-plan.md
- * §"Reversible injection"). Scenario A (response-code regression): when
+ * unchanged unless the demo explicitly opts in. Scenario A (response-code regression): when
  * `REGRESSION_DEMO=carts_complete_500`, make checkout completion return 500
  * instead of its documented 200, so the frozen golden baseline flags a
  * regression on `POST /store/carts/{id}/complete`. Registered AFTER
@@ -541,7 +540,7 @@ function regressionDemoFault(
   if (process.env.REGRESSION_DEMO === "carts_complete_500" && req.path.endsWith("/complete")) {
     res.status(500).json({
       type: "regression_demo",
-      message: "Injected fault (Phase 12): POST /store/carts/{id}/complete forced to 500."
+      message: "Injected fault (regression demo): POST /store/carts/{id}/complete forced to 500."
     })
     return
   }
@@ -575,8 +574,8 @@ export default defineMiddlewares({
       method: [...GATE_METHODS],
       middlewares: [requireCustomerAuth]
     },
-    // Phase 12 regression-demo fault injector — OFF unless REGRESSION_DEMO is
-    // set. Placed AFTER the gate so it only fires for authenticated customers
+    // Regression-demo fault injector — OFF unless REGRESSION_DEMO is set.
+    // Placed AFTER the gate so it only fires for authenticated customers
     // (a real checkout that now 500s), making the failure a behavioral
     // regression rather than an auth rejection.
     {

@@ -12,7 +12,7 @@ export type SessionSource =
  * session_id = sess-<source>-<uuid>.
  *
  * The <source> tag exists ONLY for human debugging of a generator run. It is
- * never sent as a classifier signal and Phase 7 must not parse it: persona is
+ * never sent as a classifier signal and the behavior engine must not parse it: persona is
  * derived from flow content, not from this label. It accepts
  * an arbitrary string so the staged orchestrator can tag by session type.
  */

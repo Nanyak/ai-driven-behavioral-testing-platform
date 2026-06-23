@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Phase 7 behavioral modeling engine: mines unlabeled session flows into ranked, persona-tagged test candidates (emergent classification, deterministic; LLM for naming only).",
+  "description": "Behavioral modeling engine: mines unlabeled session flows into ranked, persona-tagged test candidates (emergent classification, deterministic; LLM for naming only).",
   "scripts": {
     "mine": "node --max-old-space-size=2048 --import tsx src/run.ts",
     "test:signature": "tsx src/signature/signature.test.ts",

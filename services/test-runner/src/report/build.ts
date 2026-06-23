@@ -1,12 +1,12 @@
 /**
- * build.ts (Phase 11 plan step #2). Aggregate the Phase 10 NormalizedRunResult
- * into a stakeholder report: totals, per-persona, per-flow, and endpoint-failure
- * rollups, with one failure entry per failing step carrying expected/actual
- * status, golden diff, duration, and source provenance.
+ * Aggregate the NormalizedRunResult into a stakeholder report: totals,
+ * per-persona, per-flow, and endpoint-failure rollups, with one failure entry
+ * per failing step carrying expected/actual status, golden diff, duration, and
+ * source provenance.
  *
  * Pure + deterministic: same input -> byte-identical output given a fixed
  * `runId`/`now`. All ordering is stable so a diff between two runs is meaningful
- * (the regression-demo, Phase 12, relies on this).
+ * (the regression demo relies on this).
  */
 import type { NormalizedRunResult, NormalizedTest } from "../collect.js";
 import {

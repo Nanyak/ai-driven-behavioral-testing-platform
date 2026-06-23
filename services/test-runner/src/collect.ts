@@ -1,6 +1,6 @@
 /**
  * Persona, flow_name, and source_sessions are LIFTED from the Playwright
- * annotations the Phase 9 generator stamps (services/script-generator/src/emit.ts),
+ * annotations the script-generator stamps (services/script-generator/src/emit.ts),
  * never reconstructed from the candidates file here — keep this a clean exported
  * type, do not leak Playwright reporter shapes past this module.
  *
@@ -68,7 +68,7 @@ export interface PlaywrightJsonReport {
   suites?: PwSuite[];
 }
 
-/* ---- Normalized run result (Phase 11 input) ---- */
+/* ---- Normalized run result (report builder input) ---- */
 
 export interface NormalizedStep {
   endpoint: string;

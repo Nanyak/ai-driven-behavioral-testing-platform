@@ -18,7 +18,7 @@ function parseTarget(arg: string | undefined): Target {
 
 function printSummary(result: NormalizedRunResult, target: Target): void {
   const { totals } = result;
-  console.log(`\nPhase 10 — Test Runner (${target})`);
+  console.log(`\nTest Runner (${target})`);
   console.log(`  Executed: ${totals.executed}  Passed: ${totals.passed}  Failed: ${totals.failed}  Skipped: ${totals.skipped}`);
 
   const byPersona = new Map<string, { passed: number; failed: number; skipped: number }>();

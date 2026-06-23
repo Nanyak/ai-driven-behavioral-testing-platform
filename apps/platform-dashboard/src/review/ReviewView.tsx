@@ -99,15 +99,15 @@ function HowItWorks() {
         <div className="how-body">
           <ul>
             <li>
-              <strong>Tests are generated before you review them.</strong> Phase 9 writes a
-              Playwright spec for each mined flow automatically. A flow can already have a
+              <strong>Tests are generated before you review them.</strong> The script-generator
+              writes a Playwright spec for each mined flow automatically. A flow can already have a
               test while still being <em>Awaiting review</em>.
             </li>
             <li>
               <strong>Approve</strong> = bless this flow and keep its test.{" "}
               <strong>Discard</strong> = reject the flow. Both record your decision and stop
               the flow from re-surfacing as a new candidate on the next{" "}
-              <code>behavior:mine</code> (the Phase 7 skip gate).
+              <code>behavior:mine</code> (the skip gate).
             </li>
             <li>
               Neither button creates or deletes the <code>.spec.ts</code> file. Discarding
@@ -260,7 +260,7 @@ function DetailPanel({
       <p className="review-note">
         <strong>Approve</strong> keeps the test and blesses the flow; <strong>Discard</strong>{" "}
         marks it rejected. Both write to <code>data/hitl/approvals.json</code> and feed the
-        Phase 7 skip gate so the flow won't re-surface next <code>behavior:mine</code>.
+        The skip gate will prevent the flow from re-surfacing next <code>behavior:mine</code>.
         Neither touches the <code>.spec.ts</code> file itself.
       </p>
     </aside>

@@ -36,15 +36,15 @@ export interface SessionFlow {
   started_at: string;
   ended_at: string;
   /**
-   * Highest-privilege last. VALIDATION GROUND TRUTH ONLY — Phase 7 must never
-   * feed this to the classifier.
+   * Highest-privilege last. VALIDATION GROUND TRUTH ONLY — the behavior engine
+   * must never feed this to the classifier.
    */
   role_observed: ObservedRole[];
   steps: FlowStep[];
 }
 
 /**
- * OBSERVED HALF of the ADR 0001 intersection. Phase 8 is authoritative
+ * OBSERVED HALF of the ADR 0001 intersection. The golden service is authoritative
  * (OpenAPI spec); this only snapshots what was seen in logs and is empty
  * when the backend ran bodies-off.
  */

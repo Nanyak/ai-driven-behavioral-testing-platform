@@ -119,13 +119,13 @@ async function main(): Promise<void> {
   log(
     goldens.length > 0
       ? `[ingest] wrote ${goldens.length} golden candidate(s) to ${config.goldenDir}`
-      : `[ingest] no golden candidates (logs were bodies-off; Phase 8 falls back to spec-only — expected)`
+      : `[ingest] no golden candidates (logs were bodies-off; golden service falls back to spec-only — expected)`
   );
 
   if (sessions.length < 50) {
     log(
       `[ingest] note: only ${sessions.length} session flows (<50). Generate more ` +
-        `traffic (Phase 5) for a representative mining run.`
+        `traffic (npm run traffic:generate) for a representative mining run.`
     );
   }
 }

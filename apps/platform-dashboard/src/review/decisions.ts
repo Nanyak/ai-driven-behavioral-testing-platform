@@ -1,7 +1,7 @@
 export type Decision = "approved" | "discarded";
 
 /**
- * The test file is generated BEFORE review (Phase 9) — approve/discard never
+ * The test file is generated BEFORE review by the script-generator — approve/discard never
  * create or delete it.
  */
 export type Lifecycle = "approved" | "discarded" | "awaiting_review" | "discovered";

@@ -170,7 +170,7 @@ async function preflight(cfg: TrafficConfig): Promise<boolean> {
 async function main() {
   const cfg = loadConfig();
 
-  console.log("Phase 5: Synthetic Traffic Generator (staged taxonomy)");
+  console.log("Synthetic Traffic Generator (staged taxonomy)");
   console.log(`  Backend:     ${cfg.backendUrl}`);
   console.log(`  Profile:     ${cfg.profile}  (N=${cfg.totalSessions}, pool=${cfg.accountPoolSize})`);
   console.log(`  LLM model:   ${cfg.llmModel}${cfg.anthropicApiKey ? "" : " (no key — local fallback)"}`);

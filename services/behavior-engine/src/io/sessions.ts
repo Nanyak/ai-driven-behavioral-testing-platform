@@ -25,7 +25,7 @@ const REPO_ROOT = resolve(SERVICE_ROOT, "..", "..");
 /** Repo-root `data/sessions/` — the ingestion output dir (shared, read-only here). */
 export const SESSIONS_DIR = resolve(REPO_ROOT, "data", "sessions");
 
-/** One step of a session-flow record (Phase 6 data contract). */
+/** One step of a session-flow record (log-ingestion data contract). */
 export interface FlowStep {
   method: string;
   endpoint: string;

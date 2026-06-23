@@ -178,7 +178,7 @@ function renderStep(plan: StepPlan, index: number, golden: boolean): { code: str
   inner.push(`    const ${respVar} = await request.${method}(${requestArgs});`);
   // Capture the live body BEFORE the status assert (which throws on mismatch),
   // so a failing step still carries its response for advisory triage. Capped +
-  // enveloped with the step title so Phase 10 collect.ts can map body->step.
+  // enveloped with the step title so test-runner/collect.ts can map body->step.
   // This is read only via reports/playwright/normalized.json — it never enters
   // the deterministic report.json (ADR 0001 gate path unchanged).
   inner.push(
@@ -353,13 +353,13 @@ export function emitSpec({ candidate, plan, golden }: EmitOptions): EmitResult {
 
   const testTitle = `${candidate.persona} — ${candidate.flow_name}`;
 
-  // Provenance travels WITH the test (Phase 10 plan key decision): each spec
-  // stamps flow_signature + persona + flow_name + source_sessions as Playwright
-  // annotations, so collect.ts (Phase 10) lifts them straight out of the JSON
-  // reporter rather than reconstructing them from the candidates file. The
-  // source_sessions array is JSON-stringified into the annotation `description`
-  // (an annotation description is a single string). session_id provenance is a
-  // debugging/reporting tag only — never a Phase 7 classifier signal
+  // Provenance travels WITH the test: each spec stamps flow_signature + persona
+  // + flow_name + source_sessions as Playwright annotations, so collect.ts lifts
+  // them straight out of the JSON reporter rather than reconstructing them from
+  // the candidates file. The source_sessions array is JSON-stringified into the
+  // annotation `description` (an annotation description is a single string).
+  // session_id provenance is a debugging/reporting tag only — never a
+  // behavior-engine classifier signal
   // (CLAUDE.md §8.2).
   const annotationLines = [
     `  test.info().annotations.push({ type: "flow_signature", description: ${JSON.stringify(candidate.signature)} });`,

@@ -5,9 +5,9 @@
  *   mine -> dedup (within-run) -> rank -> [SKIP GATE] -> naming (LLM) -> candidates
  *
  * The manifest is the set of already-covered flow signatures, from two sources:
- *   1. the generated-tests corpus -- each Phase 9 `.spec.ts` stamps its
+ *   1. the generated-tests corpus -- each script-generator `.spec.ts` stamps its
  *      signature (ADR 0002); we read those back.
- *   2. the Phase 15 HITL approval JSON store -- entries marked `approved` AND
+ *   2. the HITL approval JSON store -- entries marked `approved` AND
  *      entries marked `discarded` (a human-rejected flow must not re-surface).
  *
  * TOLERANCE: a MISSING `generated-tests/` dir or a MISSING HITL
@@ -28,7 +28,7 @@ const REPO_ROOT = resolve(SERVICE_ROOT, "..", "..");
 const GENERATED_TESTS_DIR = resolve(REPO_ROOT, "generated-tests");
 const HITL_STORE = resolve(REPO_ROOT, "data", "hitl", "approvals.json");
 
-// Each generated test stamps its signature. The Phase 9 convention (ADR 0002) is
+// Each generated test stamps its signature. The script-generator convention (ADR 0002) is
 // a machine-readable marker; we match it permissively so a small format change
 // in the stamp does not silently empty the manifest.
 const SIGNATURE_STAMP = /flow_signature["'\s:=]+([0-9a-f]{64})/i;

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Phase 10 test runner: executes the Phase 9 generated Playwright suite per persona project, forces JSON+HTML reporters into reports/playwright/, and normalizes the Playwright JSON into a persona→flow→step run result for Phase 11 reporting.",
+  "description": "Test runner: executes the generated Playwright suite per persona project, forces JSON+HTML reporters into reports/playwright/, and normalizes the Playwright JSON into a persona→flow→step run result for reporting.",
   "scripts": {
     "run": "tsx src/cli.ts",
     "triage": "tsx src/triage/cli.ts",
