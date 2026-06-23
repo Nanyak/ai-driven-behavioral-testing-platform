@@ -50,6 +50,14 @@ flowchart LR
 Data flows in one direction: **traffic → logs → Elasticsearch → session flows →
 behavior candidates → Playwright specs → run results → report.**
 
+> **Note on the traffic sources.** The Synthetic Traffic Generator (and the
+> storefront/dashboard as ad-hoc sources) are *scaffolding to supply behavioral
+> input* — they stand in for the production logs this platform would normally
+> consume. They are not features of the product. The platform proper begins at the
+> **Structured Logging Middleware** and is source-agnostic from
+> `data/sessions/session-flows-*.json` onward: swap the generator for a real log
+> shipper and nothing downstream changes.
+
 ## Components
 
 | Component | Path | Responsibility |
@@ -57,12 +65,13 @@ behavior candidates → Playwright specs → run results → report.**
 | Medusa backend (SUT) | `apps/medusa/` | The real e-commerce system under test. Hosts Store + Admin REST APIs and the structured logging middleware. |
 | Storefront | `apps/storefront/` | Next.js customer-facing app; a real human/traffic source against the Store API. |
 | Platform dashboard | `apps/platform-dashboard/` | Internal ops view: mined flows, persona breakdown, run results, and the human-in-the-loop (HITL) review surface. |
-| Traffic generator | `services/traffic-generator/` | Drives synthetic traffic — both deterministic scripted flows and **LLM-varied** narratives (Haiku 4.5). The registered-customer checkout backbone exists *only* in the LLM-varied stream. |
+| Traffic generator | `services/traffic-generator/` | **Scaffolding, not a product feature.** Stands in for a production log source we don't have — it manufactures the behavioral input the pipeline would otherwise read from a real system. Drives both deterministic scripted flows and **LLM-varied** narratives (Haiku 4.5); the registered-customer checkout backbone exists *only* in the LLM-varied stream. In a real deployment this component is replaced by a log shipper pointed at production/staging Elasticsearch (see [`limitations.md`](./limitations.md) §1). |
 | Log ingestion | `services/log-ingestion/` | Reads access/application logs from Elasticsearch, reconstructs per-session journeys, and extracts golden candidates. Writes `data/sessions/session-flows-*.json`. |
 | Behavior engine | `services/behavior-engine/` | Mines frequent flows (n-gram / PrefixSpan / Markov), derives personas from attributes, names flows + flags anomalies (LLM), and emits test candidates plus the validation report. |
 | Golden store | `services/golden/` | Builds the OpenAPI-derived golden schemas (the assertion oracle) and the comparison logic. |
 | Script generator | `services/script-generator/` | Turns test candidates into executable Playwright API specs, per persona. |
 | Test runner | `services/test-runner/` | Executes the generated suite against Medusa, compares responses to goldens, and builds `reports/report.{json,html}` with regression attribution. |
+| Regression triage agent | `services/test-runner/src/triage/` | **Advisory only.** Post-run, classifies each failure (real regression / contract drift / test artifact / uncertain) from the report + normalized diff + captured body, writing the sidecar `reports/triage.json` and a verdict chip in the HTML. Offline deterministic heuristic with no key; Sonnet 4.6 (→ Opus 4.8) with one. Never on the oracle/gate path (ADR 0001/0005). |
 
 ## Data contracts (the artifacts between stages)
 

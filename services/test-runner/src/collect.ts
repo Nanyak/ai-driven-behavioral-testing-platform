@@ -79,6 +79,14 @@ export interface NormalizedStep {
   duration_ms: number;
   golden_diff: SchemaDiffEntry[] | null;
   failure_message: string | null;
+  /**
+   * Live response body excerpt (capped upstream), captured from the
+   * "response-body" attachment the generated spec stamps before its status
+   * assert. ADVISORY evidence for triage only — deliberately NOT propagated
+   * into the deterministic report.json (it is dynamic/nondeterministic).
+   * Optional; absent on fixtures and pre-capture runs.
+   */
+  response_body?: string | null;
 }
 
 export interface NormalizedTest {
@@ -143,6 +151,35 @@ function readGoldenDiff(attachments: PwAttachment[] | undefined): SchemaDiffEntr
   }
 }
 
+/**
+ * Decode the "response-body" attachments (one per request step, enveloped with
+ * its step title) into an endpoint-title -> body-excerpt map. Multiple steps
+ * hitting the same endpoint collide on last-wins; acceptable for advisory
+ * triage. The body is dynamic, so it rides the normalized result only and never
+ * reaches report.json.
+ */
+function readResponseBodies(attachments: PwAttachment[] | undefined): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const att of attachments ?? []) {
+    if (att.name !== "response-body" || !att.body) continue;
+    let text = att.body;
+    try {
+      text = Buffer.from(att.body, "base64").toString("utf8");
+    } catch {
+      /* fall through to raw parse */
+    }
+    try {
+      const parsed = JSON.parse(text) as { endpoint?: unknown; body?: unknown };
+      if (typeof parsed.endpoint === "string" && typeof parsed.body === "string") {
+        out.set(parsed.endpoint, parsed.body);
+      }
+    } catch {
+      /* skip malformed attachment */
+    }
+  }
+  return out;
+}
+
 function normStatus(status: string | undefined): NormalizedStep["status"] {
   switch (status) {
     case "passed":
@@ -160,12 +197,13 @@ const STEP_TITLE_RE = /^(GET|POST|PUT|PATCH|DELETE)\s+(\/\S+)$/;
 
 function extractRequestSteps(result: PwTestResult): NormalizedStep[] {
   const goldenDiff = readGoldenDiff(result.attachments);
+  const responseBodies = readResponseBodies(result.attachments);
   const out: NormalizedStep[] = [];
   for (const step of result.steps ?? []) {
     const m = STEP_TITLE_RE.exec(step.title);
     if (!m) continue;
     const failed = Boolean(step.error?.message);
-    out.push({
+    const normalized: NormalizedStep = {
       endpoint: step.title,
       method: m[1],
       expected_status: expectedFromStepError(step.error?.message),
@@ -174,7 +212,10 @@ function extractRequestSteps(result: PwTestResult): NormalizedStep[] {
       duration_ms: step.duration ?? 0,
       golden_diff: goldenDiff,
       failure_message: failed ? (step.error?.message ?? "").replace(ANSI_RE, "") || null : null,
-    });
+    };
+    const body = responseBodies.get(step.title);
+    if (body !== undefined) normalized.response_body = body;
+    out.push(normalized);
   }
   return out;
 }

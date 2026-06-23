@@ -10,6 +10,9 @@ the future direction. The goal of this document is to make the platform's claims
 ### 1. Traffic is synthetic, not real production data
 
 The behavioral input is generated, not captured from a live production system.
+The traffic generator is **scaffolding that substitutes for production logs we
+don't have** — not a product feature. The platform's actual surface starts at the
+logging middleware and is source-agnostic downstream.
 
 - **Mitigation.** Traffic is mixed-source (deterministic scripted flows + LLM-varied
   narratives via Haiku 4.5), and the validation methodology relies on a **holdout**:

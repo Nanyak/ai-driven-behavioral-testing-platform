@@ -92,6 +92,10 @@ export function listReports(): ReportRow[] {
   const rows: ReportRow[] = [];
   for (const file of readdirSync(REPORTS_RUNS_DIR)) {
     if (!file.endsWith(".json")) continue;
+    // The triage agent archives an advisory sidecar `<slug>.triage.json` next to
+    // each run report; it is NOT a run (no totals/status, no matching .html), so
+    // skip it here or it lists as a phantom 0/0/0 "run" with a dead view link.
+    if (file.endsWith(".triage.json")) continue;
     const slug = file.slice(0, -".json".length);
     try {
       const r = JSON.parse(readFileSync(join(REPORTS_RUNS_DIR, file), "utf8")) as {

@@ -112,9 +112,25 @@ npm run script-generator:generate
 # 7. Execute the generated suite against Medusa (writes reports/report.{json,html})
 npm run test:all
 
-# 8. Read the report
+# 8. (Optional) Triage any failures — advisory root-cause verdicts as a sidecar
+npm run triage
+
+# 9. Read the report
 open reports/report.html
 ```
+
+### Regression triage (advisory)
+
+`npm run triage` reads the latest `reports/report.json` (attribution) and
+`reports/playwright/normalized.json` (detailed golden diff + captured response
+bodies) and classifies each failure — **real regression / contract drift / test
+artifact / uncertain** — with a rationale and recommended action. Output is a
+**sidecar** `reports/triage.json`, merged into `report.html` as a per-failure
+verdict chip. It is strictly advisory: it never touches `report.json`, the
+golden oracle, or the gate (ADR 0001/0005), so the Phase 12 demo stays
+byte-stable. With no `ANTHROPIC_API_KEY` it runs a deterministic heuristic; with
+a key it uses Sonnet 4.6 (configurable via `TRIAGE_LLM_MODEL`, e.g.
+`claude-opus-4-8`), degrading to the heuristic on any error.
 
 To see a regression caught end to end, run the Phase 12 demo: restart Medusa with
 `REGRESSION_DEMO=carts_complete_500`, re-run `npm run test:customer`, watch the
@@ -181,6 +197,7 @@ npm run check:phase3    # ELK ingestion            npm run check:phase10  # test
 npm run check:phase4    # log schema + Kibana      npm run check:phase11  # reporting
 npm run check:phase5    # traffic generator        npm run check:phase12  # regression demo
 npm run check:phase6    # log ingestion            npm run check:phase14  # offline sign-off (fixture phases)
+npm run check:triage    # regression triage agent
                                                   npm run check:phase15  # HITL review dashboard
 
 # Traffic generator must always compile clean (hard gate):

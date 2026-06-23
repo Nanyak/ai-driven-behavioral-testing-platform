@@ -133,6 +133,14 @@ export async function safeJson(response: { json: () => Promise<unknown> }): Prom
     return {};
   }
 }
+
+export async function safeText(response: { text: () => Promise<string> }): Promise<string> {
+  try {
+    return await response.text();
+  } catch {
+    return "";
+  }
+}
 `;
   writeFileSync(resolvePath(GOLDEN_VENDOR_DIR, "util.ts"), utilSource);
 }

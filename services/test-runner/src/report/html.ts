@@ -1,4 +1,6 @@
 import type { FailureEntry, GoldenDiffSummary, Report } from "./schema.js";
+import { computeFailureId } from "../triage/id.js";
+import type { TriageReport, TriageVerdict } from "../triage/types.js";
 
 function esc(value: unknown): string {
   return String(value)
@@ -28,7 +30,20 @@ function provenanceHtml(f: FailureEntry): string {
   return `${esc(sessions)}${trace}`;
 }
 
-export function renderHtml(report: Report): string {
+function triageChipHtml(v: TriageVerdict | undefined): string {
+  if (!v) return '<span class="muted">—</span>';
+  const label = v.verdict.replace(/_/g, " ");
+  const title = esc(`${v.rationale} — ${v.recommended_action}`);
+  return `<span class="chip ${esc(v.verdict)}" title="${title}">${esc(label)} · ${esc(v.confidence)}</span>`;
+}
+
+export function renderHtml(report: Report, triage?: TriageReport | null): string {
+  // Advisory verdicts keyed by the deterministic failure id, so each failure
+  // row can show its triage chip. Absent triage -> the column is not rendered
+  // and the report is byte-for-byte the runner's original (gate-safe).
+  const verdictById = new Map<string, TriageVerdict>();
+  if (triage) for (const v of triage.verdicts) verdictById.set(v.failure_id, v);
+  const hasTriage = Boolean(triage);
   const { totals } = report;
   const top = report.endpoint_failures[0];
 
@@ -46,21 +61,24 @@ export function renderHtml(report: Report): string {
     )
     .join("");
 
+  const triageCol = hasTriage ? "<th>Triage</th>" : "";
   const failureRows = report.failures.length
     ? report.failures
-        .map(
-          (f) =>
-            `<tr>
+        .map((f) => {
+          const triageCell = hasTriage
+            ? `\n        <td>${triageChipHtml(verdictById.get(computeFailureId(f)))}</td>`
+            : "";
+          return `<tr>
         <td>${esc(f.persona)}</td>
         <td>${esc(f.flow_name)}</td>
         <td class="mono">${esc(f.endpoint)}</td>
         <td class="mono">${statusCell(f.expected_status, f.actual_status)}</td>
-        <td class="mono">${goldenDiffHtml(f.golden_diff)}</td>
+        <td class="mono">${goldenDiffHtml(f.golden_diff)}</td>${triageCell}
         <td class="mono small">${provenanceHtml(f)}</td>
-      </tr>`,
-        )
+      </tr>`;
+        })
         .join("")
-    : '<tr><td colspan="6" class="muted center">No failures — all executed tests passed.</td></tr>';
+    : `<tr><td colspan="${hasTriage ? 7 : 6}" class="muted center">No failures — all executed tests passed.</td></tr>`;
 
   const topCallout = top
     ? `<div class="callout fail-bg">Most-failing endpoint: <span class="mono">${esc(top.endpoint)}</span> — ${top.failures} failure(s)</div>`
@@ -103,6 +121,11 @@ export function renderHtml(report: Report): string {
   .muted { color: var(--muted); } .center { text-align:center; }
   .exp { color: var(--muted); } .act { color: var(--fail); font-weight: 700; }
   .diff.missing { color: var(--fail); } .diff.unexpected { color: var(--skip); } .diff.changed { color: #7c3aed; }
+  .chip { display:inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; cursor: help; }
+  .chip.real_regression { background:#fef2f2; color: var(--fail); border:1px solid #fecaca; }
+  .chip.contract_drift { background:#fffbeb; color: var(--skip); border:1px solid #fde68a; }
+  .chip.test_artifact { background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; }
+  .chip.uncertain { background:#f1f5f9; color: var(--muted); border:1px solid var(--line); }
 </style>
 </head>
 <body>
@@ -128,7 +151,7 @@ export function renderHtml(report: Report): string {
   <tbody>${flowRows || '<tr><td colspan="5" class="muted center">No flows.</td></tr>'}</tbody></table>
 
   <h2>Failures</h2>
-  <table><thead><tr><th>Persona</th><th>Flow</th><th>Endpoint</th><th>Status (exp→act)</th><th>Golden diff</th><th>Source session(s)</th></tr></thead>
+  <table><thead><tr><th>Persona</th><th>Flow</th><th>Endpoint</th><th>Status (exp→act)</th><th>Golden diff</th>${triageCol}<th>Source session(s)</th></tr></thead>
   <tbody>${failureRows}</tbody></table>
 </div>
 </body>
