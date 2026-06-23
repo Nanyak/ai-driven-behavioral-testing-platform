@@ -50,8 +50,8 @@ flowchart LR
 
 Data flows in one direction: **traffic → logs → Elasticsearch → session flows →
 behavior candidates → Playwright specs → run results → report.** The OpenAPI
-contract (not logged bodies) is the assertion oracle (ADR 0001). An entity diagram
-lives at `docs/erd.png` / `docs/erd.svg`.
+contract (not logged bodies) is the assertion oracle (ADR 0001). An entity/data-flow
+diagram lives at `docs/erd.md`.
 
 ## Prerequisites
 
@@ -119,7 +119,7 @@ open reports/report.html
 To see a regression caught end to end, run the Phase 12 demo: restart Medusa with
 `REGRESSION_DEMO=carts_complete_500`, re-run `npm run test:customer`, watch the
 report go red with persona/flow/endpoint attribution, then unset the toggle and
-re-run to return to green. See `docs/phase-12-implementation-plan.md`.
+re-run to return to green. See the regression-demo section of `docs/pipeline.md`.
 
 ## The AI claim, briefly
 
@@ -157,14 +157,15 @@ services/
   script-generator/    Playwright test generation (Phase 9)
   test-runner/         Test execution (Phase 10) + reporting (Phase 11/12)
 context/               Project-level specs (plan.md, checklist.md, problem-statement.md)
-docs/                  Phase plans, ADRs, architecture/pipeline/limitations
+docs/                  architecture.md, pipeline.md, limitations.md, erd.md
 generated-tests/       Emitted Playwright specs (per persona)
 golden-responses/      Golden schema snapshots
 reports/               report.json + report.html
 infra/ scripts/        Infra config + root automation (check-phaseN, setup)
 ```
 
-Each service has its own `README.md` — read it before the source.
+Each service's source is headed by a module-level doc comment describing its
+contract — read it before the implementation.
 
 ## Verification
 
@@ -190,13 +191,12 @@ cd services/traffic-generator && npx tsc --noEmit
 0/2/3/6–12/15; the live-stack probes 1/4/5 are excluded — they run during the
 clean run). The **live** end-to-end validation procedure (clean Docker state →
 traffic → Kibana → green report → regression → revert) is documented in
-`docs/phase-14-implementation-plan.md` and `docs/pipeline.md`.
+`docs/pipeline.md`.
 
 ## Detailed setup, API examples, and troubleshooting
 
-The full Medusa setup walkthrough, Store/Admin API request examples, structured
-log schema, and troubleshooting steps are in `docs/local-development.md` and the
-per-phase plans under `docs/`. Quick references:
+The clean-checkout runbook, stage-by-stage commands with acceptance gates, the
+regression demo, and troubleshooting are in `docs/pipeline.md`. Quick references:
 
 - **Medusa health:** `http://localhost:9000/health`
 - **Medusa Admin UI:** `http://localhost:9000/app` (`admin@example.com` / `change-me`)
