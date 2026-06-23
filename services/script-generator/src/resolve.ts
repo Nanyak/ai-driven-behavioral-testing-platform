@@ -24,7 +24,11 @@ export type BodyPlan =
   | { kind: "empty" }
   | { kind: "unresolvable"; reason: string };
 
-export type PathPlan = { template: string; params: Record<string, string> };
+// Params are an ORDERED list (by occurrence in the template), not a name-keyed
+// map: a path can repeat a param name (`/store/carts/{id}/line-items/{id}`), and
+// a map would overwrite the first binding and leave the second `{id}`
+// unsubstituted. emit.ts substitutes them left-to-right by occurrence.
+export type PathPlan = { template: string; params: { param: string; varName: string }[] };
 
 /** A resolve call emitted BEFORE the step's main request, to populate scope. */
 export interface ResolveCall {
@@ -42,6 +46,11 @@ export interface ResolveCall {
   body?: SynthesizedBody;
   /** Required query params for a resolving GET (e.g. `GET /store/payment-providers` needs `region_id`). */
   query?: SynthesizedBody;
+  /** When true, the resolve runs but its status is NOT asserted — used for an
+   * idempotent "ensure state" mutation that may legitimately 4xx (e.g. fulfilling
+   * an order another flow / a prior run already fulfilled). The goal is the
+   * post-condition (the order is fulfilled), not this call's status. */
+  bestEffort?: boolean;
 }
 
 export type AuthRequirement = "publishable-key" | "customer-token" | "admin-token" | "none";
@@ -88,16 +97,29 @@ function captureRulesFor(method: string, endpoint: string): Record<string, strin
   if (method === "GET" && endpoint === "/store/products")
     return { productId: "products[0].id", variantId: "products[0].variants[0].id" };
   if (method === "POST" && endpoint === "/store/carts") return { cartId: "cart.id" };
-  if (method === "POST" && endpoint === "/store/carts/{id}/line-items") return { lineItemId: "line_item.id" };
+  // Medusa v2 `POST …/line-items` returns the whole `{ cart }`, not `{ line_item }`
+  // (Task C) — read the new line item off the cart's items array, else the
+  // best-effort capture silently misses and an update step can't resolve its id.
+  if (method === "POST" && endpoint === "/store/carts/{id}/line-items") return { lineItemId: "cart.items[0].id" };
   // An admin order fetched mid-flow exposes its line items, the ids a subsequent
   // fulfillment/return body references (a fulfillment fulfills the order's lines).
   if (method === "GET" && endpoint === "/admin/orders/{id}") return { lineItemId: "order.items[0].id" };
+  // Begin-return returns the just-created return (with an active order change);
+  // the lifecycle steps that follow (request-items, request, receive…) must
+  // operate on THAT return, not an arbitrary `returns[0]` from the list (which
+  // has no active order change → "An active Order Change is required").
+  if (method === "POST" && endpoint === "/admin/returns") return { returnId: "return.id" };
   // Checkout reads that produce an id a later mutation needs in its body: the
   // shipping-method step takes `option_id` and the payment-session step takes
   // `provider_id`. Binding them here lets the full checkout chain thread end to
   // end (GET appears before the POST that consumes it in the mined journey).
   if (method === "GET" && endpoint === "/store/shipping-options") return { shippingOptionId: "shipping_options[0].id" };
   if (method === "GET" && endpoint === "/store/payment-providers") return { paymentProviderId: "payment_providers[0].id" };
+  // Admin product-create prerequisites (Task B2): when the mined flow already
+  // lists these, capture the ids so the `POST /admin/products` body threads them
+  // without a separate standalone resolver GET.
+  if (method === "GET" && endpoint === "/admin/shipping-profiles") return { shippingProfileId: "shipping_profiles[0].id" };
+  if (method === "GET" && endpoint === "/admin/sales-channels") return { salesChannelId: "sales_channels[0].id" };
   if (method === "POST" && endpoint === "/store/payment-collections") return { paymentCollectionId: "payment_collection.id" };
   if (method === "POST" && (endpoint === "/auth/customer/emailpass" || endpoint === "/auth/customer/emailpass/register"))
     return { customerToken: "$raw" };
@@ -105,7 +127,14 @@ function captureRulesFor(method: string, endpoint: string): Record<string, strin
   return {};
 }
 
-function scopeVarForParam(param: string, endpoint: string): string {
+function scopeVarForParam(param: string, endpoint: string, occurrence: number): string {
+  // Cart line-item update: `/store/carts/{id}/line-items/{id}` carries two
+  // identically-named path params (the normalizer collapses both to `{id}`).
+  // Disambiguate positionally: the first id is the cart, the SECOND (after
+  // `line-items`) is the line item (Task C).
+  if (endpoint.startsWith("/store/carts") && endpoint.includes("/line-items/") && occurrence === 1) {
+    return "lineItemId";
+  }
   if (endpoint.startsWith("/admin/orders")) return "orderId";
   if (endpoint.startsWith("/admin/products")) return "productId";
   if (endpoint.startsWith("/admin/inventory-items")) return "inventoryItemId";
@@ -124,6 +153,7 @@ type ResolveStep = {
   extract: string;
   body?: SynthesizedBody;
   query?: SynthesizedBody;
+  bestEffort?: boolean;
 };
 
 /** Scope vars whose standalone resolver must MUTATE an auth-gated resource (a
@@ -141,7 +171,16 @@ function placeholderIdFor(varName: string): string {
 // Most scope variables resolve via a single GET; `cartId` is a short bootstrap
 // chain (`GET /store/regions` -> `POST /store/carts`) since a cart is a
 // runtime-created resource, never a literal/seeded id (CLAUDE.md §5).
-function standaloneResolverFor(varName: string, auth: AuthRequirement): ResolveStep[] | null {
+// A pending admin order WITH its line items inlined — `fields=*items` so the
+// list response carries `items[].id` (the default list omits them). Used by the
+// return-lifecycle bootstrap to read a line-item id without a second round-trip.
+const ADMIN_PENDING_ORDERS_WITH_ITEMS = "/admin/orders?status[]=pending&order=-created_at&fields=*items";
+
+function standaloneResolverFor(
+  varName: string,
+  auth: AuthRequirement,
+  fulfilledOrder = false
+): ResolveStep[] | null {
   switch (varName) {
     case "regionId":
       return [{ bindTo: varName, method: "GET", endpoint: "/store/regions", extract: "regions[0].id" }];
@@ -155,9 +194,14 @@ function standaloneResolverFor(varName: string, auth: AuthRequirement): ResolveS
     case "variantId":
       return [{ bindTo: varName, method: "GET", endpoint: "/store/products", extract: "products[0].variants[0].id" }];
     case "inventoryItemId":
-      // Admin-only resource (no store analog). // VERIFY: list is non-empty in the
-      // seeded backend, else inventory_items[0] is undefined at runtime.
-      return [{ bindTo: varName, method: "GET", endpoint: "/admin/inventory-items", extract: "inventory_items[0].id" }];
+      // Admin-only resource (no store analog). Order by NEWEST: the only consumer,
+      // `POST …/location-levels`, runs in a flow that just created a product, whose
+      // inventory item is UNSTOCKED (location_levels: []). An arbitrary
+      // `inventory_items[0]` is often an already-stocked seed item → the create
+      // 400s ("Inventory level … already exists"). The newest item is the one the
+      // product-create step just made — unstocked, so the level create succeeds.
+      // // VERIFY: list is non-empty in the seeded backend.
+      return [{ bindTo: varName, method: "GET", endpoint: "/admin/inventory-items?order=-created_at", extract: "inventory_items[0].id" }];
     case "returnId":
       // Admin-only resource. // VERIFY: a return must already exist in the seeded
       // backend for the lifecycle steps to bind a real id.
@@ -167,9 +211,53 @@ function standaloneResolverFor(varName: string, auth: AuthRequirement): ResolveS
       // location id; list them admin-side. // VERIFY: list is non-empty (the seed
       // creates at least one stock location).
       return [{ bindTo: varName, method: "GET", endpoint: "/admin/stock-locations", extract: "stock_locations[0].id" }];
+    case "shippingProfileId":
+      // `POST /admin/products` requires a shipping profile (Task B2). // VERIFY:
+      // the seed creates a default shipping profile.
+      return [{ bindTo: varName, method: "GET", endpoint: "/admin/shipping-profiles", extract: "shipping_profiles[0].id" }];
+    case "salesChannelId":
+      // `POST /admin/products` links a sales channel so the variant is purchasable
+      // in /store (Task B2). // VERIFY: the seed's "Default Sales Channel".
+      return [{ bindTo: varName, method: "GET", endpoint: "/admin/sales-channels", extract: "sales_channels[0].id" }];
     case "orderId":
+      if (auth === ADMIN && fulfilledOrder) {
+        // Return-lifecycle bootstrap: a return requires a FULFILLED order
+        // ("Cannot request to return more items than what was fulfilled"), but
+        // every seeded pending order is `not_fulfilled`. So pick an order, read
+        // its line item, and fulfill it before the return begins. Two details:
+        //  • Use `orders[1]`, NOT `orders[0]`: the cancel and fulfillment flows
+        //    both claim `orders[0]`, and fulfilling it here would make cancel 400
+        //    ("All fulfillments must be canceled first"). A distinct order keeps
+        //    those flows undisturbed.
+        //  • The fulfillment is bestEffort: another flow (or a prior run) may have
+        //    already fulfilled this order — that 400 is fine; the post-condition
+        //    (order is fulfilled) is what the return needs, not this call's status.
+        return [
+          { bindTo: "orderId", method: "GET", endpoint: ADMIN_PENDING_ORDERS_WITH_ITEMS, extract: "orders[1].id" },
+          { bindTo: "lineItemId", method: "GET", endpoint: ADMIN_PENDING_ORDERS_WITH_ITEMS, extract: "orders[1].items[0].id" },
+          { bindTo: "stockLocationId", method: "GET", endpoint: "/admin/stock-locations", extract: "stock_locations[0].id" },
+          {
+            bindTo: "fulfillmentSeed",
+            method: "POST",
+            endpoint: "/admin/orders/{orderId}/fulfillments",
+            extract: "",
+            bestEffort: true,
+            body: {
+              items: { kind: "raw", expr: "[{ id: scope.lineItemId, quantity: 1 }]" },
+              location_id: { kind: "runtime", ref: "stockLocationId" },
+            },
+          },
+        ];
+      }
+      // ADMIN: filter to a PENDING order (Task A). The unfiltered `orders[0]`
+      // returns an arbitrary order — often an already-canceled one — so cancel
+      // 400s ("has been canceled") and fulfillment 400s (a canceled order can't
+      // be fulfilled). A pending order with items can be canceled, fulfilled, and
+      // returned. The query string is emitted as a literal URL (resolveUrlExpr
+      // JSON.stringifies an endpoint with no path params / query object).
+      // `fulfillment_status` is IGNORED on this Medusa build — do not rely on it.
       return auth === ADMIN
-        ? [{ bindTo: varName, method: "GET", endpoint: "/admin/orders", extract: "orders[0].id" }]
+        ? [{ bindTo: varName, method: "GET", endpoint: "/admin/orders?status[]=pending&order=-created_at", extract: "orders[0].id" }]
         : [{ bindTo: varName, method: "GET", endpoint: "/store/orders", extract: "orders[0].id" }];
     case "cartId":
       // A bootstrapped cart must be NON-EMPTY: a mined checkout flow frequently
@@ -200,6 +288,15 @@ function standaloneResolverFor(varName: string, auth: AuthRequirement): ResolveS
             quantity: { kind: "literal", value: 1 },
           },
         },
+      ];
+    case "lineItemId":
+      // A cart line-item update needs a line item id even when no prior add step
+      // captured one (Task C). Bootstrap a cart (the cartId chain seeds one
+      // in-stock line item), then read it back off the cart. The cart chain's
+      // bindTos are skipped by `ensure` if cartId was already resolved earlier.
+      return [
+        ...standaloneResolverFor("cartId", auth)!,
+        { bindTo: varName, method: "GET", endpoint: "/store/carts/{cartId}", extract: "cart.items[0].id" },
       ];
     case "paymentCollectionId":
       // The cart need only exist (no line items required to open a payment
@@ -247,13 +344,23 @@ function standaloneResolverFor(varName: string, auth: AuthRequirement): ResolveS
   }
 }
 
+// The log-ingestion normalizer collapses EVERY id-like segment to `{id}`, so the
+// cart line-item update mines as `/store/carts/{id}/line-items/{id}` — but the
+// OAS keys the second param `{line_id}`. Alias the lookup so the update body
+// schema (with required `quantity`) is found (Task C). This is the ONLY store
+// path with ≥2 path params, so a targeted alias suffices.
+const OAS_PATH_ALIASES: Record<string, string> = {
+  "/store/carts/{id}/line-items/{id}": "/store/carts/{id}/line-items/{line_id}",
+};
+
 function requestSchemaFor(
   specs: OasSpecs,
   method: string,
   endpoint: string
 ): { doc: OasDocument; schema: OasSchema } | null {
+  const lookup = OAS_PATH_ALIASES[endpoint] ?? endpoint;
   for (const doc of [specs.store, specs.admin]) {
-    const pathItem = doc.paths[endpoint];
+    const pathItem = doc.paths[lookup];
     const operation = pathItem?.[method.toLowerCase() as OasMethod];
     const requestBody = (operation as { requestBody?: { content?: Record<string, { schema: OasSchema }> } } | undefined)
       ?.requestBody;
@@ -430,6 +537,56 @@ function synthesizeBody(
   // resolvable hint). When the flow fetched the order first (lineItemId captured,
   // see captureRulesFor), thread the real id; otherwise fall back to a placeholder
   // and let the call 4xx honestly rather than skip.
+  // `POST /admin/returns` (Task B1): the OAS schema is $ref/allOf-heavy and the
+  // generic synth emits `order_id: "test-order_id"` (placeholder) → 404. Mirror
+  // the traffic generator's known-good body: a pending order id + a stock
+  // location. Both resolve via standalone admin GETs (Task A gives a pending
+  // order), threaded by `ensure`.
+  if (method === "POST" && endpoint === "/admin/returns" && ensure("orderId") && ensure("stockLocationId")) {
+    return {
+      kind: "synthesized",
+      fields: {
+        order_id: { kind: "runtime", ref: "orderId" },
+        location_id: { kind: "runtime", ref: "stockLocationId" },
+      },
+    };
+  }
+  // Return-lifecycle item steps: `request-items` / `receive-items` take the
+  // ORDER's line-item id (not a placeholder), the same `lineItemId` the begin
+  // bootstrap bound from the fulfilled order. The generic synth emits a bare
+  // `id: "test-id"` (an array element's id carries no field-name hint) → 400.
+  if (
+    method === "POST" &&
+    (endpoint === "/admin/returns/{id}/request-items" || endpoint === "/admin/returns/{id}/receive-items") &&
+    ensure("lineItemId")
+  ) {
+    return {
+      kind: "synthesized",
+      fields: { items: { kind: "raw", expr: "[{ id: scope.lineItemId, quantity: 1 }]" } },
+    };
+  }
+  // `POST /admin/products` (Task B2): the generic synth emits only `{ title }` →
+  // "Product options are not provided". Mirror admin-session.ts createProduct: a
+  // published product with one "One Size" variant, a shipping profile, and a
+  // sales-channel link (so the variant is purchasable in /store). currency_code
+  // "eur" matches the seed's single European region (kept hardcoded); title/SKU
+  // use Date.now() for uniqueness across reruns.
+  if (method === "POST" && endpoint === "/admin/products" && ensure("shippingProfileId") && ensure("salesChannelId")) {
+    return {
+      kind: "synthesized",
+      fields: {
+        title: { kind: "raw", expr: "`GEN-${Date.now()}`" },
+        status: { kind: "literal", value: "published" },
+        shipping_profile_id: { kind: "runtime", ref: "shippingProfileId" },
+        options: { kind: "raw", expr: `[{ title: "Size", values: ["One Size"] }]` },
+        variants: {
+          kind: "raw",
+          expr: '[{ title: "Default", sku: `GEN-${Date.now()}`, options: { Size: "One Size" }, prices: [{ amount: 1500, currency_code: "eur" }] }]',
+        },
+        sales_channels: { kind: "raw", expr: "[{ id: scope.salesChannelId }]" },
+      },
+    };
+  }
   if (method === "POST" && endpoint.endsWith("/fulfillments") && ensure("stockLocationId")) {
     const itemId = ensure("lineItemId") ? "scope.lineItemId" : JSON.stringify("test-id");
     return {
@@ -601,8 +758,25 @@ export function buildFlowPlan(
   const plans: StepPlan[] = [];
   const errors: string[] = [];
 
+  // A flow that exercises any return endpoint needs its admin order to be
+  // FULFILLED before the return begins (see standaloneResolverFor orderId). The
+  // signal is flow-wide because the order is resolved at the first GET
+  // /admin/orders/{id} step, before the /admin/returns step is reached.
+  const flowIsReturnLifecycle = steps.some((s) => s.endpoint.startsWith("/admin/returns"));
+
   for (const step of steps) {
-    const auth = authFor(step.endpoint, flowRequiresAuth);
+    let auth = authFor(step.endpoint, flowRequiresAuth);
+    // Negative-auth downgrade (Task D): a step asserting 401 on a customer-gated
+    // endpoint must reach the `requireCustomerAuth` gate WITHOUT a valid session
+    // token, or the always-on setup handshake (emit.ts autoRegister) makes it
+    // 200. Strip the customer token (drop to publishable-key only) for that one
+    // step so the gate produces the asserted 401. The mechanism differs from the
+    // mined broken-token cause (no-token vs broken-token), but the status-only
+    // regression assertion holds. Guarded narrowly (customer auth + expected 401)
+    // so other steps in the same flow keep the established token.
+    if (auth === CUSTOMER && step.expected_status === 401) {
+      auth = PUBLISHABLE;
+    }
     const resolveCalls: ResolveCall[] = [];
 
     // Ensure a scope variable is available, emitting (chained) resolve calls if
@@ -630,7 +804,7 @@ export function buildFlowPlan(
         scope.add(varName);
         return true;
       }
-      const chain = standaloneResolverFor(varName, auth);
+      const chain = standaloneResolverFor(varName, auth, flowIsReturnLifecycle);
       if (!chain) return false;
       for (const call of chain) {
         if (scope.has(call.bindTo)) continue; // a chained prerequisite already resolved earlier in this flow
@@ -640,13 +814,15 @@ export function buildFlowPlan(
       return true;
     };
 
-    const pathParams: Record<string, string> = {};
+    const pathParams: { param: string; varName: string }[] = [];
     let stepFailed = false;
 
-    for (const param of pathParamNames(step.endpoint)) {
-      const varName = scopeVarForParam(param, step.endpoint);
+    const paramNames = pathParamNames(step.endpoint);
+    for (let occurrence = 0; occurrence < paramNames.length; occurrence++) {
+      const param = paramNames[occurrence];
+      const varName = scopeVarForParam(param, step.endpoint, occurrence);
       if (ensure(varName)) {
-        pathParams[param] = varName;
+        pathParams.push({ param, varName });
       } else {
         errors.push(
           `${step.method} ${step.endpoint}: path param "{${param}}" needs "${varName}", which no prior step produced and no standalone GET can resolve`

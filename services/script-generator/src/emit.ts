@@ -23,7 +23,10 @@ function authHeaderExpr(auth: AuthRequirement): string {
 
 function urlExpr(plan: StepPlan): string {
   let template = plan.path.template;
-  for (const [param, varName] of Object.entries(plan.path.params)) {
+  // Substitute left-to-right by occurrence: params are ordered, and `replace`
+  // rewrites the first remaining `{param}` each pass, so a repeated name (e.g.
+  // both `{id}` in `/store/carts/{id}/line-items/{id}`) binds cart then line item.
+  for (const { param, varName } of plan.path.params) {
     template = template.replace(`{${param}}`, `\${scope.${varName}}`);
   }
   const query = Object.entries(plan.query);
@@ -101,8 +104,15 @@ function renderResolveCall(call: ResolveCall, index: number): string {
     : `{ headers: ${headers} }`;
   const lines = [
     `  const ${varDecl} = await request.${method}(${resolveUrlExpr(call)}, ${options});`,
-    `  expect(${varDecl}.status(), "resolve ${call.method} ${call.endpoint} for ${call.bindTo}").toBe(200);`,
   ];
+  // A best-effort resolve runs for its side effect (e.g. ensuring an order is
+  // fulfilled) and may legitimately 4xx if the post-condition already holds, so
+  // its status is not asserted.
+  if (!call.bestEffort) {
+    lines.push(
+      `  expect(${varDecl}.status(), "resolve ${call.method} ${call.endpoint} for ${call.bindTo}").toBe(200);`
+    );
+  }
   // A side-effecting resolve (e.g. seeding a cart line item) has no extract: run
   // the request and assert it succeeded, but bind nothing into scope.
   if (call.extract !== "") {
