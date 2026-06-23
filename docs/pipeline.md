@@ -66,10 +66,11 @@ open reports/report.html
 ### Per-persona runs
 
 ```bash
-npm run test:guest      # guest_shopper specs only
-npm run test:customer   # registered_customer specs only
-npm run test:admin      # admin_operator specs only
-npm run test:edge       # edge-case (has_errors) specs only
+npm run test:guest      # guest_shopper specs only (both subfolders)
+npm run test:customer   # registered_customer specs only (both subfolders)
+npm run test:admin      # admin_operator specs only (both subfolders)
+npm run test:happy      # happy-path specs across all personas
+npm run test:failure    # failure-path (has_errors) specs across all personas
 ```
 
 ## Regression demo (catch a regression end to end)

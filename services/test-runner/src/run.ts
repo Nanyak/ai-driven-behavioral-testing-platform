@@ -17,10 +17,21 @@ const GENERATED_TESTS_DIR = resolvePath(REPO_ROOT, "generated-tests");
 const REPORTS_DIR = resolvePath(REPO_ROOT, "reports", "playwright");
 const REPO_REPORTS_DIR = resolvePath(REPO_ROOT, "reports");
 
-export type Project = "guest" | "customer" | "admin" | "edge";
-export type Target = Project | "all";
+export type Project = "guest" | "customer" | "admin";
+// Path filters cut ACROSS personas: a positional Playwright argument matches
+// the spec's file path, so `failure-path` runs every persona's failure-path/
+// folder (and `happy-path` every happy-path/). They replace the old `edge`
+// project, which the happy-path/failure-path split folded into each persona.
+export type PathFilter = "happy" | "failure";
+export type Target = Project | PathFilter | "all";
 
-export const PROJECTS: Project[] = ["guest", "customer", "admin", "edge"];
+export const PROJECTS: Project[] = ["guest", "customer", "admin"];
+export const PATH_FILTERS: PathFilter[] = ["happy", "failure"];
+
+const PATH_FILTER_DIR: Record<PathFilter, string> = {
+  happy: "happy-path",
+  failure: "failure-path",
+};
 
 export interface RunOptions {
   target: Target;
@@ -77,7 +88,11 @@ function runEnv(): NodeJS.ProcessEnv {
  */
 export function buildArgs(target: Target, extraArgs: string[] = []): string[] {
   const args = ["playwright", "test"];
-  if (target !== "all") {
+  if (target === "happy" || target === "failure") {
+    // Positional filter -> matches every persona's <happy-path|failure-path>/
+    // spec path; no --project so it spans guest/customer/admin.
+    args.push(PATH_FILTER_DIR[target]);
+  } else if (target !== "all") {
     args.push("--project", target);
   }
   args.push(...extraArgs);

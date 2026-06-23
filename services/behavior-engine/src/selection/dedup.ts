@@ -130,9 +130,9 @@ function pruneSubsumed(flows: MinedFlow[]): MinedFlow[] {
  * not whichever short fragments happen to have the most volume.
  *
  * BALANCED across the has_errors split: the script generator routes clean flows
- * to their persona folder and has_errors flows to `edge/`. Error flows score
- * higher (errorCoverage + cart/auth endpoints), so a persona's top-`cap` can be
- * ALL errors — leaving that persona's own test folder empty. So reserve up to
+ * to their persona's happy-path/ and has_errors flows to that persona's
+ * failure-path/. Error flows score higher (errorCoverage + cart/auth endpoints),
+ * so a persona's top-`cap` can be ALL errors — leaving its happy-path/ empty. So reserve up to
  * half the cap for each class (clean / error) when both exist, then fill the
  * rest by rank. Per-persona total stays <= cap. Generic over the flow type.
  */

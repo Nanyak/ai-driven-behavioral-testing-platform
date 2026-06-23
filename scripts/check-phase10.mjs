@@ -7,7 +7,7 @@
  * bullets (docs/phase-10-implementation-plan.md §"Validation / acceptance"):
  *   - tsc --noEmit is clean in services/test-runner (hard gate),
  *   - the GENERATED generated-tests/playwright.config.ts defines one project
- *     per persona folder (guest, customer, admin, edge) so persona-scoped runs
+ *     per persona folder (guest, customer, admin) so persona-scoped runs
  *     work via `--project` (Phase 9 run.ts writes this; we read it back),
  *   - `playwright test --list --project <persona>` succeeds for every persona
  *     and lists only that folder's specs,
@@ -16,7 +16,7 @@
  *     annotations, expected-vs-actual status parsed from the step error, golden
  *     diff lifted from the "golden-diff" attachment, trace_id omitted when
  *     absent, totals counted (passed/failed/skipped),
- *   - LIVE execution: if Medusa :9000/health is reachable, run `test:edge` and
+ *   - LIVE execution: if Medusa :9000/health is reachable, run `test:failure` and
  *     assert a JSON report + normalized result are written under
  *     reports/playwright/. If Medusa is UNREACHABLE, this gate is SKIPPED with
  *     a clear message (the wiring/projects/collect gates still run) — a down
@@ -37,7 +37,7 @@ const GENERATED_TESTS_DIR = resolve(ROOT, "generated-tests");
 const CONFIG_PATH = resolve(GENERATED_TESTS_DIR, "playwright.config.ts");
 const FIXTURE = resolve(SERVICE, "fixtures", "sample-playwright-report.json");
 const REPORTS_DIR = resolve(ROOT, "reports", "playwright");
-const PERSONA_PROJECTS = ["guest", "customer", "admin", "edge"];
+const PERSONA_PROJECTS = ["guest", "customer", "admin"];
 
 /** Read the canonical repo-root .env (mirrors traffic-generator config.ts) for the backend URL. */
 function loadEnv() {
@@ -91,7 +91,7 @@ async function main() {
   else fail("tsc --noEmit", (tsc.stdout || tsc.stderr || "").trim().split("\n").slice(0, 5).join(" | "));
 
   // [2] Generated playwright.config.ts defines one project per persona folder.
-  console.log("\n[2] generated-tests/playwright.config.ts defines 4 persona projects");
+  console.log("\n[2] generated-tests/playwright.config.ts defines 3 persona projects");
   if (!existsSync(CONFIG_PATH)) {
     fail("playwright.config.ts present", `expected ${CONFIG_PATH} — run npm run script-generator:generate`);
   } else {
@@ -177,20 +177,20 @@ async function main() {
   }
 
   // [5] LIVE execution (graceful skip when Medusa is down).
-  console.log("\n[5] Live execution (test:edge) — requires Medusa :9000");
+  console.log("\n[5] Live execution (test:failure) — requires Medusa :9000");
   if (!(await medusaReachable())) {
     skip(`Medusa not reachable at ${MEDUSA_HEALTH}; wiring/projects/collect validated above`);
   } else {
-    const run = spawnSync("npm", ["run", "test:edge"], { cwd: ROOT, encoding: "utf8" });
+    const run = spawnSync("npm", ["run", "test:failure"], { cwd: ROOT, encoding: "utf8" });
     // Playwright may exit non-zero if a test fails; we only require the run to
     // have produced a normalized report, not that every test passes.
     const normalized = resolve(REPORTS_DIR, "normalized.json");
     const jsonReport = resolve(REPORTS_DIR, "results.json");
     if (existsSync(jsonReport) && existsSync(normalized)) {
       const norm = JSON.parse(readFileSync(normalized, "utf8"));
-      ok(`live test:edge ran; normalized ${norm.totals.executed} test(s) -> reports/playwright/`);
+      ok(`live test:failure ran; normalized ${norm.totals.executed} test(s) -> reports/playwright/`);
     } else {
-      fail("live test:edge report", (run.stdout || run.stderr || "").trim().split("\n").slice(-4).join(" | "));
+      fail("live test:failure report", (run.stdout || run.stderr || "").trim().split("\n").slice(-4).join(" | "));
     }
   }
 

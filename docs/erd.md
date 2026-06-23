@@ -92,7 +92,7 @@ erDiagram
     }
 
     GENERATED_SPEC {
-        string path "generated-tests/<persona>/*.spec.ts"
+        string path "generated-tests/<persona>/<happy-path|failure-path>/*.spec.ts"
         string persona
     }
 

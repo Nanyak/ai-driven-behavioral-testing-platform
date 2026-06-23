@@ -14,7 +14,7 @@
  *     a mismatch here silently breaks cross-run dedup,
  *   - no spec contains a hardcoded seed-shaped ID literal (product_/variant_/
  *     region_/cart_/order_ as a literal VALUE, not a JSON field name),
- *   - edge/ specs assert the logged non-2xx status (they reproduce an
+ *   - failure-path/ specs assert the logged non-2xx status (they reproduce an
  *     observed failure, never an invented one),
  *   - generated-tests/ itself type-checks and `playwright test --list`
  *     succeeds (proves the emitted specs are syntactically + structurally
@@ -36,7 +36,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
 const SERVICE = resolve(ROOT, "services", "script-generator");
 const GENERATED_TESTS_DIR = resolve(ROOT, "generated-tests");
-const PERSONA_DIRS = ["guest", "customer", "admin", "edge"];
+const PERSONA_DIRS = ["guest", "customer", "admin"];
 
 const SIGNATURE_STAMP = /flow_signature["'\s:=]+([0-9a-f]{64})/i;
 const HARDCODED_ID_VALUE = /:\s*"(prod_|variant_|reg_|cart_|order_|cust_)[a-zA-Z0-9]+"/;
@@ -118,29 +118,29 @@ function main() {
   if (offenders.length === 0) ok("no hardcoded ID literal values found");
   else fail("hardcoded ID literals", offenders.slice(0, 5).join(", "));
 
-  // [6] RUNNABLE edge/ specs assert the logged non-2xx status. A `test.fixme`
-  // spec executes nothing (it is reported as a known generation gap, never run),
-  // so a runtime 4xx/5xx assertion is moot for it — only non-fixme edge specs
-  // must carry one.
-  console.log("\n[6] runnable edge/ specs assert a non-2xx status");
-  const allEdgeSpecs = specs.filter((f) => f.includes(`${join("edge", "")}`));
-  const edgeSpecs = allEdgeSpecs.filter((f) => !/test\.fixme\(/.test(readFileSync(f, "utf8")));
-  const fixmeEdge = allEdgeSpecs.length - edgeSpecs.length;
-  if (allEdgeSpecs.length === 0) {
-    fail("edge specs present", "expected >=1 spec under generated-tests/edge/");
-  } else if (edgeSpecs.length === 0) {
-    fail("runnable edge specs present", `all ${allEdgeSpecs.length} edge specs are test.fixme`);
+  // [6] RUNNABLE failure-path/ specs assert the logged non-2xx status. A
+  // `test.fixme` spec executes nothing (it is reported as a known generation
+  // gap, never run), so a runtime 4xx/5xx assertion is moot for it — only
+  // non-fixme failure-path specs must carry one.
+  console.log("\n[6] runnable failure-path/ specs assert a non-2xx status");
+  const allFailureSpecs = specs.filter((f) => f.includes(`${join("failure-path", "")}`));
+  const failureSpecs = allFailureSpecs.filter((f) => !/test\.fixme\(/.test(readFileSync(f, "utf8")));
+  const fixmeFailure = allFailureSpecs.length - failureSpecs.length;
+  if (allFailureSpecs.length === 0) {
+    fail("failure-path specs present", "expected >=1 spec under generated-tests/<persona>/failure-path/");
+  } else if (failureSpecs.length === 0) {
+    fail("runnable failure-path specs present", `all ${allFailureSpecs.length} failure-path specs are test.fixme`);
   } else {
     let allAssertError = true;
-    for (const f of edgeSpecs) {
+    for (const f of failureSpecs) {
       const content = readFileSync(f, "utf8");
       if (!/toBe\(4\d\d\)|toBe\(5\d\d\)/.test(content)) {
         allAssertError = false;
-        fail("edge spec error-status assertion", `${f} has no toBe(4xx/5xx) assertion`);
+        fail("failure-path spec error-status assertion", `${f} has no toBe(4xx/5xx) assertion`);
       }
     }
     if (allAssertError)
-      ok(`all ${edgeSpecs.length} runnable edge spec(s) assert a 4xx/5xx status (${fixmeEdge} fixme skipped)`);
+      ok(`all ${failureSpecs.length} runnable failure-path spec(s) assert a 4xx/5xx status (${fixmeFailure} fixme skipped)`);
   }
 
   // [7] generated-tests/ itself type-checks and lists via Playwright.
