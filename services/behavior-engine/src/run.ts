@@ -3,7 +3,7 @@
  *
  *   npm run run -- [--file <path>] [--min-support N] [--quiet]
  *
- * Pipeline (plan §Mining steps, ADR 0002 gate placement):
+ * Pipeline (ADR 0002 gate placement):
  *
  *   load (repo-root data/sessions) -> canonical tokens
  *     -> mine (n-gram baseline, PrefixSpan, Markov)
@@ -39,7 +39,7 @@ const SERVICE_ROOT = resolve(__dirname, "..");
 const CANDIDATES_DIR = resolve(SERVICE_ROOT, "data", "candidates");
 const VALIDATION_DIR = resolve(SERVICE_ROOT, "data", "validation");
 
-const MIN_SUPPORT = 3; // absolute floor (plan §Support threshold), never fractional.
+const MIN_SUPPORT = 3; // absolute floor, never fractional.
 
 interface Args {
   file?: string;
@@ -200,7 +200,7 @@ interface Candidate {
   support: number;
   score: number;
   signature: string;
-  /** ADVISORY metadata (BA-F1) — NOT a Phase 8/9 oracle (ADR 0001). */
+  /** ADVISORY metadata — NOT a Phase 8/9 oracle (ADR 0001). */
   assertion_hints: { fields: string[]; source: string };
   anomaly_note: string | null;
   source_sessions: string[];

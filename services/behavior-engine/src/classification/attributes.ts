@@ -2,13 +2,13 @@
  * Deterministic emergent attributes — derived from STEP CONTENT ONLY
  * (endpoint + status). This is the heart of the "persona is emergent" claim.
  *
- * GUARDRAIL (plan §10.3, CLAUDE.md §8): this module must NEVER read
+ * GUARDRAIL (CLAUDE.md §8): this module must NEVER read
  * `role_observed` or the `session_id` source tag. The status code is part of the
  * flow content (a response the backend produced); the JWT role is not. A
  * `SignatureStep`-like input (method, endpoint, status) is all this sees.
  *
  * Three rule variants live here so the validation step can measure each
- * status-derived signal's contribution as a delta (plan §Validation):
+ * status-derived signal's contribution as a delta:
  *   - ENDPOINT-ONLY baseline: requires_auth from auth/identity endpoints only.
  *   - CART-SIGNAL rule: baseline OR a *successful* (2xx) cart/checkout mutation.
  *   - READ-SIGNAL rule (ADR 0006, the production rule): cart-signal OR a
@@ -17,7 +17,7 @@
  *     ownership: `GET /store/shipping-options` / `GET /store/orders/{id}` 404 for
  *     a guest, but a 2xx proves an owned cart/order, hence a token).
  *
- * Premise (reworded per PO-2): a *genuinely unauthenticated* guest cart mutation
+ * Premise: a *genuinely unauthenticated* guest cart mutation
  * 4xx's (the requireCustomerAuth gate, ADR 0003/0004); a 2xx cart mutation
  * implies a held token — a customer signal. The SAME logic extends to the
  * endpoints the backend auth-gates (ADR 0006): a guest 401's on `GET /store/orders`
@@ -71,7 +71,7 @@ function isCartMutation(method: string, endpoint: string): boolean {
  * without a customer token, so a 2xx on it proves a held token. Conservative by
  * design — `/store/orders/{id}` is omitted (a guest gets 404, not 401, because
  * order-by-id lookup is permitted), as is `/store/shipping-options` (cart-gated,
- * not auth-gated). // VERIFY against live backend (gate enforcement, PO-2).
+ * not auth-gated). // VERIFY against live backend (gate enforcement).
  *
  * `/store/customers/me` is gated for ALL methods, not just GET: the profile
  * *update* (`POST /store/customers/me`) 401's for a guest exactly as the read

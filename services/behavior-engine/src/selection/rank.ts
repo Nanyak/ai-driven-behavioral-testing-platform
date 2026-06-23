@@ -2,7 +2,7 @@
  * Candidate ranking (plan section Ranking).
  *
  * Score = weighted sum of normalized signals. ALL weights live in ONE config
- * object with explicit defaults (PO-5/7) so ranking is tunable and explainable.
+ * object with explicit defaults so ranking is tunable and explainable.
  *
  * Signals:
  *   - support           : session support, log-scaled then normalized to [0,1].
@@ -10,7 +10,7 @@
  *                          cover (breadth across guest/customer/admin).
  *   - endpointImportance : checkout/auth/admin endpoints weigh higher than pure
  *                          browsing. BUSINESS IMPORTANCE IS MERGED HERE
- *                          (PO-7): "business importance" and "endpoint
+ *                          "business importance" and "endpoint
  *                          importance" were two names for the same idea --
  *                          revenue/identity/state-changing endpoints matter more
  *                          than reads -- so they are one signal, stated here
@@ -18,7 +18,7 @@
  *   - errorCoverage      : rewards has_errors flows so negative behavior is not
  *                          out-competed by high-volume happy paths.
  *
- * Tie-break after scoring is deterministic (PO-5): score desc, then support desc,
+ * Tie-break after scoring is deterministic: score desc, then support desc,
  * then pattern length desc, then lexicographic signature.
  */
 

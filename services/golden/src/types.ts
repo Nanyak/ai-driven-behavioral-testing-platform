@@ -1,6 +1,5 @@
 /**
- * Phase 8 golden response types (plan §"Golden response format", ADR 0001,
- * ADR 0004).
+ * Phase 8 golden response types (ADR 0001, ADR 0004).
  *
  * `SchemaNode`/`SchemaLeaf` are kept type-identical to
  * `services/log-ingestion/src/types.ts` so Phase 6's observed
@@ -24,7 +23,7 @@ export type SchemaNode = SchemaLeaf | { [key: string]: SchemaNode };
 export type SchemaSource = "openapi" | "openapi+observed" | "observed";
 
 /**
- * The golden response format (plan §"Golden response format"). One file per
+ * The golden response format. One file per
  * `(endpoint, expected_status)` under `golden-responses/`.
  *
  * OAS provenance fields (`oas_operation_id`, `oas_ref`, `oas_version`) are

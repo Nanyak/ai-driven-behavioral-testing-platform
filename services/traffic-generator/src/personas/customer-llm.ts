@@ -4,7 +4,7 @@ import type { TrafficConfig } from "../config/config.js";
 import { generateNarrative } from "../llm/narrative.js";
 
 /**
- * Registered-customer full checkout — the HOLDOUT (plan §8.4).
+ * Registered-customer full checkout — the HOLDOUT.
  *
  * This is the ONLY place the full register -> login -> browse -> cart ->
  * line-items -> checkout -> complete sequence is realized. It must never appear

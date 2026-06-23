@@ -2,7 +2,7 @@
  * The store contract here is exactly what `services/behavior-engine/src/coverage.ts`
  * parses: `{ entries: [{ flow_signature, status, ... }] }`, status in
  * {approved, discarded}, both feeding the skip gate. A missing/malformed store is
- * treated as empty here too — never fatal (PO-6 / BA-F8).
+ * treated as empty here too — never fatal.
  */
 
 import {

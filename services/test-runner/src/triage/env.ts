@@ -10,7 +10,6 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-// src/triage -> service root two up, repo root two more.
 const SERVICE_ROOT = resolve(__dirname, "..", "..");
 const REPO_ROOT = resolve(SERVICE_ROOT, "..", "..");
 

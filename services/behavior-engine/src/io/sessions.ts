@@ -1,5 +1,5 @@
 /**
- * Input stage (PO-1): read session-flow records from repo-root `data/sessions/`.
+ * Input stage: read session-flow records from repo-root `data/sessions/`.
  *
  * This mirrors the ingestion service's path resolution exactly (it WRITES to
  * repo-root `data/sessions/`, log-ingestion/config.ts) — the behavior engine is
@@ -19,7 +19,6 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// services/behavior-engine/src/io -> service root two up, repo root two more.
 const SERVICE_ROOT = resolve(__dirname, "..", "..");
 const REPO_ROOT = resolve(SERVICE_ROOT, "..", "..");
 

@@ -4,7 +4,6 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// services/log-ingestion/src -> service root is one level up, repo root two more.
 const SERVICE_ROOT = resolve(__dirname, "..");
 const REPO_ROOT = resolve(SERVICE_ROOT, "..", "..");
 

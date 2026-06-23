@@ -12,7 +12,7 @@
  * fractional") -- this is what lets thin edge-case (has_errors) behavior survive
  * into candidates.
  *
- * Determinism (PO-5): patterns are emitted in a pinned order --
+ * Determinism: patterns are emitted in a pinned order --
  *   support desc, then pattern LENGTH desc, then lexicographic by token string.
  * The same input always yields the same ordered output.
  *
@@ -30,7 +30,6 @@ export interface SequentialPattern {
 
 export interface PrefixSpanResult {
   patterns: SequentialPattern[];
-  /** id -> token, to decode `itemIds`. */
   vocabulary: string[];
 }
 
@@ -198,7 +197,7 @@ export function minePrefixSpan(
     grow([item], proj, patterns.length);
   }
 
-  // Deterministic global ordering (PO-5): support desc, length desc, then
+  // Deterministic global ordering: support desc, length desc, then
   // lexicographic by decoded token string.
   patterns.sort((a, b) => {
     if (b.support !== a.support) {

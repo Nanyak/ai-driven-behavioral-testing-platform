@@ -75,7 +75,7 @@ export function printDistribution(targets: Record<SessionType, number>, results:
   );
   const fmt = (cells: string[]) => cells.map((c, i) => c.padEnd(widths[i])).join("  ");
 
-  console.log("\nObserved vs target distribution (plan §4)");
+  console.log("\nObserved vs target distribution");
   console.log("  " + fmt(header));
   console.log("  " + widths.map((w) => "-".repeat(w)).join("  "));
   for (const row of rows) console.log("  " + fmt(row));
@@ -145,7 +145,7 @@ export function printAcceptance(all: SessionResult[], state: RunState, floors: F
 
   const flag = (value: number, floor: number) => (value >= floor ? "✓" : "✗");
 
-  console.log("\nAcceptance gates (plan §7)");
+  console.log("\nAcceptance gates");
   console.log(`  ${flag(holdout, floors.holdout)} holdout (new-customer checkout):   ${holdout} / ≥${floors.holdout}`);
   console.log(`  ${flag(returningCheckouts, floors.returningCheckout)} returning checkouts:           ${returningCheckouts} / ≥${floors.returningCheckout}`);
   console.log(`  ${flag(returnsFiled, floors.returns)} returns filed:                 ${returnsFiled} / ≥${floors.returns}`);
@@ -158,7 +158,7 @@ export function printAcceptance(all: SessionResult[], state: RunState, floors: F
   console.log(`  ${flag(inventoryRestocks, 1)} admin set-inventory-level (2xx): ${inventoryRestocks} / ≥1`);
   console.log(`  ${flag(invalidPromo400s, 1)} invalid-promo 400s:            ${invalidPromo400s} / ≥1`);
   console.log(`  ${flag(returnRejections, 1)} admin return-rejections (cancel 2xx, pooled order): ${returnRejections} / ≥1`);
-  console.log("\nIdentity decoupling (plan §1.4)");
+  console.log("\nIdentity decoupling");
   console.log(`  register-without-checkout sessions: ${registerNoCheckout}`);
   console.log(`  login-without-register sessions:    ${loginNoRegister}`);
   console.log(`  pools: ${JSON.stringify(state.summary)}`);

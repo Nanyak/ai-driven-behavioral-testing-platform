@@ -197,14 +197,12 @@ export function ProductDetail({
         </div>
       </div>
 
-      {/* Reviews section */}
       <div className="grid gap-5 border-t border-emerald-100 p-6 lg:col-span-2 lg:p-9">
         <div>
           <p className="text-xs font-black uppercase tracking-normal text-emerald-700">Reviews</p>
           <h3 className="mt-1 text-2xl font-black text-emerald-950">Shopper feedback</h3>
         </div>
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
-          {/* Review list */}
           <div className="grid content-start gap-3">
             {reviews.length > 0 ? reviews.map((review) => (
               <article key={review.id} className="grid gap-2 rounded-lg border border-emerald-100 bg-emerald-50/50 p-4">

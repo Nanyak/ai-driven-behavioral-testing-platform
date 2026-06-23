@@ -125,7 +125,7 @@ async function stage0(cfg: TrafficConfig, state: RunState): Promise<SessionResul
   return seedResults;
 }
 
-/** Top up the count-controllable leaves to their floors (plan §7). */
+/** Top up the count-controllable leaves to their floors. */
 function applyFloors(counts: Record<SessionType, number>, floors: Floors): void {
   counts.newCheckout = Math.max(counts.newCheckout, floors.holdout);
   counts.returningCheckout = Math.max(counts.returningCheckout, floors.returningCheckout);
@@ -202,7 +202,7 @@ async function main() {
   const stage1Results = await runJobs(stage1Jobs, cfg, state);
   console.log(`  ✓ Stage 1 done. orderPool=${state.orderPool.length}`);
 
-  // Stage 2 must hard-fail loudly on empty pools (plan §5).
+  // Stage 2 must hard-fail loudly on empty pools.
   if (stage2Jobs.length > 0 && state.orderPool.length === 0) {
     console.error(
       "\n✗ Stage 2 has post-purchase sessions but orderPool is EMPTY — Stage 1 produced no orders.\n" +

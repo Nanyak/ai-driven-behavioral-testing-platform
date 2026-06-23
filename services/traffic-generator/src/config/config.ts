@@ -52,7 +52,7 @@ export type MixProfile = "realistic" | "signal-rich" | "smoke";
 
 /**
  * Values are relative — they are normalized to the configured total session
- * count, then floored (plan §7).
+ * count, then floored.
  */
 export interface Weights {
   bounce: number;
@@ -96,7 +96,7 @@ export interface EventProbs {
   contaminate: number;
 }
 
-/** Floors are minimums topped up by applyFloors, not desired/target counts (plan §7). */
+/** Floors are minimums topped up by applyFloors, not desired/target counts. */
 export interface Floors {
   holdout: number;
   returningCheckout: number;

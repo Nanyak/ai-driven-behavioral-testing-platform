@@ -13,7 +13,7 @@ export type SessionSource =
  *
  * The <source> tag exists ONLY for human debugging of a generator run. It is
  * never sent as a classifier signal and Phase 7 must not parse it: persona is
- * derived from flow content, not from this label (plan §8 / §10.3). It accepts
+ * derived from flow content, not from this label. It accepts
  * an arbitrary string so the staged orchestrator can tag by session type.
  */
 export function newSessionId(source: string): string {

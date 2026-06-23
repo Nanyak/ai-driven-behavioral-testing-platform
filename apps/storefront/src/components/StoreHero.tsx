@@ -18,12 +18,10 @@ export function StoreHero({ onNavigate }: StoreHeroProps) {
         <div className="absolute -top-32 right-1/4 size-[520px] rounded-full bg-emerald-500/15 blur-[80px]" />
         <div className="absolute bottom-0 left-0 size-[360px] rounded-full bg-emerald-400/10 blur-[60px]" />
         <div className="absolute top-1/2 right-0 size-[280px] rounded-full bg-orange-500/12 blur-[70px]" />
-        {/* Fine dot grid */}
         <div
           className="absolute inset-0 opacity-[0.04]"
           style={{ backgroundImage: "radial-gradient(#ffffff 1px, transparent 1px)", backgroundSize: "28px 28px" }}
         />
-        {/* Subtle horizontal line */}
         <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
       </div>
 
@@ -33,7 +31,6 @@ export function StoreHero({ onNavigate }: StoreHeroProps) {
         <ChevronDown className="size-4 text-white/40" style={{ animation: "var(--animate-bounce-subtle)" }} />
       </div>
 
-      {/* Left: hero copy */}
       <div className="relative self-end">
         <Badge
           className="mb-5 border border-white/25 bg-white/10 text-white backdrop-blur hover:bg-white/15"
@@ -78,7 +75,6 @@ export function StoreHero({ onNavigate }: StoreHeroProps) {
         </div>
       </div>
 
-      {/* Right: floating feature card */}
       <div className="relative hidden min-h-80 self-stretch md:grid">
         <div className="grid min-h-80 w-full content-end justify-self-end rounded-2xl border border-white/20 bg-white/8 p-7 shadow-2xl shadow-black/40 backdrop-blur-2xl lg:w-[360px]">
           <div className="mb-4 flex items-center gap-2 text-sm font-black text-white/90">

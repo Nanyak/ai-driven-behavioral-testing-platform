@@ -149,7 +149,6 @@ export default async function initial_data_seed({
   });
 
   logger.info("Seeding fulfillment data...");
-  // This is created by a migration script in core.
   const { data: shippingProfileResult } = await query.graph({
     entity: "shipping_profile",
     fields: ["id"],
@@ -1040,7 +1039,6 @@ export default async function initial_data_seed({
   logger.info("Seeding deals price list...");
   const dealVariantIds = dealProducts.flatMap((p) => (p.variants ?? []).map((v) => v.id));
 
-  // Sale prices for deal products (roughly 25-30% off)
   const salePriceMap: Record<string, number> = {
     "CARGO": 3200,
     "ZIP-HOODIE": 4000,

@@ -14,7 +14,7 @@
  *   1. Persona is NOT part of the key. Identity is the endpoint sequence, not
  *      its derived label (ADR 0002).
  *   2. STATUS is NOT part of the key. The key is method + endpoint only.
- *   3. Consecutive identical tokens collapse to one (PO-3). A 200/304
+ *   3. Consecutive identical tokens collapse to one. A 200/304
  *      revalidation pair, or any back-to-back repeat of the same
  *      `METHOD endpoint`, is a no-op repeat and must not split an otherwise
  *      identical flow into two signatures. This collapse is applied here, once,

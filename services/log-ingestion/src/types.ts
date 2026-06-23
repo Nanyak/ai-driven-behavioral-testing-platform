@@ -37,7 +37,7 @@ export interface SessionFlow {
   ended_at: string;
   /**
    * Highest-privilege last. VALIDATION GROUND TRUTH ONLY — Phase 7 must never
-   * feed this to the classifier (plan §10.3).
+   * feed this to the classifier.
    */
   role_observed: ObservedRole[];
   steps: FlowStep[];

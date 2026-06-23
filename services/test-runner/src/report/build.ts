@@ -25,14 +25,13 @@ export interface BuildOptions {
   now?: Date;
 }
 
-/** A test counts as failed for rollups when it did not pass or skip. */
 function isFailed(status: NormalizedTest["status"]): boolean {
   return status === "failed" || status === "timedOut" || status === "interrupted";
 }
 
 /** `run-YYYY-MM-DD-HHMMSS` in UTC. */
 function deriveRunId(now: Date): string {
-  const iso = now.toISOString(); // 2026-06-21T06:14:05.123Z
+  const iso = now.toISOString();
   const [date, time] = iso.split("T");
   return `run-${date}-${time.slice(0, 8).replace(/:/g, "")}`;
 }
@@ -47,7 +46,6 @@ export function buildReport(result: NormalizedRunResult, opts: BuildOptions = {}
   const failures: FailureEntry[] = [];
 
   for (const test of result.tests) {
-    // Per-persona rollup.
     const prow = personaMap.get(test.persona) ?? { persona: test.persona, passed: 0, failed: 0, skipped: 0 };
     // Per-flow rollup, keyed by signature when present (persona-independent
     // identity, ADR 0002), else persona+name.

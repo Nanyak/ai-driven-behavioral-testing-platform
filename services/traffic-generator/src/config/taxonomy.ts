@@ -112,9 +112,9 @@ export function identityFor(type: SessionType): Identity {
   if (split) return splitIdentity(split);
   switch (type) {
     case "returningCheckout":
-    case "cartWallConversion": // guest hits the wall, then logs into a pooled account
-    case "stockOutCheckout": // returning customer hits the insufficient-inventory 400
-    case "cartReviseAbandon": // returning customer curates a cart, then abandons
+    case "cartWallConversion":
+    case "stockOutCheckout":
+    case "cartReviseAbandon":
     case "orderStatus":
     case "repeatOrderCheck":
     case "profileMgmt":

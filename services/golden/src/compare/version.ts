@@ -1,10 +1,9 @@
 /**
- * Versioning (plan §"Versioning"). Goldens carry `captured_at`. A schema
- * change in a test run is a regression BY DEFAULT — the baseline only updates
- * when the developer explicitly re-runs ingestion/refresh. No silent
- * auto-update. Also provides the `oas_version` drift hook (plan acceptance
- * bullet 7): a golden whose `oas_version` no longer matches the current spec
- * can be flagged for human review.
+ * Goldens carry `captured_at`. A schema change in a test run is a regression
+ * BY DEFAULT — the baseline only updates when the developer explicitly
+ * re-runs ingestion/refresh. No silent auto-update. A golden whose
+ * `oas_version` no longer matches the current spec can be flagged for human
+ * review via `checkOasDrift`.
  */
 import type { CompareResult } from "./compare.js";
 import type { GoldenResponse } from "../types.js";
@@ -45,7 +44,7 @@ export interface DriftFlag {
 
 /**
  * Flag a golden whose `oas_version` no longer matches the current spec's
- * version (drift hook, plan acceptance bullet 7). Observed-only goldens
+ * version. Observed-only goldens
  * (`oas_version: null`) never drift — they have no spec provenance to compare.
  */
 export function checkOasDrift(golden: GoldenResponse, currentOasVersion: string): DriftFlag {

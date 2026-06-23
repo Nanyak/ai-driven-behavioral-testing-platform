@@ -15,11 +15,11 @@ interface RequestOptions {
 
 /**
  * Surfaces 4xx/5xx as values instead of throwing so the noise/retry logic can
- * react to failures (plan §5 step 1).
+ * react to failures.
  *
  * It deliberately attaches NO persona or role header — role is established by
  * which auth endpoints a session hits, recorded by the Medusa logging
- * middleware from the JWT actor_type (plan §7, §10.3).
+ * middleware from the JWT actor_type.
  */
 export class MedusaClient {
   constructor(

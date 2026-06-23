@@ -133,7 +133,7 @@ function renderCaptures(captures: Record<string, string>, respVar: string): stri
       path === "$raw"
         ? `(await ${respVar}.json()).token`
         : `extractPath(await ${respVar}.json(), ${JSON.stringify(path)})`;
-    lines.push(`  try { scope.${varName} = ${expr}; } catch { /* best-effort capture */ }`);
+    lines.push(`  try { scope.${varName} = ${expr}; } catch { }`);
   }
   return lines.join("\n");
 }

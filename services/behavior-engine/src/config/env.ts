@@ -15,7 +15,6 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// src/config -> service root two up, repo root two more.
 const SERVICE_ROOT = resolve(__dirname, "..", "..");
 const REPO_ROOT = resolve(SERVICE_ROOT, "..", "..");
 

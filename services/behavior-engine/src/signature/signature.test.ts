@@ -1,5 +1,5 @@
 /**
- * Golden / unit test for signature.ts (PO-3). Run: `npm run test:signature`.
+ * Golden / unit test for signature.ts. Run: `npm run test:signature`.
  *
  * Plain assertions, no test framework — mirrors the repo's dependency-light
  * style. Exits non-zero on the first failure so the check script can gate on it.
@@ -18,7 +18,7 @@ function check(name: string, fn: () => void): void {
 const s = (method: string, endpoint: string): SignatureStep => ({ method, endpoint });
 
 // 1. Status is excluded — a 200/304 revalidation pair on the same endpoint
-//    collapses to ONE token, so the two flows share a signature (PO-3).
+//    collapses to ONE token, so the two flows share a signature.
 check("consecutive identical METHOD+endpoint collapse (200/304 revalidation)", () => {
   const withRevalidate = [s("GET", "/store/regions"), s("GET", "/store/regions")];
   const single = [s("GET", "/store/regions")];

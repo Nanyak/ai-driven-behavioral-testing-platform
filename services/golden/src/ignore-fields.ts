@@ -1,6 +1,6 @@
 /**
- * Global ignore-fields list (plan §"Global ignore-fields list"). Single
- * auditable source — kept IDENTICAL to `services/log-ingestion/src/pipeline.ts`
+ * Global ignore-fields list. Single auditable source — kept IDENTICAL to
+ * `services/log-ingestion/src/pipeline.ts`
  * `IGNORE_FIELDS`. Do not edit one without the other until log-ingestion is
  * re-pointed at this module (deferred to a later phase per the Phase 8 brief).
  */

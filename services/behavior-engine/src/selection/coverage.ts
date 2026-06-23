@@ -10,7 +10,7 @@
  *   2. the Phase 15 HITL approval JSON store -- entries marked `approved` AND
  *      entries marked `discarded` (a human-rejected flow must not re-surface).
  *
- * TOLERANCE (PO-6 / BA-F8): a MISSING `generated-tests/` dir or a MISSING HITL
+ * TOLERANCE: a MISSING `generated-tests/` dir or a MISSING HITL
  * store is an EMPTY manifest, never an error. On a clean checkout the manifest
  * is empty and every flow is treated as new (correct by construction). All
  * filesystem access is best-effort and degrades to "nothing covered yet".
@@ -22,7 +22,6 @@ import { fileURLToPath } from "node:url";
 import type { MinedFlow } from "./dedup.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-// src/selection -> service root two up, repo root two more.
 const SERVICE_ROOT = resolve(__dirname, "..", "..");
 const REPO_ROOT = resolve(SERVICE_ROOT, "..", "..");
 

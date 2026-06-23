@@ -29,8 +29,6 @@ import { runEdgeFlow } from "../flows/edge.js";
 import { runCustomerCheckout } from "../personas/customer-llm.js";
 import { LIGHT_NOISE } from "../http/noise.js";
 
-// --- pool helpers ---
-
 function synthAccount(): PoolAccount {
   return { email: newCustomerEmail(), password: DEFAULT_PASSWORD };
 }
@@ -73,8 +71,6 @@ async function adminDegrade(client: MedusaClient, cfg: TrafficConfig): Promise<S
 async function guestDegrade(client: MedusaClient): Promise<StepResult[]> {
   return (await runGuestShop(client, "browse")).steps;
 }
-
-// --- dispatch: one session of the given type/identity ---
 
 export async function dispatch(
   type: SessionType,

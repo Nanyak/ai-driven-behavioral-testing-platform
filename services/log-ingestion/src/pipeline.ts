@@ -1,6 +1,6 @@
 /**
  * Output is LABEL-FREE by design: no persona is assigned here. Phase 7 derives
- * persona as an emergent attribute (plan §10.3), so ingestion must never
+ * persona as an emergent attribute, so ingestion must never
  * pre-label sessions or the discovery claim collapses.
  */
 
@@ -112,8 +112,8 @@ export function groupBySession(docs: RawLogDoc[]): GroupResult {
   return { buckets, droppedNoSession };
 }
 
-// `role_observed` is VALIDATION GROUND TRUTH ONLY (never a classifier input —
-// plan §10.3). No persona field is ever written here.
+// `role_observed` is VALIDATION GROUND TRUTH ONLY (never a classifier input).
+// No persona field is ever written here.
 const ROLE_RANK: Record<ObservedRole, number> = { guest: 0, customer: 1, admin: 2 };
 
 function toObservedRole(userRole: string | null | undefined): ObservedRole {

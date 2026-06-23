@@ -1,7 +1,7 @@
 /**
  * Persona resolution — emergent, deterministic, from attributes only.
  *
- * Resolution table (plan §Emergent persona derivation), highest-privilege wins
+ * Resolution table — highest-privilege wins
  * for a session that changes role mid-stream:
  *
  *   is_admin                         -> admin_operator

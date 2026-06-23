@@ -24,9 +24,8 @@ function baymardCut(stepsLength: number): number {
 }
 
 /**
- * Returning-customer flow (plan §3, §4 B/C2). Logs into a PRE-EXISTING pooled
- * account — login only, never register — preserving the sign-in/sign-up
- * decoupling from plan §1.4.
+ * Returning-customer flow. Logs into a PRE-EXISTING pooled account — login
+ * only, never register — preserving sign-in/sign-up decoupling.
  *
  * Token reuse: ~55% of returning sessions skip re-authentication because the
  * customer's JWT is still live (they just open the app). These sessions emit

@@ -1,6 +1,6 @@
 /**
- * Observed half of the ADR 0001 intersection (plan §"Extraction from observed
- * bodies"). Walks a response JSON tree and classifies each leaf, flagging
+ * Observed half of the ADR 0001 intersection. Walks a response JSON tree
+ * and classifies each leaf, flagging
  * ignore-listed fields as `"ignored"`. Mirrors
  * `services/log-ingestion/src/pipeline.ts` `describe()`, generalized to take
  * an endpoint so per-endpoint ignore additions (dotted paths) apply too.

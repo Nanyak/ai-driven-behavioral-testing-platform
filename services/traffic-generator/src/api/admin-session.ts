@@ -97,7 +97,7 @@ export class AdminSession {
   }
 
   /**
-   * Create a published product with a single "One Size" variant (plan §8.5; the
+   * Create a published product with a single "One Size" variant — the
    * seller's core catalog loop + the prerequisite for the customer stock-out
    * arc, Theme 3). Resolves the shipping profile, sales channel, and — for the
    * stock-out product — the created variant's inventory item + stock location so
@@ -221,11 +221,11 @@ export class AdminSession {
     return this.record("admin_list_customers", "GET", "/admin/customers", res);
   }
 
-  // --- Stage-0 / Stage-2 additions (plan §6.5) — VERIFY shapes against live 2.15.5 ---
+  // --- Stage-0 / Stage-2 additions — VERIFY shapes against live 2.15.5 ---
 
   /**
    * Seed a valid percentage promotion so deal-seeker conversions can actually
-   * succeed (plan §5 Stage 0). The order-level `application_method`
+   * succeed (Stage 0 seed). The order-level `application_method`
    * (`target_type:"order"`, `allocation:"across"`) body is **verified working
    * (200)** on this Medusa 2.15.5 build — the old "POST /admin/promotions 400"
    * project note was stale (the discount applies on a checkout cart). The
@@ -267,7 +267,7 @@ export class AdminSession {
   }
 
   /**
-   * Fulfill a real completed order (plan §5 Stage 2 F2). VERIFY:
+   * Fulfill a real completed order. VERIFY:
    * `POST /admin/orders/{id}/fulfillments` item shape varies across 2.x.
    */
   async createFulfillment(orderId: string): Promise<ApiResponse> {
@@ -296,7 +296,7 @@ export class AdminSession {
   }
 
   /**
-   * Begin a draft return for an order (plan §5 Stage 2 F3) and resolve its id.
+   * Begin a draft return for an order and resolve its id.
    * `location_id` is required for the later receive/confirm to settle. VERIFY:
    * the begin-return response carries the new return under `return` on this
    * build; the `order_id` filter is the fallback if a future minor changes that.
@@ -388,7 +388,7 @@ export class AdminSession {
   }
 
   /**
-   * Cancel an order (plan §5 Stage 2 F5) — the reversal path for an order that
+   * Cancel an order — the reversal path for an order that
    * has NOT shipped yet. The backend rejects canceling a fulfilled order ("All
    * fulfillments must be canceled first"), so callers pass unfulfilled orders.
    * Canceling reverses the authorized payment (refund-equivalent).

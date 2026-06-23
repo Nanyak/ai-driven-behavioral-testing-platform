@@ -7,7 +7,7 @@
  *   2. Anomaly / contamination — flag out-of-persona endpoints; judge a
  *      guest->customer transition as contamination vs. legitimate transfer.
  *   3. Assertion recommendation — ADVISORY hints on which response fields matter
- *      (BA-F1). This is OPTIONAL METADATA on a candidate, explicitly NOT a
+ *      These are OPTIONAL METADATA on a candidate, explicitly NOT a
  *      Phase 8/9 oracle. ADR 0001 keeps the OpenAPI spec as the assertion
  *      oracle; these hints never override it. The output contract documents
  *      `assertion_hints` as advisory.
@@ -36,7 +36,7 @@ const ANTHROPIC_VERSION = "2023-06-01";
 /** Max in-flight naming calls — bounded so 30 flows aren't 30 serial round-trips, without hammering rate limits. */
 const NAMING_CONCURRENCY = 6;
 
-/** Advisory, non-oracle metadata attached to a candidate (BA-F1). */
+/** Advisory, non-oracle metadata attached to a candidate. */
 export interface AssertionHints {
   /** Response fields the LLM judged worth asserting on. Advisory only. */
   fields: string[];

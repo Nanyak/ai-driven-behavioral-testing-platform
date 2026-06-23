@@ -100,7 +100,7 @@ export function unionSchema(a: SchemaNode, b: SchemaNode, path = ""): MergeResul
 
 /**
  * Build a `GoldenResponse` for one `(endpoint, status)`, stamping
- * `schema_source` and OAS provenance (plan §"Intersect + merge", step 3):
+ * `schema_source` and OAS provenance (step 3: intersect + merge):
  *
  *  - OAS entry + observed schema  -> intersect/tighten, `"openapi+observed"`.
  *  - OAS entry, no observed data  -> spec skeleton as-is, `"openapi"` (bodies

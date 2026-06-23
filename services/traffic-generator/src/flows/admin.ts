@@ -117,7 +117,6 @@ export async function runAdminReturnRejectFlow(
   await session.listReturns();
   const location = await session.resolveStockLocation();
 
-  // Resolve order line-item ids fresh — cart line-item ids in the pool differ.
   const order = await session.getOrder(orderId);
   const items: any[] = order.ok ? order.body?.order?.items ?? [] : [];
   if (items.length === 0) {

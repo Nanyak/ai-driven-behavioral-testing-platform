@@ -9,18 +9,18 @@
  * Emits, on the real data:
  *   1. Per-persona precision/recall + confusion matrix for TWO rule variants on
  *      the SAME sessions — the endpoint-only baseline and the cart-signal rule —
- *      so the cart signal's contribution is a measured DELTA (PO-2 footnote
+ *      so the cart signal's contribution is a measured DELTA (footnote
  *      included: role_observed under-labels token-reuse/login sessions as guest,
  *      so some guest->customer reclassifications are ground-truth GAPS, not
  *      classifier errors).
  *   2. Holdout recovery: PrefixSpan support count for the registered-customer
  *      checkout backbone; acceptance is support >= 6 (the Phase 5 holdout floor,
- *      BA-F2), comfortably above minSupport=3.
- *   3. Negative control (BA-F3): a concrete fixture check — no high-support mined
+ *      floor=6), comfortably above minSupport=3.
+ *   3. Negative control: a concrete fixture check — no high-support mined
  *      flow contains a *successful* `POST /store/returns` (removed by ADR 0003,
  *      so store returns are a dead 4xx path) nor an admin->customer-checkout
  *      chimera. Pass = that signature's support is 0/below floor.
- *   4. Contamination resolution (BA-F7): contaminated guest->customer sessions
+ *   4. Contamination resolution: contaminated guest->customer sessions
  *      resolve to the highest-privilege persona.
  */
 
@@ -53,7 +53,7 @@ export interface PersonaScore {
   precision: number;
   recall: number;
   f1: number;
-  support: number; // ground-truth count of this persona
+  support: number;
 }
 
 export interface VariantReport {
@@ -122,12 +122,12 @@ function scoreVariant(
 }
 
 // ---------------------------------------------------------------------------
-// Holdout recovery (BA-F2)
+// Holdout recovery
 // ---------------------------------------------------------------------------
 
 /**
  * The registered-customer checkout BACKBONE — the holdout sequence, realized
- * only in `personas/customer-llm.ts` (plan §8.4). PrefixSpan must rediscover it.
+ * only in `personas/customer-llm.ts`. PrefixSpan must rediscover it.
  * These are the load-bearing ordered tokens; PrefixSpan allows gaps, so browsing
  * noise around them does not prevent the match.
  */
@@ -138,7 +138,7 @@ const HOLDOUT_BACKBONE = [
   "POST /store/carts/{id}/complete",
 ];
 
-export const HOLDOUT_SUPPORT_FLOOR = 6; // Phase 5 holdout floor (BA-F2).
+export const HOLDOUT_SUPPORT_FLOOR = 6; // holdout floor for Phase 5 checkout sessions.
 
 function containsSubsequence(patternTokens: string[], target: string[]): boolean {
   let i = 0;
@@ -180,7 +180,7 @@ function scoreHoldout(prefixspan: PrefixSpanResult): HoldoutReport {
 }
 
 // ---------------------------------------------------------------------------
-// Negative control (BA-F3) — concrete fixture
+// Negative control — concrete fixture
 // ---------------------------------------------------------------------------
 
 /**
@@ -246,7 +246,7 @@ function scoreNegativeControl(
 }
 
 // ---------------------------------------------------------------------------
-// Contamination resolution (BA-F7)
+// Contamination resolution
 // ---------------------------------------------------------------------------
 
 export interface ContaminationReport {
@@ -257,12 +257,12 @@ export interface ContaminationReport {
   /**
    * Misclassified contaminated sessions that DO carry a content privilege-signal
    * (auth endpoint, 2xx cart mutation, or /admin/*) — these would be real
-   * classifier errors. The gate passes iff this is 0 (BA-F7).
+   * classifier errors. The gate passes iff this is 0.
    */
   misclassifiedWithSignal: number;
   /**
    * Misclassified contaminated sessions with NO content privilege-signal — the
-   * PO-2 ground-truth gap: role_observed carries a JWT role (token reuse / login)
+   * Ground-truth gap: role_observed carries a JWT role (token reuse / login)
    * that left no trace in the steps, so content-only classification correctly
    * reads them as guest. NOT classifier errors; reported, not failed.
    */
@@ -315,7 +315,7 @@ function scoreContamination(sessions: SessionFlow[]): ContaminationReport {
     } else if (hasPrivilegeSignal(session)) {
       misclassifiedWithSignal++; // a real classifier error
     } else {
-      groundTruthGaps++; // PO-2 footnote: role_observed under-labels, not our error
+      groundTruthGaps++; // role_observed under-labels token-reuse sessions, not our error
     }
   }
 
@@ -324,7 +324,7 @@ function scoreContamination(sessions: SessionFlow[]): ContaminationReport {
     resolvedToHighestPrivilege: resolved,
     misclassifiedWithSignal,
     groundTruthGaps,
-    // Sound gate (BA-F7): every contaminated session that emits a content
+    // Sound gate: every contaminated session that emits a content
     // privilege-signal must resolve to the highest privilege. Sessions with no
     // such signal are ground-truth gaps (token reuse), correctly read as guest.
     passes: misclassifiedWithSignal === 0,
@@ -339,7 +339,7 @@ export interface ValidationReport {
   run_id: string;
   sessions_scored: number;
   /**
-   * FOOTNOTE (PO-2): `role_observed` under-labels token-reuse and login-only
+   * FOOTNOTE: `role_observed` under-labels token-reuse and login-only
    * sessions as guest — a returning customer who reuses a live JWT emits no
    * /auth/* endpoint and may be tagged guest in role_observed even though the
    * cart-signal rule correctly recovers them. Some guest->customer
@@ -353,7 +353,7 @@ export interface ValidationReport {
     cart_signal: VariantReport;
     /** Baseline + cart + read signals — the production rule (ADR 0006). */
     cart_read_signal: VariantReport;
-    /** cart_signal.macroF1 - endpoint_only.macroF1 (must be >= 0, plan §Acceptance). */
+    /** cart_signal.macroF1 - endpoint_only.macroF1 (must be >= 0). */
     macro_f1_delta: number;
     /** Per-persona recall lift the cart signal gives (the measured delta). */
     registered_customer_recall_lift: number;

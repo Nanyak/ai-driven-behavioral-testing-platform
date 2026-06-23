@@ -17,7 +17,7 @@ export const DEFAULT_PASSWORD = "Password123!";
  * Every method records a StepResult and is self-healing (lazily resolves
  * region/products/cart) so it works whether called as a scripted backbone or
  * in an arbitrary LLM-chosen order. IDs are always resolved at runtime — never
- * hardcoded (plan §risks).
+ * hardcoded.
  */
 export class StoreSession {
   regionId?: string;
@@ -335,11 +335,11 @@ export class StoreSession {
     return this.record("view_order", "GET", "/store/orders/{id}", res);
   }
 
-  // --- Stage-1 additions (plan §6.5) ---
+  // --- Stage-1 additions ---
 
   /**
    * Log into a PRE-EXISTING pooled account — the decoupler that finally makes
-   * returning customers possible (plan §1.4). Unlike login(), it does NOT fall
+   * returning customers possible. Unlike login(), it does NOT fall
    * back to register(), so a returning session emits `login` with no `register`,
    * which is exactly what lets Phase 7 separate signup from sign-in.
    */
@@ -476,7 +476,7 @@ export class StoreSession {
     return this.record("apply_promo", "POST", "/store/carts/{id}", res);
   }
 
-  // --- Stage-2 additions (plan §6.5) ---
+  // --- Stage-2 additions ---
 
   async reorder(variantId: string): Promise<ApiResponse> {
     await this.createCart();

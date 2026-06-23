@@ -5,7 +5,7 @@ import type { TrafficConfig } from "../config/config.js";
  * The constrained action vocabulary the LLM may choose from. Keeping the
  * narrative to a known token set makes translation deterministic and robust
  * while still letting the model vary order, selection, and length — the source
- * of "realistic diversity the scripts did not anticipate" (plan §8.2).
+ * of "realistic diversity the scripts did not anticipate".
  */
 export const ACTION_VOCABULARY = [
   "browse_products",

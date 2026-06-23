@@ -19,7 +19,6 @@ export function StoreHeader({ itemCount, customerEmail, onNavigate, onSearchChan
     <header className="sticky top-3 z-20 mx-auto w-[calc(100%-1.5rem)] max-w-7xl rounded-2xl border border-slate-200/80 bg-white/95 shadow-xl shadow-slate-900/8 backdrop-blur">
       <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-2.5 md:grid-cols-[auto_auto_1fr_auto]">
 
-        {/* Logo */}
         <AppLink
           className="flex min-w-max cursor-pointer items-center gap-2.5"
           to="/"
@@ -33,7 +32,6 @@ export function StoreHeader({ itemCount, customerEmail, onNavigate, onSearchChan
           </span>
         </AppLink>
 
-        {/* Nav — desktop only */}
         <nav className="hidden items-center gap-0.5 md:flex" aria-label="Store navigation">
           <AppLink
             className="cursor-pointer rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
@@ -60,7 +58,6 @@ export function StoreHeader({ itemCount, customerEmail, onNavigate, onSearchChan
           )}
         </nav>
 
-        {/* Mobile hamburger menu */}
         <Sheet>
           <SheetTrigger
             className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50 md:hidden"
@@ -138,7 +135,6 @@ export function StoreHeader({ itemCount, customerEmail, onNavigate, onSearchChan
           </SheetContent>
         </Sheet>
 
-        {/* Search */}
         <label
           className="order-3 col-span-3 flex h-10 cursor-text items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 text-slate-400 transition-colors focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-4 focus-within:ring-emerald-500/12 md:order-none md:col-span-1"
           aria-label="Search products"
@@ -153,10 +149,8 @@ export function StoreHeader({ itemCount, customerEmail, onNavigate, onSearchChan
           />
         </label>
 
-        {/* Actions */}
         <div className="flex items-center gap-1.5">
 
-          {/* User / Sign in */}
           <AppLink
             className="flex h-9 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50"
             to={customerEmail ? "/profile" : "/signin"}
@@ -168,7 +162,6 @@ export function StoreHeader({ itemCount, customerEmail, onNavigate, onSearchChan
             </span>
           </AppLink>
 
-          {/* Wishlist — icon + floating badge */}
           <AppLink
             className="relative flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
             to="/wishlist"
@@ -183,7 +176,6 @@ export function StoreHeader({ itemCount, customerEmail, onNavigate, onSearchChan
             )}
           </AppLink>
 
-          {/* Alerts — icon + floating badge */}
           <AppLink
             className="relative flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
             to="/notifications"
@@ -198,7 +190,6 @@ export function StoreHeader({ itemCount, customerEmail, onNavigate, onSearchChan
             )}
           </AppLink>
 
-          {/* Cart — CTA */}
           <AppLink
             className="flex h-9 cursor-pointer items-center gap-2 rounded-xl bg-emerald-600 px-3 text-sm font-black text-white transition-colors hover:bg-emerald-700"
             to="/cart"
