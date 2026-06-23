@@ -65,8 +65,13 @@ function bodyExpr(body: BodyPlan): string | null {
 }
 
 function resolveUrlExpr(call: ResolveCall): string {
+  // A resolve endpoint may be path-templated (e.g. seeding a line item on the
+  // just-created cart: `/store/carts/{cartId}/line-items`). Substitute `{param}`
+  // from runtime scope, mirroring the main step's urlExpr.
+  const path = call.endpoint.replace(/\{([^}]+)\}/g, (_m, p) => `\${scope.${p}}`);
+  const hasPathParam = path !== call.endpoint;
   const query = Object.entries(call.query ?? {});
-  if (query.length === 0) return JSON.stringify(call.endpoint);
+  if (query.length === 0) return hasPathParam ? `\`${path}\`` : JSON.stringify(call.endpoint);
   const qs = query
     .map(([key, field]) => {
       const value =
@@ -78,21 +83,32 @@ function resolveUrlExpr(call: ResolveCall): string {
       return `${encodeURIComponent(key)}=${value}`;
     })
     .join("&");
-  return `\`${call.endpoint}?${qs}\``;
+  return `\`${path}?${qs}\``;
 }
 
 function renderResolveCall(call: ResolveCall, index: number): string {
+  // A literal binding emits no request: the auth-gated resource can't be created
+  // in this (unauthenticated) context, and the step that consumes the id asserts
+  // a 4xx the gate produces from the path prefix alone (see resolve.ts ensure()).
+  if (call.literal !== undefined) {
+    return `  scope.${call.bindTo} = ${JSON.stringify(call.literal)}; // placeholder: ${call.bindTo} is auth-gated; the negative step's status comes from the gate`;
+  }
   const headers = authHeaderExpr(call.auth);
   const varDecl = `resolve${index}`;
   const method = call.method.toLowerCase();
   const options = call.body
     ? `{ headers: ${headers}, data: ${synthesizedFieldsExpr(call.body)} }`
     : `{ headers: ${headers} }`;
-  return [
+  const lines = [
     `  const ${varDecl} = await request.${method}(${resolveUrlExpr(call)}, ${options});`,
     `  expect(${varDecl}.status(), "resolve ${call.method} ${call.endpoint} for ${call.bindTo}").toBe(200);`,
-    `  scope.${call.bindTo} = extractPath(await ${varDecl}.json(), ${JSON.stringify(call.extract)});`,
-  ].join("\n");
+  ];
+  // A side-effecting resolve (e.g. seeding a cart line item) has no extract: run
+  // the request and assert it succeeded, but bind nothing into scope.
+  if (call.extract !== "") {
+    lines.push(`  scope.${call.bindTo} = extractPath(await ${varDecl}.json(), ${JSON.stringify(call.extract)});`);
+  }
+  return lines.join("\n");
 }
 
 function renderCaptures(captures: Record<string, string>, respVar: string): string {

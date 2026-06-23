@@ -3,6 +3,11 @@ import { randomUUID } from "node:crypto";
 import { pick } from "../util/random.js";
 import { MISSING, recordStep, type StepResult } from "../http/step.js";
 
+/** A generous stock level for normal catalog products so they never run out
+ * across a traffic run (the stock-out arc uses its own dedicated low-stock
+ * product, so this can be large without affecting that signal). */
+const HEALTHY_STOCK_QTY = 1_000_000;
+
 /** For the stock-out arc (Theme 3). */
 export interface CreatedProduct {
   productId: string;
@@ -153,18 +158,27 @@ export class AdminSession {
     }
 
     const created: CreatedProduct = { productId: product.id, variantId };
-    // The stock-out product needs its inventory item + location resolved so the
-    // orchestrator can pin a low stocked_quantity. The create response carries no
-    // inventory item, so look it up by the just-generated (unique) SKU.
-    if (opts.lowStock) {
-      const items = await this.client.request(
-        "GET",
-        `/admin/inventory-items?sku=${encodeURIComponent(sku)}&limit=1`,
-        { token: this.token }
-      );
-      this.record("admin_list_inventory_items", "GET", "/admin/inventory-items", items);
-      created.inventoryItemId = items.ok ? items.body?.inventory_items?.[0]?.id : undefined;
-      created.locationId = await this.resolveStockLocation();
+    // EVERY created product needs its inventory item + location resolved and
+    // stocked, or it is published+visible in /store but unpurchasable: a freshly
+    // created variant's inventory item is not stocked at any location, so a
+    // customer add-to-cart 400s ("variant does not have the required inventory" /
+    // "Sales channel ... not associated with any stock location"). Those broken
+    // products then pollute the random catalog the customer-checkout holdout buys
+    // from, turning the GUARANTEED checkout into ~50% line-item/complete 400s. The
+    // create response carries no inventory item, so look it up by the unique SKU.
+    const items = await this.client.request(
+      "GET",
+      `/admin/inventory-items?sku=${encodeURIComponent(sku)}&limit=1`,
+      { token: this.token }
+    );
+    this.record("admin_list_inventory_items", "GET", "/admin/inventory-items", items);
+    created.inventoryItemId = items.ok ? items.body?.inventory_items?.[0]?.id : undefined;
+    created.locationId = await this.resolveStockLocation();
+    // The stock-out arc pins a LOW quantity via the orchestrator, so leave its
+    // stocking to the caller. A normal catalog product is stocked here with a
+    // healthy quantity so it is purchasable like the seed catalog.
+    if (!opts.lowStock && created.inventoryItemId && created.locationId) {
+      await this.setInventoryLevel(created.inventoryItemId, created.locationId, HEALTHY_STOCK_QTY);
     }
     return { res, created };
   }

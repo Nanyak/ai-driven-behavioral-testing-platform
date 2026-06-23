@@ -113,24 +113,43 @@ function splitToken(token: string): { method: string; endpoint: string } {
  * Turn a PrefixSpan pattern into a classified MinedFlow. Persona/attributes are
  * derived from the flow's own steps (with the modal expected statuses) — endpoint
  * + status only, no role_observed.
+ *
+ * Option B (auth-context-coherent modal): the per-token modal is taken over only
+ * the supporting sessions whose OWN emergent persona matches the flow's, so a
+ * gated endpoint's expected status reflects THIS flow's auth context. Without it,
+ * a customer checkout's `POST /store/carts` inherits the guest 401 that dominates
+ * the unpartitioned modal (the supporting set mixes guest attempts with customer
+ * successes), and the generated test then expects 401 while the authenticated run
+ * returns 200. Partitioning by the session's own context keeps each journey
+ * internally consistent: expected status and the persona the test runs under no
+ * longer disagree.
  */
 function toMinedFlow(
   tokens: string[],
   support: number,
-  modal: Map<string, number>,
-  sourceSessions: string[]
+  supporting: SessionFlow[],
+  sessionPersona: Map<string, Persona>
 ): MinedFlow {
-  const steps: CandidateStep[] = tokens.map((token) => {
-    const { method, endpoint } = splitToken(token);
-    return { method, endpoint, expected_status: modal.get(token) ?? 200 };
-  });
+  const stepsFrom = (sessions: SessionFlow[]): CandidateStep[] => {
+    const modal = modalStatuses(sessions);
+    return tokens.map((token) => {
+      const { method, endpoint } = splitToken(token);
+      return { method, endpoint, expected_status: modal.get(token) ?? 200 };
+    });
+  };
   // classify() reads {method, endpoint, status} only. Production rule = the full
   // status-derived signal: cart-mutation signal AND auth-gated-read signal (ADR 0006).
-  const { attributes, persona } = classify(
-    steps.map((s) => ({ method: s.method, endpoint: s.endpoint, status: s.expected_status })),
-    true,
-    true
-  );
+  const asStatus = (steps: CandidateStep[]) =>
+    steps.map((s) => ({ method: s.method, endpoint: s.endpoint, status: s.expected_status }));
+
+  // Provisional persona over ALL supporting sessions identifies the flow's auth
+  // context; then restrict the modal to the supporting sessions whose own context
+  // matches. Falls back to the full set if none match (never lose the journey).
+  const provisional = classify(asStatus(stepsFrom(supporting)), true, true).persona;
+  const matched = supporting.filter((s) => sessionPersona.get(s.session_id) === provisional);
+  const steps = stepsFrom(matched.length > 0 ? matched : supporting);
+
+  const { attributes, persona } = classify(asStatus(steps), true, true);
   return {
     signature: flowSignature(steps),
     tokens,
@@ -138,7 +157,7 @@ function toMinedFlow(
     support,
     persona,
     attributes,
-    source_sessions: sourceSessions,
+    source_sessions: supporting.map((s) => s.session_id),
   };
 }
 
@@ -215,24 +234,35 @@ async function main(): Promise<void> {
   );
 
   // Expected status per token is computed from the flow's OWN supporting
-  // sessions, NOT globally: a token like `POST /store/carts` is 401 globally
-  // (guests attempt it far more than customers succeed), but inside a customer
-  // checkout flow it is 200. A global modal would stamp the contaminated 401 on
-  // a clean customer journey, mis-flagging it has_errors and breaking the
-  // generated test's expectations. Per-flow modal keeps each journey coherent.
+  // sessions, NOT globally, and further restricted to the supporting sessions
+  // whose auth context matches the flow's (Option B, see toMinedFlow): a token
+  // like `POST /store/carts` is 401 globally (guests attempt it far more than
+  // customers succeed) AND 401 across a supporting set that mixes guest attempts
+  // with customer successes, but inside a customer checkout it is 200. Stamping
+  // the contaminated 401 on a clean customer journey mis-flags it has_errors and
+  // makes the generated test expect 401 where the authenticated run returns 200.
   const sessionById = new Map(sessions.map((s) => [s.session_id, s]));
-  const flowModal = (supportIds: string[]): Map<string, number> => {
-    const subset = supportIds.map((id) => sessionById.get(id)).filter((s): s is SessionFlow => s !== undefined);
-    return modalStatuses(subset.length > 0 ? subset : sessions);
-  };
+  // Each session's OWN emergent auth context (endpoint+status only, no
+  // role_observed), memoized once. This is a per-session classification used to
+  // partition expected-status modals — it never feeds persona classification of
+  // the mined flow beyond the same emergent signal already in use.
+  const sessionPersona = new Map<string, Persona>(
+    sessions.map((s) => [
+      s.session_id,
+      classify(s.steps.map((st) => ({ method: st.method, endpoint: st.endpoint, status: st.status })), true, true)
+        .persona,
+    ])
+  );
   // Keep substantial journeys: PrefixSpan emits every frequent prefix; we want
   // candidates with >=2 steps (a single endpoint is not a flow to test).
   const minedFlows: MinedFlow[] = prefixspan.patterns
     .filter((p) => p.itemIds.length >= 2)
     .map((p) => {
       const tokens = decodePattern(p, prefixspan.vocabulary);
-      const supporting = supportingSessions(tokens, sessionTokens);
-      return toMinedFlow(tokens, p.support, flowModal(supporting), supporting);
+      const supporting = supportingSessions(tokens, sessionTokens)
+        .map((id) => sessionById.get(id))
+        .filter((s): s is SessionFlow => s !== undefined);
+      return toMinedFlow(tokens, p.support, supporting, sessionPersona);
     });
 
   const deduped = dedup(minedFlows);
