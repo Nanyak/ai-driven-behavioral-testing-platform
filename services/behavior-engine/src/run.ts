@@ -109,6 +109,18 @@ function splitToken(token: string): { method: string; endpoint: string } {
   return { method: token.slice(0, sp), endpoint: token.slice(sp + 1) };
 }
 
+// JS string coercions a failed client-side id interpolation leaves in a URL path
+// (`/store/carts/${cart.id}` with cart.id === undefined). Mirrors the noise filter
+// in log-ingestion/pipeline.ts; kept here so the engine also rejects already-ingested
+// captures that still carry these literal segments.
+const BROKEN_INTERPOLATION_SEGMENTS = new Set(["undefined", "null", "NaN", "[object Object]"]);
+
+function hasBrokenInterpolationSegment(flow: MinedFlow): boolean {
+  return flow.steps.some((step) =>
+    step.endpoint.split("/").some((segment) => BROKEN_INTERPOLATION_SEGMENTS.has(segment))
+  );
+}
+
 /**
  * Turn a PrefixSpan pattern into a classified MinedFlow. Persona/attributes are
  * derived from the flow's own steps (with the modal expected statuses) — endpoint
@@ -263,7 +275,15 @@ async function main(): Promise<void> {
         .map((id) => sessionById.get(id))
         .filter((s): s is SessionFlow => s !== undefined);
       return toMinedFlow(tokens, p.support, supporting, sessionPersona);
-    });
+    })
+    // Defense-in-depth: a flow whose signature depends on a malformed URL — a path
+    // segment left by a failed client-side id interpolation (`/store/carts/undefined`,
+    // from a cart that never got created) — is a broken capture, not a behavior, and
+    // tends to surface as an all-failure "error path" thrash mislabeled by persona.
+    // Ingestion now drops these steps at the source (log-ingestion/pipeline.ts); this
+    // guard also removes already-ingested ones so a re-mine of existing data/sessions
+    // does not resurface the artifact.
+    .filter((flow) => !hasBrokenInterpolationSegment(flow));
 
   const deduped = dedup(minedFlows);
   log(

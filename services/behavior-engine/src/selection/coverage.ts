@@ -32,6 +32,10 @@ const HITL_STORE = resolve(REPO_ROOT, "data", "hitl", "approvals.json");
 // a machine-readable marker; we match it permissively so a small format change
 // in the stamp does not silently empty the manifest.
 const SIGNATURE_STAMP = /flow_signature["'\s:=]+([0-9a-f]{64})/i;
+// The OUTCOME half a spec asserts (`// status_signature: 200,200,401`). Lets the
+// gate ask "is there already a spec for THIS outcome?", not just "for this shape".
+// Older specs predating the stamp contribute a shape entry but no outcome.
+const STATUS_SIGNATURE_STAMP = /status_signature["'\s:=]+([\d,]+)/i;
 
 function listSpecFiles(dir: string): string[] {
   if (!existsSync(dir)) {
@@ -50,27 +54,58 @@ function listSpecFiles(dir: string): string[] {
   return out;
 }
 
-function fromGeneratedTests(dir: string): Set<string> {
-  const sigs = new Set<string>();
-  for (const file of listSpecFiles(dir)) {
-    const match = SIGNATURE_STAMP.exec(readFileSync(file, "utf8"));
-    if (match) {
-      sigs.add(match[1].toLowerCase());
-    }
-  }
-  return sigs;
+interface TestCoverage {
+  /** Every shape that has a spec — the shape-level coverage set. */
+  sigs: Set<string>;
+  /** signature -> outcome(s) an actual spec asserts (from the status_signature
+   * stamp). A spec predating the stamp adds to `sigs` but not here. */
+  outcomes: Map<string, Set<string>>;
 }
 
-function fromHitlStore(path: string): Set<string> {
+function fromGeneratedTests(dir: string): TestCoverage {
   const sigs = new Set<string>();
+  const outcomes = new Map<string, Set<string>>();
+  for (const file of listSpecFiles(dir)) {
+    const text = readFileSync(file, "utf8");
+    const sigMatch = SIGNATURE_STAMP.exec(text);
+    if (!sigMatch) continue;
+    const sig = sigMatch[1].toLowerCase();
+    sigs.add(sig);
+    const outMatch = STATUS_SIGNATURE_STAMP.exec(text);
+    if (outMatch) {
+      const set = outcomes.get(sig) ?? new Set<string>();
+      set.add(outMatch[1]);
+      outcomes.set(sig, set);
+    }
+  }
+  return { sigs, outcomes };
+}
+
+interface HitlCoverage {
+  /** Every decided shape (approved OR discarded) — the shape-level skip set. */
+  sigs: Set<string>;
+  /**
+   * APPROVED shapes -> the set of blessed expected-status sequences (the
+   * "outcome" half of the flow). A re-mined flow whose shape matches a key here
+   * but whose outcome is NOT in the set is a drift/regression against a blessed
+   * baseline, and must NOT be skipped — that is the whole point of the
+   * outcome-aware gate. Entries without a `status_signature` (pre-enrichment
+   * stores) contribute no outcome, so they fall back to shape-level skip.
+   */
+  approvedOutcomes: Map<string, Set<string>>;
+}
+
+function fromHitlStore(path: string): HitlCoverage {
+  const sigs = new Set<string>();
+  const approvedOutcomes = new Map<string, Set<string>>();
   if (!existsSync(path)) {
-    return sigs;
+    return { sigs, approvedOutcomes };
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(readFileSync(path, "utf8"));
   } catch {
-    return sigs; // a malformed store is treated as empty, never fatal.
+    return { sigs, approvedOutcomes }; // a malformed store is treated as empty, never fatal.
   }
   const entries = Array.isArray(parsed)
     ? parsed
@@ -84,14 +119,26 @@ function fromHitlStore(path: string): Set<string> {
       typeof signature === "string" &&
       (status === "approved" || status === "discarded")
     ) {
-      sigs.add(signature.toLowerCase());
+      const sig = signature.toLowerCase();
+      sigs.add(sig);
+      if (status === "approved" && typeof entry.status_signature === "string") {
+        const set = approvedOutcomes.get(sig) ?? new Set<string>();
+        set.add(entry.status_signature);
+        approvedOutcomes.set(sig, set);
+      }
     }
   }
-  return sigs;
+  return { sigs, approvedOutcomes };
 }
 
 export interface CoverageManifest {
   signatures: Set<string>;
+  /** Approved shape -> blessed outcome(s); drives the outcome-aware skip gate. */
+  approvedOutcomes: Map<string, Set<string>>;
+  /** Shape -> outcome(s) an ACTUAL spec already asserts. Lets the gate keep a
+   * blessed outcome that has no oracle yet (so it gets generated) instead of
+   * skipping it — the drift-retirement ordering fix. */
+  specOutcomes: Map<string, Set<string>>;
   fromTests: number;
   fromHitl: number;
 }
@@ -102,10 +149,23 @@ export interface CoverageSources {
 }
 
 export function buildCoverageManifest(sources: CoverageSources = {}): CoverageManifest {
-  const testsSigs = fromGeneratedTests(sources.generatedTestsDir ?? GENERATED_TESTS_DIR);
-  const hitlSigs = fromHitlStore(sources.hitlStore ?? HITL_STORE);
-  const signatures = new Set<string>([...testsSigs, ...hitlSigs]);
-  return { signatures, fromTests: testsSigs.size, fromHitl: hitlSigs.size };
+  const tests = fromGeneratedTests(sources.generatedTestsDir ?? GENERATED_TESTS_DIR);
+  const hitl = fromHitlStore(sources.hitlStore ?? HITL_STORE);
+  const signatures = new Set<string>([...tests.sigs, ...hitl.sigs]);
+  return {
+    signatures,
+    approvedOutcomes: hitl.approvedOutcomes,
+    specOutcomes: tests.outcomes,
+    fromTests: tests.sigs.size,
+    fromHitl: hitl.sigs.size,
+  };
+}
+
+/** The "outcome" half of a flow: its ordered expected-status sequence. MUST match
+ * the dashboard's `statusSignature` (hitl-store.ts) so a blessed outcome compares
+ * equal to a re-mined one. */
+function outcomeOf(flow: MinedFlow): string {
+  return flow.steps.map((s) => s.expected_status).join(",");
 }
 
 export interface SkipGateResult<T extends MinedFlow> {
@@ -114,10 +174,26 @@ export interface SkipGateResult<T extends MinedFlow> {
 }
 
 /**
- * Drop ranked flows whose signature is already covered BEFORE the LLM call.
- * Skipped flows are returned (counted as `skipped_existing` in the run summary),
- * never silently discarded. Generic over the flow type so a ranked/scored flow
- * keeps its extra fields through the gate.
+ * Drop ranked flows that are already covered BEFORE the LLM call — OUTCOME-AWARE,
+ * not shape-only. For a flow with shape `sig` and outcome `O`:
+ *
+ *   - `sig` has an APPROVED baseline:
+ *       - `O` is NOT a blessed outcome        -> KEEP (drift/regression — surface it
+ *                                                so the dashboard flags the conflict).
+ *       - `O` IS blessed, and a spec already
+ *         asserts `O`                          -> SKIP (stable; the oracle exists).
+ *       - `O` IS blessed but NO spec asserts
+ *         it yet                               -> KEEP (a freshly-approved drift whose
+ *                                                new oracle hasn't been generated —
+ *                                                keep it so the generator can emit it,
+ *                                                regardless of mine/generate order).
+ *   - `sig` has NO approved baseline:
+ *       - shape already has a spec/decision    -> SKIP (shape-level, unchanged).
+ *       - otherwise                            -> KEEP (a genuinely new journey).
+ *
+ * The signature deliberately excludes status (ADR 0002), so a regression shares its
+ * baseline's signature; the per-outcome checks above are what let a drift through.
+ * Skipped flows are returned (counted as `skipped_existing`), never silently dropped.
  */
 export function applySkipGate<T extends MinedFlow>(
   rankedFlows: T[],
@@ -126,6 +202,22 @@ export function applySkipGate<T extends MinedFlow>(
   const kept: T[] = [];
   const skipped: T[] = [];
   for (const flow of rankedFlows) {
+    const approved = manifest.approvedOutcomes.get(flow.signature);
+    if (approved) {
+      const outcome = outcomeOf(flow);
+      if (!approved.has(outcome)) {
+        kept.push(flow); // blessed journey, different outcome -> regression/drift
+        continue;
+      }
+      const specced = manifest.specOutcomes.get(flow.signature);
+      if (specced && specced.has(outcome)) {
+        skipped.push(flow); // blessed and its oracle already exists -> stable
+      } else {
+        kept.push(flow); // blessed but no oracle yet -> keep so it gets generated
+      }
+      continue;
+    }
+    // No approved baseline: fall back to shape-level coverage (unchanged behavior).
     if (manifest.signatures.has(flow.signature)) {
       skipped.push(flow);
     } else {

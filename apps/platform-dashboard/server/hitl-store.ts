@@ -230,12 +230,19 @@ export interface ReviewFlow {
   /** Where this flow sits in the review pipeline (test exists ≠ decided). */
   lifecycle: Lifecycle;
   /**
-   * True when an APPROVED flow exists for the same route_key but a different
-   * signature — i.e. this newly-scanned flow contradicts a blessed baseline.
+   * True when an APPROVED flow exists for the same route_key (same journey) but a
+   * different `status_signature` (outcome) — i.e. this newly-scanned flow runs the
+   * blessed journey yet expects a different result (drift/regression).
    */
   conflicts_with_approved: boolean;
   /** Signatures of the approved baseline(s) this flow contradicts. */
   conflict_signatures: string[];
+  /**
+   * The approved baseline(s) this flow contradicts, carried INLINE (name + blessed
+   * outcome). A regression shares its baseline's status-free signature, so the UI
+   * cannot resolve the baseline by signature alone — it is supplied here directly.
+   */
+  conflict_baselines: Array<{ flow_name: string; status_signature: string }>;
 }
 
 /**
@@ -476,32 +483,61 @@ export function loadFlows(): FlowsPayload {
       lifecycle: lifecycleOf(decision, Boolean(testPath)),
       conflicts_with_approved: false,
       conflict_signatures: [],
+      conflict_baselines: [],
     };
   });
 
-  // Second pass: map every approved route_key -> its signatures, from BOTH the
-  // current scan and prior decisions, so a new flow is flagged when it shares a
-  // journey with an approved baseline but expects a different outcome.
-  const approvedByRoute = new Map<string, Set<string>>();
-  const addApproved = (rk: string | undefined, sig: string) => {
-    if (!rk) return;
-    const set = approvedByRoute.get(rk) ?? new Set<string>();
-    set.add(sig);
-    approvedByRoute.set(rk, set);
+  // Second pass: map every approved route_key (journey) -> its blessed outcomes,
+  // from BOTH the current scan and the prior-decision store, so a flow is flagged
+  // when it runs an approved journey but expects a DIFFERENT outcome (drift). The
+  // comparison is on status_signature (the outcome half), NOT signature: a
+  // regression shares its baseline's status-free signature, so a signature diff
+  // would never fire.
+  interface Baseline {
+    signature: string;
+    status_signature: string;
+    flow_name: string;
+  }
+  const approvedByRoute = new Map<string, Baseline[]>();
+  const addApproved = (rk: string | undefined, base: Baseline) => {
+    if (!rk || !base.status_signature) return;
+    const list = approvedByRoute.get(rk) ?? [];
+    if (!list.some((b) => b.status_signature === base.status_signature)) {
+      list.push(base);
+    }
+    approvedByRoute.set(rk, list);
   };
-  for (const f of flows) if (f.lifecycle === "approved") addApproved(f.route_key, f.signature);
+  for (const f of flows) {
+    if (f.lifecycle === "approved") {
+      addApproved(f.route_key, {
+        signature: f.signature,
+        status_signature: f.status_signature,
+        flow_name: f.flow_name,
+      });
+    }
+  }
   for (const d of decisions.values()) {
-    if (d.status === "approved") addApproved(d.route_key, d.flow_signature);
+    if (d.status === "approved") {
+      addApproved(d.route_key, {
+        signature: d.flow_signature,
+        status_signature: d.status_signature ?? "",
+        flow_name: d.flow_name ?? d.flow_signature.slice(0, 12),
+      });
+    }
   }
 
   for (const f of flows) {
     if (f.lifecycle === "approved") continue;
-    const sigs = approvedByRoute.get(f.route_key);
-    if (!sigs) continue;
-    const others = [...sigs].filter((s) => s !== f.signature);
-    if (others.length > 0) {
+    const baselines = approvedByRoute.get(f.route_key);
+    if (!baselines) continue;
+    const differing = baselines.filter((b) => b.status_signature !== f.status_signature);
+    if (differing.length > 0) {
       f.conflicts_with_approved = true;
-      f.conflict_signatures = others;
+      f.conflict_signatures = differing.map((b) => b.signature);
+      f.conflict_baselines = differing.map((b) => ({
+        flow_name: b.flow_name,
+        status_signature: b.status_signature,
+      }));
     }
   }
 

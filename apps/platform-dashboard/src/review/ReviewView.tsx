@@ -143,12 +143,10 @@ function Legend() {
 
 function DetailPanel({
   flow,
-  baselineFor,
   onDecide,
   pending,
 }: {
   flow: ReviewFlow;
-  baselineFor: (sig: string) => { flow_name: string; status_signature: string } | undefined;
   onDecide: (status: Decision) => void;
   pending: boolean;
 }) {
@@ -184,15 +182,12 @@ function DetailPanel({
             <code>{flow.status_signature || "—"}</code>.
           </p>
           <ul>
-            {flow.conflict_signatures.map((sig) => {
-              const base = baselineFor(sig);
-              return (
-                <li key={sig}>
-                  approved: <strong>{base?.flow_name ?? `${sig.slice(0, 12)}…`}</strong>{" "}
-                  expected <code>{base?.status_signature || "—"}</code>
-                </li>
-              );
-            })}
+            {flow.conflict_baselines.map((base, i) => (
+              <li key={`${base.flow_name}-${i}`}>
+                approved: <strong>{base.flow_name}</strong> expected{" "}
+                <code>{base.status_signature || "—"}</code>
+              </li>
+            ))}
           </ul>
         </div>
       ) : null}
@@ -313,21 +308,6 @@ export function ReviewView() {
 
   const flows = data?.flows ?? [];
   const prior = data?.prior_decisions ?? [];
-
-  // Signature -> { name, status_signature } for both current + prior, so a
-  // conflict can name the approved baseline it contradicts.
-  const baselineFor = useMemo(() => {
-    const map = new Map<string, { flow_name: string; status_signature: string }>();
-    for (const f of flows) {
-      map.set(f.signature, { flow_name: f.flow_name, status_signature: f.status_signature });
-    }
-    for (const p of prior) {
-      if (!map.has(p.signature)) {
-        map.set(p.signature, { flow_name: p.flow_name, status_signature: p.status_signature });
-      }
-    }
-    return (sig: string) => map.get(sig);
-  }, [flows, prior]);
 
   const visible = useMemo(() => {
     const filtered = flows.filter((flow) => {
@@ -516,7 +496,6 @@ export function ReviewView() {
         {selectedFlow ? (
           <DetailPanel
             flow={selectedFlow}
-            baselineFor={baselineFor}
             pending={pending}
             onDecide={(decision) => handleDecide(selectedFlow, decision)}
           />

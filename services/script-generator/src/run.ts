@@ -6,8 +6,8 @@
 // `generated-tests/<persona>/<happy-path|failure-path>/<hash>.spec.ts`.
 // There is no `edge` persona and no `edge/` folder — error flows live in their
 // own persona's failure-path/.
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync, cpSync } from "node:fs";
-import { dirname, resolve as resolvePath } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, cpSync } from "node:fs";
+import { dirname, join, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadAugmentedSpecs } from "../../golden/src/oas-source.js";
 import type { OasDocument } from "../../golden/src/oas-types.js";
@@ -22,6 +22,99 @@ const REPO_ROOT = resolvePath(SERVICE_ROOT, "..", "..");
 const GENERATED_TESTS_DIR = resolvePath(REPO_ROOT, "generated-tests");
 const GOLDEN_VENDOR_DIR = resolvePath(GENERATED_TESTS_DIR, "_golden");
 const GOLDEN_SOURCE_DIR = resolvePath(REPO_ROOT, "services", "golden", "src");
+const HITL_STORE = resolvePath(REPO_ROOT, "data", "hitl", "approvals.json");
+
+// Each generated spec stamps its flow_signature (ADR 0002). Same permissive
+// matcher coverage.ts uses, so a cosmetic stamp change does not silently break
+// approved-spec preservation.
+const SIGNATURE_STAMP = /flow_signature["'\s:=]+([0-9a-f]{64})/i;
+// The outcome half (`// status_signature: 200,200,401`). Lets preservation tell a
+// blessed oracle from a drifted spec that shares the (status-free) signature.
+const STATUS_SIGNATURE_STAMP = /status_signature["'\s:=]+([\d,]+)/i;
+
+/**
+ * APPROVED shape -> the blessed expected-status sequence(s), read straight from the
+ * HITL store. The "outcome" half of an approved flow; a re-mined candidate whose
+ * signature matches a key here but whose outcome is NOT in the set is a drift the
+ * generator must NOT codify. Missing/malformed store -> empty (every flow is new),
+ * never fatal — mirrors coverage.ts tolerance.
+ */
+export function approvedOutcomes(path: string = HITL_STORE): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  if (!existsSync(path)) return out;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return out;
+  }
+  const entries = Array.isArray(parsed)
+    ? parsed
+    : Array.isArray((parsed as { entries?: unknown }).entries)
+      ? (parsed as { entries: unknown[] }).entries
+      : [];
+  for (const raw of entries as Array<Record<string, unknown>>) {
+    const signature = raw.flow_signature ?? raw.signature;
+    if (raw.status !== "approved" || typeof signature !== "string") continue;
+    if (typeof raw.status_signature !== "string") continue;
+    const sig = signature.toLowerCase();
+    const set = out.get(sig) ?? new Set<string>();
+    set.add(raw.status_signature);
+    out.set(sig, set);
+  }
+  return out;
+}
+
+/** The {flow_signature, status_signature} a generated spec stamped (either may be
+ * null if unreadable/unstamped — an older spec predating the status stamp). */
+function specStamps(file: string): { signature: string | null; outcome: string | null } {
+  try {
+    const text = readFileSync(file, "utf8");
+    return {
+      signature: SIGNATURE_STAMP.exec(text)?.[1].toLowerCase() ?? null,
+      outcome: STATUS_SIGNATURE_STAMP.exec(text)?.[1] ?? null,
+    };
+  } catch {
+    return { signature: null, outcome: null };
+  }
+}
+
+/**
+ * Selectively clean a persona folder: delete every generated spec EXCEPT a blessed
+ * oracle — one whose stamped signature is approved AND whose stamped outcome is
+ * still the approved one. An approved spec must survive a regen (approved flows are
+ * skip-gated out of candidates and so are never re-emitted) so it keeps running and
+ * goes red on drift. But once a DIFFERENT outcome is approved for the same journey
+ * (a drift the operator blessed), the old-outcome spec is STALE — it is dropped here
+ * so the matching candidate can regenerate the new oracle (retirement). A spec
+ * predating the status stamp (outcome === null) falls back to signature-only
+ * preservation. Returns how many oracles were preserved.
+ */
+export function cleanPersonaFolderPreservingApproved(
+  folder: string,
+  approvedOutcomes: Map<string, Set<string>>
+): number {
+  if (!existsSync(folder)) return 0;
+  let preserved = 0;
+  for (const entry of readdirSync(folder)) {
+    const full = join(folder, entry);
+    if (statSync(full).isDirectory()) {
+      preserved += cleanPersonaFolderPreservingApproved(full, approvedOutcomes);
+    } else if (entry.endsWith(".spec.ts")) {
+      const { signature, outcome } = specStamps(full);
+      const blessed = signature ? approvedOutcomes.get(signature) : undefined;
+      // Preserve only a still-blessed oracle; outcome === null is a pre-stamp spec
+      // we cannot date, so fall back to signature-level preservation.
+      const isBlessedOracle = !!blessed && (outcome === null || blessed.has(outcome));
+      if (isBlessedOracle) {
+        preserved++;
+      } else {
+        rmSync(full, { force: true });
+      }
+    }
+  }
+  return preserved;
+}
 
 type PersonaFolder = "guest" | "customer" | "admin";
 type PathFolder = "happy-path" | "failure-path";
@@ -53,6 +146,13 @@ function routeFor(candidate: Candidate): Route {
 
 function shortHash(signature: string): string {
   return signature.slice(0, 12);
+}
+
+/** The "outcome" half of a candidate: its ordered expected-status sequence. MUST
+ * match the dashboard's `statusSignature` and the engine's outcome so a blessed
+ * outcome compares equal to a re-mined one. */
+function outcomeOf(candidate: Candidate): string {
+  return candidate.steps.map((s) => s.expected_status).join(",");
 }
 
 // Vendor services/golden/src/ into generated-tests/_golden/ so generated-tests/
@@ -262,14 +362,26 @@ function main(): void {
 
   const specs: OasSpecs = loadAugmentedSpecs() as { store: OasDocument; admin: OasDocument };
 
+  // The blessed outcome(s) per approved journey — drives BOTH spec preservation
+  // (a still-blessed oracle survives a regen) and conflict withholding below.
+  const approved = approvedOutcomes();
+
   // Clean stale specs so a structural change (the happy-path/failure-path split,
   // a renamed flow, or a candidate that no longer routes here) never leaves an
-  // orphaned spec behind. Persona folders hold ONLY generated specs (_golden/
-  // and fixtures/ are siblings), so removing them wholesale is safe; the legacy
-  // flat edge/ folder is dropped too.
-  for (const folder of [...PERSONA_FOLDERS, "edge"]) {
-    rmSync(resolvePath(GENERATED_TESTS_DIR, folder), { recursive: true, force: true });
+  // orphaned spec behind — but PRESERVE the blessed oracle. An approved flow is
+  // skip-gated out of the candidates file, so a wholesale wipe would delete its
+  // oracle and never re-emit it; selective cleaning keeps it (and keeps it running,
+  // so it goes red on drift), while dropping an oracle whose blessed outcome has
+  // since changed. `_golden/` and `fixtures/` are siblings of the persona folders,
+  // untouched. The legacy flat `edge/` folder is dropped.
+  let preservedApproved = 0;
+  for (const persona of PERSONA_FOLDERS) {
+    preservedApproved += cleanPersonaFolderPreservingApproved(
+      resolvePath(GENERATED_TESTS_DIR, persona),
+      approved
+    );
   }
+  rmSync(resolvePath(GENERATED_TESTS_DIR, "edge"), { recursive: true, force: true });
   for (const persona of PERSONA_FOLDERS) {
     for (const path of PATH_FOLDERS) {
       mkdirSync(resolvePath(GENERATED_TESTS_DIR, persona, path), { recursive: true });
@@ -279,9 +391,23 @@ function main(): void {
   writeConfigAndFixtures();
 
   const summary: RunSummaryEntry[] = [];
+  const withheld: Candidate[] = [];
   const perFolderCount: Record<string, number> = Object.fromEntries(REL_DIRS.map((d) => [d, 0]));
 
   for (const candidate of dedupResult.candidates) {
+    // Withhold a candidate that DRIFTS from a blessed baseline: its journey
+    // (status-free signature) is approved, but it now expects a different outcome.
+    // Emitting it would auto-codify the regression as a green test. The preserved
+    // oracle stays the source of truth (and goes red); the dashboard flags this as
+    // conflicts_with_approved for review. A candidate whose outcome MATCHES the
+    // approved one is NOT withheld — that is how a freshly-approved drift gets its
+    // new oracle regenerated (retirement: old-outcome spec was cleaned above).
+    const blessed = approved.get(candidate.signature);
+    if (blessed && !blessed.has(outcomeOf(candidate))) {
+      withheld.push(candidate);
+      continue;
+    }
+
     const route = routeFor(candidate);
     const relDir = `${route.persona}/${route.path}`;
     const filename = `${shortHash(candidate.signature)}.spec.ts`;
@@ -318,6 +444,12 @@ function main(): void {
   for (const relDir of REL_DIRS) {
     console.log(`    ${relDir.padEnd(22)} ${perFolderCount[relDir]}`);
   }
+  console.log(`  Approved specs preserved: ${preservedApproved}`);
+  console.log(`  Withheld (conflicts):     ${withheld.length}`);
+  for (const c of withheld) {
+    const blessed = [...(approved.get(c.signature) ?? [])].join(" | ");
+    console.log(`    [${c.flow_name}] now ${outcomeOf(c)} vs approved ${blessed || "—"}`);
+  }
   console.log(`  test.fixme blocks:        ${totalFixme}`);
   console.log(`  generation errors:        ${totalErrors}`);
   if (totalErrors > 0) {
@@ -332,4 +464,7 @@ function main(): void {
   console.log(`  Output dir:               ${GENERATED_TESTS_DIR}`);
 }
 
-main();
+// Run only when invoked directly (`tsx src/run.ts`), not when imported by a test.
+if (process.argv[1] && resolvePath(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main();
+}

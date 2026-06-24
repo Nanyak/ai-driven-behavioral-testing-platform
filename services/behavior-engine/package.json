@@ -7,6 +7,7 @@
   "scripts": {
     "mine": "node --max-old-space-size=2048 --import tsx src/run.ts",
     "test:signature": "tsx src/signature/signature.test.ts",
+    "test:coverage": "tsx src/selection/coverage.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

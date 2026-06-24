@@ -32,6 +32,7 @@ export interface ReviewFlow {
   lifecycle: Lifecycle;
   conflicts_with_approved: boolean;
   conflict_signatures: string[];
+  conflict_baselines: Array<{ flow_name: string; status_signature: string }>;
 }
 
 export interface PriorDecision {

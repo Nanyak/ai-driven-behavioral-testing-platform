@@ -58,10 +58,28 @@ const DENY_EXACT = new Set<string>(["/", "/health", "/favicon.ico", "/robots.txt
 const DENY_PREFIXES: string[] = ["/health", "/app", "/_next", "/assets", "/static"];
 const STATIC_ASSET_EXT = /\.(?:js|mjs|css|map|png|jpe?g|gif|svg|ico|woff2?|ttf|webp)$/i;
 
+// A path segment left by a FAILED client-side id interpolation — the storefront
+// built a URL like `/store/carts/${cart.id}` while `cart.id` was undefined (cart
+// creation had 401'd), emitting the JS string coercion as a literal segment.
+// `POST /store/carts/undefined` is not a Medusa route; it is a malformed request
+// that carries no behavioral meaning. We DROP it as noise rather than normalize it
+// to `{id}` — normalizing would fabricate a plausible-looking dynamic-id route out
+// of a client bug and let the broken capture mine as a real flow.
+const BROKEN_INTERPOLATION_SEGMENTS = new Set(["undefined", "null", "NaN", "[object Object]"]);
+
+function hasBrokenInterpolationSegment(normalizedEndpoint: string): boolean {
+  return normalizedEndpoint
+    .split("/")
+    .some((segment) => BROKEN_INTERPOLATION_SEGMENTS.has(segment));
+}
+
 export function isNoiseEndpoint(endpoint: string): boolean {
   const normalized = normalizeEndpoint(endpoint);
 
   if (DENY_EXACT.has(normalized)) {
+    return true;
+  }
+  if (hasBrokenInterpolationSegment(normalized)) {
     return true;
   }
   if (STATIC_ASSET_EXT.test(normalized)) {
