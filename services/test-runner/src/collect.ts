@@ -12,6 +12,7 @@
 
 import { readFileSync } from "node:fs";
 import type { SchemaDiffEntry } from "../../golden/src/compare.js";
+import type { ValueDiffEntry } from "../../golden/src/value/value-rules.js";
 
 /* ---- Playwright JSON reporter shapes (only the fields we read) ---- */
 
@@ -78,6 +79,8 @@ export interface NormalizedStep {
   status: "passed" | "failed" | "skipped" | "timedOut" | "interrupted";
   duration_ms: number;
   golden_diff: SchemaDiffEntry[] | null;
+  /** Tier A value-level violations (ADR 0001), from the "golden-value-diff" attachment. */
+  value_diff: ValueDiffEntry[] | null;
   failure_message: string | null;
   /**
    * Live response body excerpt (capped upstream), captured from the
@@ -133,8 +136,9 @@ function parseSourceSessions(raw: string | undefined): string[] {
   }
 }
 
-function readGoldenDiff(attachments: PwAttachment[] | undefined): SchemaDiffEntry[] | null {
-  const att = attachments?.find((a) => a.name === "golden-diff");
+/** Decode a base64-or-raw JSON-array attachment body; null if absent/malformed. */
+function readJsonArrayAttachment<T>(attachments: PwAttachment[] | undefined, name: string): T[] | null {
+  const att = attachments?.find((a) => a.name === name);
   if (!att?.body) return null;
   // The JSON reporter base64-encodes attachment bodies; decode then parse.
   let text = att.body;
@@ -145,10 +149,18 @@ function readGoldenDiff(attachments: PwAttachment[] | undefined): SchemaDiffEntr
   }
   try {
     const parsed = JSON.parse(text) as unknown;
-    return Array.isArray(parsed) ? (parsed as SchemaDiffEntry[]) : null;
+    return Array.isArray(parsed) ? (parsed as T[]) : null;
   } catch {
     return null;
   }
+}
+
+function readGoldenDiff(attachments: PwAttachment[] | undefined): SchemaDiffEntry[] | null {
+  return readJsonArrayAttachment<SchemaDiffEntry>(attachments, "golden-diff");
+}
+
+function readValueDiff(attachments: PwAttachment[] | undefined): ValueDiffEntry[] | null {
+  return readJsonArrayAttachment<ValueDiffEntry>(attachments, "golden-value-diff");
 }
 
 /**
@@ -197,6 +209,7 @@ const STEP_TITLE_RE = /^(GET|POST|PUT|PATCH|DELETE)\s+(\/\S+)$/;
 
 function extractRequestSteps(result: PwTestResult): NormalizedStep[] {
   const goldenDiff = readGoldenDiff(result.attachments);
+  const valueDiff = readValueDiff(result.attachments);
   const responseBodies = readResponseBodies(result.attachments);
   const out: NormalizedStep[] = [];
   for (const step of result.steps ?? []) {
@@ -211,6 +224,7 @@ function extractRequestSteps(result: PwTestResult): NormalizedStep[] {
       status: failed ? "failed" : "passed",
       duration_ms: step.duration ?? 0,
       golden_diff: goldenDiff,
+      value_diff: valueDiff,
       failure_message: failed ? (step.error?.message ?? "").replace(ANSI_RE, "") || null : null,
     };
     const body = responseBodies.get(step.title);

@@ -18,6 +18,7 @@ const baseGolden: GoldenResponse = {
   oas_operation_id: "PostCarts",
   oas_ref: "#/components/schemas/StoreCart",
   oas_version: "2.0.0",
+  value_rules: [],
   captured_at: "2026-06-19T00:00:00.000Z",
   source_sessions: [],
 };

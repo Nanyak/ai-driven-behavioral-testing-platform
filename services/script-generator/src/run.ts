@@ -107,9 +107,12 @@ function loadGoldens(): GoldenResponse[] {
  * exists. No-op otherwise (golden-responses/ is empty on a clean checkout).
  *
  * When a golden DOES exist, the schema diff is ATTACHED to the test info as
- * "golden-diff" (JSON) on BOTH pass and fail, BEFORE the expect — so the
- * test-runner's collect.ts can surface the diff for every golden-asserted step, not only the
- * failing ones. The expect() that follows still fails the test on a mismatch.
+ * "golden-diff" (a JSON array) on BOTH pass and fail, BEFORE the expect — so the
+ * test-runner's collect.ts can surface the diff for every golden-asserted step,
+ * not only the failing ones. Tier A value-level violations (ADR 0001) ride a
+ * separate "golden-value-diff" attachment and are folded into the assertion
+ * message so a value regression flips the test red with full detail. The
+ * expect() that follows fails the test on either a schema OR a value mismatch.
  */
 export async function assertGolden(endpoint: string, liveStatus: number, liveBody: unknown): Promise<void> {
   const golden = loadGoldens().find((g) => g.endpoint === endpoint && g.expected_status === liveStatus);
@@ -121,7 +124,12 @@ export async function assertGolden(endpoint: string, liveStatus: number, liveBod
     body: JSON.stringify(result.schemaDiff),
     contentType: "application/json",
   });
-  expect(result.pass, \`golden schema mismatch for \${endpoint}: \${JSON.stringify(result.schemaDiff)}\`).toBe(true);
+  await test.info().attach("golden-value-diff", {
+    body: JSON.stringify(result.valueDiff),
+    contentType: "application/json",
+  });
+  const detail = JSON.stringify({ schemaDiff: result.schemaDiff, valueDiff: result.valueDiff });
+  expect(result.pass, \`golden mismatch for \${endpoint}: \${detail}\`).toBe(true);
 }
 `;
   writeFileSync(resolvePath(GOLDEN_VENDOR_DIR, "assert-golden.ts"), assertGoldenSource);

@@ -1,6 +1,7 @@
 import { isObjectNode } from "../schema/schema-extract.js";
 import { extractObservedSchema } from "../schema/schema-extract.js";
 import { normalizeBody } from "./normalize.js";
+import { evaluateValueRules, type ValueDiffEntry } from "../value/value-rules.js";
 import type { GoldenResponse, SchemaNode } from "../types.js";
 
 export type DiffKind = "missing_field" | "unexpected_field" | "type_changed";
@@ -18,6 +19,8 @@ export interface CompareResult {
   expectedStatus: number;
   actualStatus: number;
   schemaDiff: SchemaDiffEntry[];
+  /** Tier A value-level violations (empty when no value_rules or all hold). */
+  valueDiff: ValueDiffEntry[];
 }
 
 function diffSchema(expected: SchemaNode, actual: SchemaNode, path: string): SchemaDiffEntry[] {
@@ -69,6 +72,7 @@ export function compareResponse(
       expectedStatus: golden.expected_status,
       actualStatus: liveStatus,
       schemaDiff: [],
+      valueDiff: [],
     };
   }
 
@@ -76,11 +80,17 @@ export function compareResponse(
   const actualSchema = extractObservedSchema(normalized, golden.endpoint);
   const schemaDiff = diffSchema(golden.expected_schema, actualSchema, "");
 
+  // Value rules carry explicit paths and have already been filtered against
+  // ignore_fields at build time, so they evaluate against the RAW body (no
+  // normalization needed). `?? []` keeps pre-Tier-A golden files compatible.
+  const valueDiff = evaluateValueRules(golden.value_rules ?? [], liveBody);
+
   return {
-    pass: schemaDiff.length === 0,
+    pass: schemaDiff.length === 0 && valueDiff.length === 0,
     statusMatch,
     expectedStatus: golden.expected_status,
     actualStatus: liveStatus,
     schemaDiff,
+    valueDiff,
   };
 }

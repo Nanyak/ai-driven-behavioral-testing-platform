@@ -146,6 +146,57 @@ function main() {
   }
 
   rmSync(outDir, { recursive: true, force: true });
+
+  // [4] Tier A value-level violations surface in report.json + report.html, and
+  // are OMITTED when empty (so reports without a value regression stay
+  // byte-identical to the pre-Tier-A format).
+  console.log("\n[4] Value-level golden (Tier A) in the report");
+  const vProbe = `
+    import { buildReport } from ${JSON.stringify(resolve(SERVICE, "src", "report", "build.js"))};
+    import { renderHtml } from ${JSON.stringify(resolve(SERVICE, "src", "report", "html.js"))};
+    const mk = (valueDiff) => ({
+      generated_at: "2026-06-24T00:00:00.000Z",
+      totals: { executed: 1, passed: 0, failed: 1, skipped: 0 },
+      tests: [{ persona: "registered_customer", flow_name: "Checkout", flow_signature: "sig1",
+        source_sessions: ["s1"], project: "customer", file: "f.spec.ts", title: "t",
+        status: "failed", duration_ms: 5,
+        steps: [{ endpoint: "GET /store/products", method: "GET", expected_status: 200,
+          actual_status: 200, status: "failed", duration_ms: 5, golden_diff: null,
+          value_diff: valueDiff, failure_message: "golden mismatch" }] }],
+    });
+    const withV = buildReport(mk([{ kind: "enum", path: "products[].status", expected: 'one of ["published"]', actual: "on_fire" }]), { runId: "run-v" });
+    const withoutV = buildReport(mk(null), { runId: "run-v" });
+    process.stdout.write(JSON.stringify({
+      jsonDiff: withV.failures[0].value_diff ?? null,
+      htmlShows: renderHtml(withV).includes("products[].status") && renderHtml(withV).includes("on_fire"),
+      omittedWhenEmpty: !("value_diff" in withoutV.failures[0]),
+    }));
+  `;
+  const vProbePath = resolve(SERVICE, ".valuediff-probe.mts");
+  writeFileSync(vProbePath, vProbe);
+  const vRun = spawnSync("npx", ["tsx", vProbePath], { cwd: SERVICE, encoding: "utf8" });
+  rmSync(vProbePath, { force: true });
+  if (vRun.status !== 0) {
+    fail("value-diff probe", (vRun.stdout || vRun.stderr || "").trim().split("\n").slice(-3).join(" | "));
+    return summary();
+  }
+  let v;
+  try {
+    v = JSON.parse(vRun.stdout);
+  } catch {
+    fail("value-diff probe output parse", vRun.stdout.slice(0, 200));
+    return summary();
+  }
+  if (Array.isArray(v.jsonDiff) && v.jsonDiff[0]?.path === "products[].status" && v.jsonDiff[0]?.kind === "enum") {
+    ok("report.json failure carries value_diff (enum violation on products[].status)");
+  } else {
+    fail("value_diff in report.json", JSON.stringify(v.jsonDiff));
+  }
+  if (v.htmlShows) ok("report.html renders the value violation in the golden-diff cell");
+  else fail("value violation in report.html", "not rendered");
+  if (v.omittedWhenEmpty) ok("value_diff omitted when empty (reports stay byte-stable without a value regression)");
+  else fail("value_diff omit-when-empty", "field present despite no violations");
+
   summary();
 }
 

@@ -11,6 +11,7 @@
 import type { NormalizedRunResult, NormalizedTest } from "../collect.js";
 import {
   summarizeGoldenDiff,
+  summarizeValueDiff,
   type EndpointFailure,
   type FailureEntry,
   type FlowRollup,
@@ -74,7 +75,7 @@ export function buildReport(result: NormalizedRunResult, opts: BuildOptions = {}
     // so the persona/flow failure is still attributable.
     const failedSteps = test.steps.filter((s) => s.status === "failed");
     if (failedSteps.length === 0) {
-      failures.push(makeFailure(test, "(no request step)", null, null, null, test.duration_ms, null));
+      failures.push(makeFailure(test, "(no request step)", null, null, null, null, test.duration_ms, null));
       continue;
     }
     for (const step of failedSteps) {
@@ -86,6 +87,7 @@ export function buildReport(result: NormalizedRunResult, opts: BuildOptions = {}
           step.expected_status,
           step.actual_status,
           summarizeGoldenDiff(step.golden_diff),
+          summarizeValueDiff(step.value_diff),
           step.duration_ms,
           step.failure_message,
         ),
@@ -119,6 +121,7 @@ function makeFailure(
   expected: number | null,
   actual: number | null,
   goldenDiff: FailureEntry["golden_diff"],
+  valueDiff: FailureEntry["value_diff"] | null,
   durationMs: number,
   message: string | null,
 ): FailureEntry {
@@ -134,6 +137,9 @@ function makeFailure(
     source_sessions: test.source_sessions,
     failure_message: message,
   };
+  // Carry value_diff only when value rules actually fired, so reports without a
+  // value regression stay byte-identical to the pre-Tier-A format.
+  if (valueDiff && valueDiff.length > 0) entry.value_diff = valueDiff;
   // Carry trace_id only when upstream actually supplied one (never invented).
   if (test.trace_id !== undefined && test.trace_id !== null) entry.trace_id = test.trace_id;
   return entry;

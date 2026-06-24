@@ -49,6 +49,7 @@ check("buildGolden stamps schema_source 'openapi' with bodies off (no observed s
     operationId: "PostCarts",
     ref: "#/components/schemas/StoreCart",
     oasVersion: "2.0.0",
+    valueRules: [],
   };
   const golden = buildGolden({
     endpoint: "POST /store/carts",
@@ -70,6 +71,7 @@ check("buildGolden stamps 'openapi+observed' when both spec and observed data ex
     operationId: "PostCarts",
     ref: "#/components/schemas/StoreCart",
     oasVersion: "2.0.0",
+    valueRules: [],
   };
   const golden = buildGolden({
     endpoint: "POST /store/carts",

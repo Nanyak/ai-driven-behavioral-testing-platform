@@ -151,6 +151,23 @@ function main() {
   if (goldens.length > 0) ok(`${goldens.length} stored golden(s) found`);
   else ok("no stored goldens yet (oracle utilities are unit-tested directly; end-to-end generation wires in at Phase 9/11)");
 
+  // [7] Tier A value-level golden (ADR 0001). The extraction/evaluation logic
+  // is unit-tested in test/value-rules.test.ts (run in step [2]); here we
+  // assert the REAL augmented spec still carries the value constraints the
+  // resolver lifts — i.e. the extractor has real input, not just fixtures.
+  console.log("\n[7] Value-level golden (Tier A): spec-authored constraints survive into the augmented spec");
+  function findSchemaEnum(schemaName, propPath) {
+    let node = store.components?.schemas?.[schemaName];
+    for (const key of propPath) node = node?.properties?.[key];
+    return node?.enum;
+  }
+  const statusEnum = findSchemaEnum("StoreProduct", ["status"]);
+  if (Array.isArray(statusEnum) && ["draft", "proposed", "published", "rejected"].every((v) => statusEnum.includes(v))) {
+    ok(`StoreProduct.status carries an enum -> products[].status value rule (${JSON.stringify(statusEnum)})`);
+  } else {
+    fail("StoreProduct.status enum present in augmented spec", JSON.stringify(statusEnum));
+  }
+
   summary();
 }
 

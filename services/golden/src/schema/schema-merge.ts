@@ -12,6 +12,7 @@
  */
 import { isObjectNode } from "./schema-extract.js";
 import { ignoreFieldsFor } from "../ignore-fields.js";
+import { filterIgnoredValueRules } from "../value/value-rules.js";
 import type { OasResolution } from "../oas/oas-source.js";
 import type { GoldenResponse, SchemaNode, SchemaSource } from "../types.js";
 
@@ -150,6 +151,9 @@ export function buildGolden(params: {
     oas_operation_id: oas?.operationId ?? null,
     oas_ref: oas?.ref ?? null,
     oas_version: oas?.oasVersion ?? null,
+    // Tier A: lift spec-authored value constraints, minus any that land on an
+    // ignored field (kept consistent with the type layer).
+    value_rules: oas ? filterIgnoredValueRules(oas.valueRules, endpoint) : [],
     captured_at: capturedAt,
     source_sessions: sourceSessions,
   };

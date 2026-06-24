@@ -27,6 +27,14 @@ export interface OasInlineSchema {
   oneOf?: OasSchema[];
   allOf?: OasSchema[];
   description?: string;
+  // Spec-authored VALUE constraints (Tier A value-level golden). Lifted into
+  // a golden's `value_rules` by `value/value-rules.ts`; the spec is the author,
+  // so these are deterministic and zero-judgement (ADR 0001).
+  enum?: (string | number | boolean)[];
+  const?: string | number | boolean;
+  minimum?: number;
+  maximum?: number;
+  format?: string;
 }
 
 export type OasSchema = OasRefSchema | OasInlineSchema;

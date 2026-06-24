@@ -39,18 +39,30 @@ sequence models.
   business value, with the current deterministic miner kept as a verifiable
   baseline.
 
-### 3. Golden snapshots are shape/type level, not value level
+### 3. Golden snapshots are shape/type level, plus spec-authored value rules
 
 The oracle asserts response **structure** (field existence + JSON types) against
-the OpenAPI contract, not exact field values.
+the OpenAPI contract, and — as of Tier A value-level golden — the **value
+constraints the contract itself declares**. It does not assert exact field
+values or cross-field invariants.
 
 - **Mitigation.** This is the deliberate ADR 0001 choice: the OpenAPI contract is a
   stable oracle, whereas logged values are volatile. A shared ignore-fields list
   strips inherently variable fields (`id`, timestamps, tokens, `cart_id`, …). Spec
   leaves are tightened by observed shapes without ever removing spec-declared
   fields, so the oracle is as strict as the contract allows.
-- **Future work.** Value-level invariants (e.g. price ≥ 0, total = sum of lines,
-  monotonic order states) as an optional assertion layer on top of the shape check.
+- **Tier A value-level golden (implemented).** `enum`/`const`/`minimum`/`maximum`/
+  `format` constraints are lifted straight from the OpenAPI spec into each
+  golden's `value_rules` (`services/golden/src/value/value-rules.ts`) and gated by
+  `compare.ts` alongside the shape diff. The spec is the author, so promotion is
+  deterministic and judgement-free; `oneOf` alternatives are skipped (unsound to
+  assert), rules on ignored fields are dropped (kept consistent with the type
+  layer), and a rule never fires on an absent/`null` value. Proven offline by
+  `test/value-rules.test.ts` and `check:phase8` §7.
+- **Future work (Tier B/C).** Tier B: derive stable enums/ranges from observed
+  logs as candidate rules. Tier C: cross-field invariants (price ≥ 0, total = sum
+  of lines, monotonic order states) — LLM-proposed, HITL-approved, then promoted
+  into the deterministic oracle (keeps the LLM off the gate path, ADR 0005).
 
 ### 4. ELK is single-node and laptop-bound
 

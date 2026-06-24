@@ -1,4 +1,4 @@
-import type { FailureEntry, GoldenDiffSummary, Report } from "./schema.js";
+import type { FailureEntry, GoldenDiffSummary, Report, ValueViolation } from "./schema.js";
 import { computeFailureId } from "../triage/id.js";
 import type { TriageReport, TriageVerdict } from "../triage/types.js";
 
@@ -10,12 +10,19 @@ function esc(value: unknown): string {
     .replace(/"/g, "&quot;");
 }
 
-function goldenDiffHtml(diff: GoldenDiffSummary | null): string {
-  if (!diff) return '<span class="muted">—</span>';
+// The golden-oracle cell shows both shape/type drift (schemaDiff) AND Tier A
+// value-level violations (ADR 0001). value_diff is omitted unless rules fired,
+// so reports without a value regression render byte-identically to before.
+function goldenDiffHtml(diff: GoldenDiffSummary | null, valueDiff?: ValueViolation[]): string {
   const parts: string[] = [];
-  for (const p of diff.missing) parts.push(`<span class="diff missing">− ${esc(p)}</span>`);
-  for (const p of diff.unexpected) parts.push(`<span class="diff unexpected">+ ${esc(p)}</span>`);
-  for (const p of diff.type_changed) parts.push(`<span class="diff changed">~ ${esc(p)}</span>`);
+  if (diff) {
+    for (const p of diff.missing) parts.push(`<span class="diff missing">− ${esc(p)}</span>`);
+    for (const p of diff.unexpected) parts.push(`<span class="diff unexpected">+ ${esc(p)}</span>`);
+    for (const p of diff.type_changed) parts.push(`<span class="diff changed">~ ${esc(p)}</span>`);
+  }
+  for (const v of valueDiff ?? []) {
+    parts.push(`<span class="diff value">≠ ${esc(v.path)}: ${esc(v.actual)} (want ${esc(v.expected)})</span>`);
+  }
   return parts.length ? parts.join("<br>") : '<span class="muted">—</span>';
 }
 
@@ -73,7 +80,7 @@ export function renderHtml(report: Report, triage?: TriageReport | null): string
         <td>${esc(f.flow_name)}</td>
         <td class="mono">${esc(f.endpoint)}</td>
         <td class="mono">${statusCell(f.expected_status, f.actual_status)}</td>
-        <td class="mono">${goldenDiffHtml(f.golden_diff)}</td>${triageCell}
+        <td class="mono">${goldenDiffHtml(f.golden_diff, f.value_diff)}</td>${triageCell}
         <td class="mono small">${provenanceHtml(f)}</td>
       </tr>`;
         })
@@ -121,6 +128,7 @@ export function renderHtml(report: Report, triage?: TriageReport | null): string
   .muted { color: var(--muted); } .center { text-align:center; }
   .exp { color: var(--muted); } .act { color: var(--fail); font-weight: 700; }
   .diff.missing { color: var(--fail); } .diff.unexpected { color: var(--skip); } .diff.changed { color: #7c3aed; }
+  .diff.value { color: #be123c; font-weight: 600; }
   .chip { display:inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; cursor: help; }
   .chip.real_regression { background:#fef2f2; color: var(--fail); border:1px solid #fecaca; }
   .chip.contract_drift { background:#fffbeb; color: var(--skip); border:1px solid #fde68a; }

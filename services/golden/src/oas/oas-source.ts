@@ -15,7 +15,8 @@ import {
   type OasMethod,
   type OasSchema,
 } from "./oas-types.js";
-import type { SchemaNode } from "../types.js";
+import type { SchemaNode, ValueRule } from "../types.js";
+import { extractValueRules } from "../value/value-rules.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const AUGMENTED_DIR = resolvePath(__dirname, "..", "..", "openapi", "augmented");
@@ -25,6 +26,8 @@ export interface OasResolution {
   operationId: string;
   ref: string | null;
   oasVersion: string;
+  /** Spec-authored value invariants for this response (Tier A). */
+  valueRules: ValueRule[];
 }
 
 function loadJson(path: string): OasDocument {
@@ -209,6 +212,7 @@ export function resolveFromDoc(
     operationId: operation.operationId,
     ref: findRef(mediaType.schema),
     oasVersion: doc.info.version || oasContentHash(doc),
+    valueRules: extractValueRules(doc, mediaType.schema),
   };
 }
 

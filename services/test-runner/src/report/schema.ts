@@ -3,6 +3,7 @@
 // upstream — behavior-engine candidates carry `source_sessions` but no trace
 // id; we never invent one (see collect.ts).
 import type { SchemaDiffEntry } from "../../../golden/src/compare.js";
+import type { ValueDiffEntry } from "../../../golden/src/value/value-rules.js";
 import type { RunTotals } from "../collect.js";
 
 /**
@@ -14,6 +15,18 @@ export interface GoldenDiffSummary {
   missing: string[];
   unexpected: string[];
   type_changed: string[];
+}
+
+/**
+ * A single Tier A value-level violation, flattened for the report (ADR 0001).
+ * `actual` is stringified so the report stays JSON-stable regardless of the
+ * offending value's original type.
+ */
+export interface ValueViolation {
+  path: string;
+  kind: ValueDiffEntry["kind"];
+  expected: string;
+  actual: string;
 }
 
 export interface PersonaRollup {
@@ -46,6 +59,13 @@ export interface FailureEntry {
   expected_status: number | null;
   actual_status: number | null;
   golden_diff: GoldenDiffSummary | null;
+  /**
+   * Tier A value-level violations (ADR 0001). OMITTED when there are none, so
+   * reports without value regressions stay byte-identical to the pre-Tier-A
+   * format (mirrors `trace_id`). Present only when the golden's `value_rules`
+   * actually fired.
+   */
+  value_diff?: ValueViolation[];
   duration_ms: number;
   source_sessions: string[];
   /** Omitted when absent upstream — never invented. */
@@ -62,6 +82,19 @@ export interface Report {
   by_flow: FlowRollup[];
   endpoint_failures: EndpointFailure[];
   failures: FailureEntry[];
+}
+
+export function summarizeValueDiff(
+  diff: ValueDiffEntry[] | null | undefined,
+): ValueViolation[] | null {
+  if (!diff || diff.length === 0) return null;
+  return diff.map((entry) => ({
+    path: entry.path,
+    kind: entry.kind,
+    expected: entry.expected,
+    actual:
+      typeof entry.actual === "string" ? entry.actual : JSON.stringify(entry.actual) ?? String(entry.actual),
+  }));
 }
 
 export function summarizeGoldenDiff(diff: SchemaDiffEntry[] | null | undefined): GoldenDiffSummary | null {
