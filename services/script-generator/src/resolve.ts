@@ -520,6 +520,55 @@ const ID_FIELD_TO_SCOPE: Record<string, string> = {
  * OMITTED: that reproduces the logged missing-required-field condition rather
  * than guessing a malformed value.
  */
+/**
+ * Negative-input body for an error-terminal step whose 4xx is caused by an
+ * INVALID VALUE, not a missing required field. Structural omission (the
+ * `edgeOmitOnFailure` path) can only reproduce missing-field failures; an
+ * invalid-promo or invalid-variant 400 is a well-formed request carrying a bad
+ * value, so we synthesize that value here. These mirror the traffic generator's
+ * own negative probes (edge.ts invalid variant, the invalid promo code), so the
+ * emitted body matches observed FAILING traffic rather than inventing a new
+ * malformation. Returns null for endpoints with no known invalid-value failure
+ * (callers fall through to structural synthesis).
+ */
+function negativeInputBody(method: string, endpoint: string): BodyPlan | null {
+  if (method !== "POST") return null;
+  // Bad login -> 401 "Invalid email or password". The happy path threads the
+  // in-scope (registered) email/password via authCredentialBody; here a fresh,
+  // never-registered email forces the auth failure (mirrors edge.ts bad_login,
+  // which logs in with a brand-new email + "wrong-password").
+  if (endpoint === "/auth/customer/emailpass") {
+    return {
+      kind: "synthesized",
+      fields: {
+        email: { kind: "raw", expr: "`badlogin-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`" },
+        password: { kind: "literal", value: "wrong-password" },
+      },
+    };
+  }
+  // Invalid promotion code -> 400 "The promotion code ... is invalid". A promo is
+  // applied via a cart update (`POST /store/carts/{id}` with `promo_codes`); a
+  // code that is never seeded fails validation regardless of cart contents.
+  if (endpoint === "/store/carts/{id}") {
+    return {
+      kind: "synthesized",
+      fields: { promo_codes: { kind: "raw", expr: '["INVALID_PROMO_DO_NOT_SEED"]' } },
+    };
+  }
+  // Invalid variant -> 400 "Variants ... do not exist or belong to a product that
+  // is not published" (mirrors edge.ts `variant_invalid`).
+  if (endpoint === "/store/carts/{id}/line-items") {
+    return {
+      kind: "synthesized",
+      fields: {
+        variant_id: { kind: "literal", value: "variant_invalid" },
+        quantity: { kind: "literal", value: 1 },
+      },
+    };
+  }
+  return null;
+}
+
 function synthesizeBody(
   specs: OasSpecs,
   method: string,
@@ -874,6 +923,10 @@ export function buildFlowPlan(
       body = { kind: "observed", payload: step.request_payload };
     } else {
       body =
+        // Negative-input bodies win for error-terminal steps: a bad-login 401
+        // needs WRONG credentials, so it must take precedence over the correct
+        // creds authCredentialBody threads for the happy login.
+        (step.expected_status >= 400 ? negativeInputBody(step.method, step.endpoint) : null) ??
         authCredentialBody(step.method, step.endpoint) ??
         synthesizeBody(specs, step.method, step.endpoint, ensure, step.expected_status >= 400);
     }

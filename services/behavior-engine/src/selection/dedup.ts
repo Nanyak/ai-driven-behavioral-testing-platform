@@ -51,11 +51,18 @@ export interface MinedFlow {
 export const PER_PERSONA_CAP = 10;
 
 function collapseIdentical(flows: MinedFlow[]): MinedFlow[] {
+  // Key on signature AND terminal expected status. ADR 0002 deliberately excludes
+  // status from the signature, so a failure variant (a happy prefix truncated at a
+  // 4xx step) can share a signature with a clean flow that happens to end at the
+  // same endpoint. Folding the terminal outcome into the collapse key keeps the
+  // two as distinct candidates (one -> happy-path/, one -> failure-path/) while
+  // still collapsing genuine duplicates (same sequence, same outcome).
   const bySig = new Map<string, MinedFlow>();
   for (const flow of flows) {
-    const existing = bySig.get(flow.signature);
+    const key = `${flow.signature}:${flow.steps[flow.steps.length - 1]?.expected_status ?? "x"}`;
+    const existing = bySig.get(key);
     if (!existing || flow.support > existing.support) {
-      bySig.set(flow.signature, flow);
+      bySig.set(key, flow);
     }
   }
   return [...bySig.values()];
@@ -102,7 +109,18 @@ function isSubsequenceOf(shorter: string[], longer: string[]): boolean {
  *     in order (guest checkout-attempt flows are error flows dense in common
  *     `POST /store/carts` / `payment` tokens). This also preserves the
  *     clean/edge split the per-persona cap balances over.
+ *   - For error flows, the SAME TERMINAL failing call. A failure path's identity
+ *     is the call it breaks on, so an invalid-promo flow (... -> `POST /store/
+ *     carts/{id}` 400) must not be subsumed by an invalid-variant flow (...
+ *     -> `POST /store/carts/{id}/line-items` 400) just because its token prefix
+ *     is an order-preserving subsequence. They assert different failures and
+ *     both must survive.
  */
+function terminalOf(flow: MinedFlow): string {
+  const last = flow.steps[flow.steps.length - 1];
+  return last ? `${last.method.toUpperCase()} ${last.endpoint} ${last.expected_status}` : "";
+}
+
 function pruneSubsumed(flows: MinedFlow[]): MinedFlow[] {
   // Longest first so a representative is seen before its sub-runs.
   const ordered = [...flows].sort(
@@ -114,6 +132,7 @@ function pruneSubsumed(flows: MinedFlow[]): MinedFlow[] {
       (rep) =>
         rep.persona === flow.persona &&
         rep.attributes.has_errors === flow.attributes.has_errors &&
+        (!flow.attributes.has_errors || terminalOf(rep) === terminalOf(flow)) &&
         isSubsequenceOf(flow.tokens, rep.tokens)
     );
     if (!subsumed) {

@@ -174,6 +174,82 @@ function toMinedFlow(
 }
 
 /**
+ * Minimum number of supporting sessions that must actually FAIL a step before we
+ * split out its failure variant. Matches the mining `minSupport` floor: a 4xx/5xx
+ * that recurs in >= 3 sessions is a behavior, a one-off is noise.
+ */
+const ERROR_VARIANT_MIN_SUPPORT = 3;
+
+const isErr = (status: number): boolean => status >= 400;
+
+/**
+ * Surface the MINORITY failure outcomes that the per-token modal smooths away.
+ *
+ * ADR 0002 keeps status out of the signature, and `modalStatuses` stamps each
+ * step with its most-common status, so a step that returns 2xx for most sessions
+ * but 4xx for a meaningful minority collapses to 2xx — the negative behavior
+ * (invalid promo -> 400, invalid variant -> 400, bad login -> 401, ...) never
+ * becomes its own test. The happy-path miner can't see these because it groups
+ * by endpoint sequence and the failing sessions are a sparse minority diluted by
+ * the dominant 2xx traffic (and by the 50-session provenance cap).
+ *
+ * So we mine the failures DIRECTLY from the logs. A failure path is "the journey
+ * up to the point it first broke": for each session, take the prefix ending at
+ * its FIRST 4xx/5xx step. Group those prefixes by the failing call (METHOD +
+ * endpoint + status) and, for each group seen in >= ERROR_VARIANT_MIN_SUPPORT
+ * sessions, emit one failure flow. The representative step sequence is the most
+ * common prefix shape in the group (a real observed journey); support is the
+ * group size. Each flow classifies has_errors=true, so the script generator
+ * routes it to <persona>/failure-path/. The terminal status keeps its signature
+ * distinct from the happy flow that shares the same endpoint sequence.
+ */
+function errorPathFlows(sessions: SessionFlow[]): MinedFlow[] {
+  // Group key: the failing call. Each entry collects the candidate prefixes
+  // (one per session) so we can pick a representative and count support.
+  const groups = new Map<
+    string,
+    { sessionIds: string[]; shapes: { steps: CandidateStep[]; count: number }[] }
+  >();
+  for (const session of sessions) {
+    const firstErr = session.steps.findIndex((s) => isErr(s.status));
+    if (firstErr < 1) continue; // need >= 2 steps so a lone endpoint is not a flow
+    const failing = session.steps[firstErr];
+    const groupKey = `${failing.method.toUpperCase()} ${failing.endpoint} ${failing.status}`;
+    const steps: CandidateStep[] = session.steps
+      .slice(0, firstErr + 1)
+      .map((s) => ({ method: s.method, endpoint: s.endpoint, expected_status: s.status }));
+    const sig = flowSignature(steps);
+    const group = groups.get(groupKey) ?? { sessionIds: [], shapes: [] };
+    group.sessionIds.push(session.session_id);
+    const shape = group.shapes.find((b) => flowSignature(b.steps) === sig);
+    if (shape) shape.count++;
+    else group.shapes.push({ steps, count: 1 });
+    groups.set(groupKey, group);
+  }
+
+  const flows: MinedFlow[] = [];
+  for (const { sessionIds, shapes } of groups.values()) {
+    const support = sessionIds.length;
+    if (support < ERROR_VARIANT_MIN_SUPPORT) continue;
+    // Representative = most common prefix shape (ties -> longest journey).
+    const rep = shapes.sort((a, b) => b.count - a.count || b.steps.length - a.steps.length)[0];
+    const steps = rep.steps;
+    const asStatus = steps.map((s) => ({ method: s.method, endpoint: s.endpoint, status: s.expected_status }));
+    const { attributes, persona } = classify(asStatus, true, true);
+    flows.push({
+      signature: flowSignature(steps),
+      tokens: canonicalTokens(steps),
+      steps,
+      support,
+      persona,
+      attributes,
+      source_sessions: sessionIds.slice(0, 50),
+    });
+  }
+  return flows;
+}
+
+/**
  * Which sessions contain a token sequence as an ordered subsequence (gaps ok).
  * Used to attach provenance + bound source_sessions for a mined pattern.
  */
@@ -284,6 +360,13 @@ async function main(): Promise<void> {
     // guard also removes already-ingested ones so a re-mine of existing data/sessions
     // does not resurface the artifact.
     .filter((flow) => !hasBrokenInterpolationSegment(flow));
+
+  // Mine failure paths directly from the logs (invalid promo -> 400, invalid
+  // variant -> 400, ...). The happy-path miner smooths these minority outcomes
+  // into the modal 2xx; here each is its own has_errors flow -> failure-path/.
+  const variants = errorPathFlows(sessions);
+  log(`[behavior-engine] failure-path mining: +${variants.length} flows`);
+  minedFlows.push(...variants);
 
   const deduped = dedup(minedFlows);
   log(
