@@ -15,6 +15,7 @@ import { dedup } from "./dedup.js";
 import { emitSpec } from "./emit.js";
 import { loadCandidates, type Candidate } from "./load.js";
 import { buildFlowPlan, type OasSpecs } from "./resolve.js";
+import { printRepairSummary, runRepair, type EmittedSpec } from "./repair/repair.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SERVICE_ROOT = resolvePath(__dirname, "..");
@@ -356,6 +357,12 @@ function main(): void {
   const args = process.argv.slice(2);
   const fileArgIndex = args.indexOf("--file");
   const explicitFile = fileArgIndex >= 0 ? args[fileArgIndex + 1] : undefined;
+  // Opt-in agent escalation: after the deterministic emit, repair the specs that
+  // fail to reproduce their mined status_signature (see repair/). Off by default
+  // so `:generate` stays deterministic; --only <substr> scopes it to one flow.
+  const repairEnabled = args.includes("--repair") || process.env.RESOLVER_AGENT === "1";
+  const onlyArgIndex = args.indexOf("--only");
+  const repairOnly = onlyArgIndex >= 0 ? args[onlyArgIndex + 1]?.split(",").filter(Boolean) : undefined;
 
   const candidateFile = loadCandidates(explicitFile);
   const dedupResult = dedup(candidateFile.candidates);
@@ -462,6 +469,25 @@ function main(): void {
   }
   console.log(`  Vendored _golden/ from:   services/golden/src/`);
   console.log(`  Output dir:               ${GENERATED_TESTS_DIR}`);
+
+  if (repairEnabled) {
+    // Hand the emitted (non-withheld) specs to the agent escalation. Approved
+    // flows are skipped — their blessed oracle is the source of truth, never
+    // auto-repaired. Runs against the live SUT, so the SUT must be up.
+    const emitted: EmittedSpec[] = summary.map((s) => ({
+      relPath: s.filename,
+      flowName: s.flow_name,
+      signature: s.signature,
+      fixme: s.fixmeCount > 0,
+    }));
+    console.log(`\nResolver-agent repair: verifying ${emitted.length} spec(s) against the live SUT…`);
+    const outcomes = runRepair(emitted, {
+      approvedSignatures: new Set(approved.keys()),
+      only: repairOnly,
+      specs,
+    });
+    printRepairSummary(outcomes);
+  }
 }
 
 // Run only when invoked directly (`tsx src/run.ts`), not when imported by a test.

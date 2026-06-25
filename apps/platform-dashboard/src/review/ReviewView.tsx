@@ -10,11 +10,12 @@ import {
   RefreshCw,
   ShieldAlert,
   Trash2,
+  Wrench,
   XCircle,
 } from "lucide-react";
 import { useFlows } from "./useFlows.js";
 import { EmptyState, Skeleton } from "../ui/primitives.js";
-import type { Decision, Lifecycle, PriorDecision, ReviewFlow } from "./decisions.js";
+import { fetchRepairDiff, type Decision, type Lifecycle, type PriorDecision, type RepairDiff, type ReviewFlow } from "./decisions.js";
 
 const PERSONA_LABELS: Record<string, string> = {
   guest_shopper: "Guest Shopper",
@@ -85,6 +86,139 @@ function ConflictChip() {
     >
       <AlertTriangle size={13} aria-hidden="true" /> conflicts
     </span>
+  );
+}
+
+function AgentBadge({ attempts }: { attempts?: number | null }) {
+  return (
+    <span
+      className="lifecycle-badge agent"
+      title={
+        "The on-disk spec's arrange/setup was repaired by the resolver-agent so it reproduces the mined outcome. " +
+        "Assertions are unchanged (oracle-guarded). Approve to bless it as the baseline."
+      }
+    >
+      <Wrench size={13} aria-hidden="true" /> agent-repaired
+      {typeof attempts === "number" ? ` ·${attempts}` : ""}
+    </span>
+  );
+}
+
+type DiffLine = { type: "ctx" | "add" | "del"; text: string };
+
+/** Minimal LCS-based unified diff over lines — small enough for a spec file. */
+function lineDiff(before: string, after: string): DiffLine[] {
+  const a = before.split("\n");
+  const b = after.split("\n");
+  const n = a.length;
+  const m = b.length;
+  const dp: number[][] = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  const out: DiffLine[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) {
+      out.push({ type: "ctx", text: a[i] });
+      i++;
+      j++;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      out.push({ type: "del", text: a[i++] });
+    } else {
+      out.push({ type: "add", text: b[j++] });
+    }
+  }
+  while (i < n) out.push({ type: "del", text: a[i++] });
+  while (j < m) out.push({ type: "add", text: b[j++] });
+  return out;
+}
+
+/** Collapse long runs of unchanged context so the reviewer sees only what changed. */
+function collapseContext(lines: DiffLine[], pad = 2): DiffLine[] {
+  const keep = new Array(lines.length).fill(false);
+  lines.forEach((l, idx) => {
+    if (l.type === "ctx") return;
+    for (let k = Math.max(0, idx - pad); k <= Math.min(lines.length - 1, idx + pad); k++) keep[k] = true;
+  });
+  const out: DiffLine[] = [];
+  let skipping = false;
+  for (let idx = 0; idx < lines.length; idx++) {
+    if (keep[idx]) {
+      out.push(lines[idx]);
+      skipping = false;
+    } else if (!skipping) {
+      out.push({ type: "ctx", text: "  ⋮" });
+      skipping = true;
+    }
+  }
+  return out;
+}
+
+function RepairedDiff({ flow }: { flow: ReviewFlow }) {
+  const [open, setOpen] = useState(false);
+  const [diff, setDiff] = useState<RepairDiff | null>(null);
+  const [loadState, setLoadState] = useState<"idle" | "loading" | "error" | "empty">("idle");
+
+  async function toggle() {
+    const next = !open;
+    setOpen(next);
+    if (next && diff === null && loadState === "idle") {
+      setLoadState("loading");
+      try {
+        const d = await fetchRepairDiff(flow.signature);
+        if (d) {
+          setDiff(d);
+          setLoadState("idle");
+        } else {
+          setLoadState("empty");
+        }
+      } catch {
+        setLoadState("error");
+      }
+    }
+  }
+
+  const rendered = diff ? collapseContext(lineDiff(diff.before, diff.after)) : [];
+
+  return (
+    <section className="repair-diff">
+      <button type="button" className="prior-toggle" onClick={() => void toggle()}>
+        <Wrench size={14} aria-hidden="true" />
+        <span>What the agent changed{diff ? ` (${diff.attempts} attempt${diff.attempts === 1 ? "" : "s"})` : ""}</span>
+        <span className="how-caret">{open ? "▲" : "▼"}</span>
+      </button>
+      {open ? (
+        <div className="repair-diff-body">
+          {loadState === "loading" ? <p className="muted">Loading diff…</p> : null}
+          {loadState === "error" ? <p className="muted">Could not load the repair diff.</p> : null}
+          {loadState === "empty" ? (
+            <p className="muted">
+              No stored before/after for this flow (the last repair run didn't record one).
+            </p>
+          ) : null}
+          {diff ? (
+            <>
+              <p className="muted">
+                Arrange/setup only — assertions and expected statuses are oracle-guarded and
+                identical on both sides.
+              </p>
+              <pre className="repair-diff-pre">
+                {rendered.map((l, idx) => (
+                  <div key={idx} className={`dl ${l.type}`}>
+                    <span className="dl-mark">{l.type === "add" ? "+" : l.type === "del" ? "−" : " "}</span>
+                    {l.text}
+                  </div>
+                ))}
+              </pre>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -161,6 +295,7 @@ function DetailPanel({
         <h2>{flow.flow_name}</h2>
         <div className="detail-badges">
           {flow.conflicts_with_approved ? <ConflictChip /> : null}
+          {flow.repaired_by_agent ? <AgentBadge attempts={flow.repair_attempts} /> : null}
           <LifecycleBadge lifecycle={flow.lifecycle} />
         </div>
       </header>
@@ -238,6 +373,8 @@ function DetailPanel({
         </p>
         <code className="signature">{flow.signature}</code>
       </section>
+
+      {flow.repaired_by_agent ? <RepairedDiff flow={flow} /> : null}
 
       <footer className="review-actions">
         <button
@@ -524,6 +661,7 @@ export function ReviewView() {
                       </span>
                     ) : null}
                     {flow.conflicts_with_approved ? <ConflictChip /> : null}
+                    {flow.repaired_by_agent ? <AgentBadge attempts={flow.repair_attempts} /> : null}
                     <LifecycleBadge lifecycle={flow.lifecycle} />
                   </span>
                 </button>

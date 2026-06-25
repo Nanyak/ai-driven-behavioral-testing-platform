@@ -6,7 +6,9 @@
   "description": "Script generator: converts ranked behavior-engine test candidates into runnable Playwright API tests (generated-tests/), with runtime-resolved IDs, OAS-synthesized payloads, and vendored golden-response assertions.",
   "scripts": {
     "generate": "tsx src/run.ts",
+    "repair": "tsx src/run.ts --repair",
     "test:run": "tsx src/run.test.ts",
+    "test:repair": "tsx src/repair/repair.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

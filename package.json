@@ -34,6 +34,7 @@
     "golden:test": "npm --prefix services/golden test",
     "script-generator:install": "npm --prefix services/script-generator install",
     "script-generator:generate": "npm --prefix services/script-generator run generate",
+    "script-generator:repair": "npm --prefix services/script-generator run repair --",
     "test-runner:install": "npm --prefix services/test-runner install",
     "test:all": "npm --prefix services/test-runner run run -- all",
     "test:guest": "npm --prefix services/test-runner run run -- guest",

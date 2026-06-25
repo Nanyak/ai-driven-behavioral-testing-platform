@@ -238,6 +238,10 @@ export interface ReviewFlow {
   conflicts_with_approved: boolean;
   /** Signatures of the approved baseline(s) this flow contradicts. */
   conflict_signatures: string[];
+  /** The on-disk spec was repaired by the resolver-agent (carries its provenance stamp). */
+  repaired_by_agent: boolean;
+  /** Agent repair attempts from the last repair run (null when not repaired). */
+  repair_attempts: number | null;
   /**
    * The approved baseline(s) this flow contradicts, carried INLINE (name + blessed
    * outcome). A regression shares its baseline's status-free signature, so the UI
@@ -313,16 +317,79 @@ function listSpecFiles(dir: string): string[] {
   return out;
 }
 
-/** Map signature (lowercase 64-hex) -> repo-relative spec path. */
-function specsBySignature(): Map<string, string> {
-  const map = new Map<string, string>();
+/** The stamp the resolver-agent leaves on a spec it repaired (script-generator repair/). */
+const REPAIR_PROVENANCE = "// repaired-by: resolver-agent";
+
+interface SpecRef {
+  /** repo-relative spec path. */
+  path: string;
+  /** True when the on-disk spec currently carries the resolver-agent stamp. */
+  repairedByAgent: boolean;
+}
+
+/** Map signature (lowercase 64-hex) -> its on-disk spec (path + agent-repair flag). */
+function specsBySignature(): Map<string, SpecRef> {
+  const map = new Map<string, SpecRef>();
   for (const file of listSpecFiles(GENERATED_TESTS_DIR)) {
-    const match = SIGNATURE_STAMP.exec(readFileSync(file, "utf8"));
+    const text = readFileSync(file, "utf8");
+    const match = SIGNATURE_STAMP.exec(text);
     if (match) {
-      map.set(match[1].toLowerCase(), file.slice(REPO_ROOT.length + 1));
+      map.set(match[1].toLowerCase(), {
+        path: file.slice(REPO_ROOT.length + 1),
+        repairedByAgent: text.includes(REPAIR_PROVENANCE),
+      });
     }
   }
   return map;
+}
+
+/* ---- Resolver-agent repair report (reports/resolver-repair.json) ---- */
+
+const REPAIR_REPORT = resolve(REPO_ROOT, "reports", "resolver-repair.json");
+
+interface RepairOutcomeRecord {
+  signature: string;
+  flowName: string;
+  result: string;
+  attempts: number;
+  beforeSource?: string;
+  afterSource?: string;
+}
+
+/** Outcomes from the last repair run, keyed by lowercased flow signature. Empty when absent. */
+function repairOutcomesBySignature(): Map<string, RepairOutcomeRecord> {
+  const map = new Map<string, RepairOutcomeRecord>();
+  if (!existsSync(REPAIR_REPORT)) return map;
+  try {
+    const doc = JSON.parse(readFileSync(REPAIR_REPORT, "utf8")) as { outcomes?: RepairOutcomeRecord[] };
+    for (const o of doc.outcomes ?? []) {
+      if (typeof o.signature === "string") map.set(o.signature.toLowerCase(), o);
+    }
+  } catch {
+    /* malformed report -> no repair annotations, never fatal */
+  }
+  return map;
+}
+
+export interface RepairDiff {
+  signature: string;
+  flow_name: string;
+  attempts: number;
+  before: string;
+  after: string;
+}
+
+/** The before/after sources for a repaired flow, for the review diff. Null if none. */
+export function repairDiff(signature: string): RepairDiff | null {
+  const o = repairOutcomesBySignature().get(signature.toLowerCase());
+  if (!o || o.result !== "repaired" || !o.beforeSource || !o.afterSource) return null;
+  return {
+    signature: signature.toLowerCase(),
+    flow_name: o.flowName,
+    attempts: o.attempts,
+    before: o.beforeSource,
+    after: o.afterSource,
+  };
 }
 
 /**
@@ -477,11 +544,14 @@ export function loadFlows(): FlowsPayload {
     candidates?: RawCandidate[];
   };
   const specs = specsBySignature();
+  const repairs = repairOutcomesBySignature();
 
   // First pass: build flows with route_key/status_signature/lifecycle.
   const flows: ReviewFlow[] = (doc.candidates ?? []).map((c) => {
     const sig = c.signature.toLowerCase();
-    const testPath = specs.get(sig) ?? null;
+    const specRef = specs.get(sig) ?? null;
+    const testPath = specRef?.path ?? null;
+    const repair = repairs.get(sig);
     const decision = decisions.get(sig)?.status ?? null;
     const steps = c.steps ?? [];
     return {
@@ -508,6 +578,9 @@ export function loadFlows(): FlowsPayload {
       lifecycle: lifecycleOf(decision, Boolean(testPath)),
       conflicts_with_approved: false,
       conflict_signatures: [],
+      // Badge reflects the live spec on disk; attempts come from the last repair run.
+      repaired_by_agent: specRef?.repairedByAgent ?? false,
+      repair_attempts: repair?.result === "repaired" ? repair.attempts : null,
       conflict_baselines: [],
     };
   });

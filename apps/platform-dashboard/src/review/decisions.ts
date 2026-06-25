@@ -33,6 +33,18 @@ export interface ReviewFlow {
   conflicts_with_approved: boolean;
   conflict_signatures: string[];
   conflict_baselines: Array<{ flow_name: string; status_signature: string }>;
+  /** The on-disk spec was repaired by the resolver-agent (carries its provenance stamp). */
+  repaired_by_agent: boolean;
+  /** Agent repair attempts from the last repair run (null when not repaired). */
+  repair_attempts: number | null;
+}
+
+export interface RepairDiff {
+  signature: string;
+  flow_name: string;
+  attempts: number;
+  before: string;
+  after: string;
 }
 
 export interface PriorDecision {
@@ -71,6 +83,14 @@ export async function fetchFlows(): Promise<FlowsPayload> {
     throw new Error(`/api/flows returned ${response.status}`);
   }
   return (await response.json()) as FlowsPayload;
+}
+
+/** Fetch the before/after sources for a resolver-agent-repaired flow (404 -> null). */
+export async function fetchRepairDiff(signature: string): Promise<RepairDiff | null> {
+  const response = await fetch(`/api/repair/diff?signature=${encodeURIComponent(signature)}`);
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`/api/repair/diff returned ${response.status}`);
+  return (await response.json()) as RepairDiff;
 }
 
 /**

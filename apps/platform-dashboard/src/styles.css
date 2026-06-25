@@ -749,6 +749,56 @@ select:focus-visible {
   color: var(--danger);
 }
 
+.lifecycle-badge.agent {
+  background: #e7e0fb;
+  border: 1px solid #b7a6ef;
+  color: #5b3fc4;
+}
+
+/* Resolver-agent repair diff (review detail) */
+.repair-diff {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.repair-diff-body {
+  margin-top: 8px;
+}
+
+.repair-diff-pre {
+  background: var(--code-bg);
+  border-radius: 8px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  margin: 8px 0 0;
+  max-height: 360px;
+  overflow: auto;
+  padding: 8px 10px;
+  white-space: pre;
+}
+
+.repair-diff-pre .dl {
+  display: block;
+}
+
+.repair-diff-pre .dl-mark {
+  display: inline-block;
+  opacity: 0.6;
+  padding-right: 8px;
+  user-select: none;
+  width: 1ch;
+}
+
+.repair-diff-pre .dl.add {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.repair-diff-pre .dl.del {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
 .review-detail {
   background: var(--surface-2);
   border: 1px solid var(--border);

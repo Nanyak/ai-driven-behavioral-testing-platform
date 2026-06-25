@@ -6,6 +6,7 @@ import {
   readReportHtml,
   readReportHtmlById,
   readReportSummary,
+  repairDiff,
   upsertDecision,
   type Decision,
 } from "./hitl-store.js";
@@ -43,6 +44,26 @@ export function hitlApiPlugin(): Plugin {
         } catch (error) {
           sendJson(res, 500, { error: error instanceof Error ? error.message : "load failed" });
         }
+      });
+
+      // The before/after sources for a resolver-agent-repaired flow, so the review
+      // panel can show what the agent changed in the arrange/setup.
+      server.middlewares.use("/api/repair/diff", (req, res, next) => {
+        if (req.method !== "GET") {
+          next();
+          return;
+        }
+        const signature = new URL(req.url ?? "", "http://localhost").searchParams.get("signature");
+        if (!signature) {
+          sendJson(res, 400, { error: "signature query param is required" });
+          return;
+        }
+        const diff = repairDiff(signature);
+        if (!diff) {
+          sendJson(res, 404, { error: "no agent repair recorded for this flow" });
+          return;
+        }
+        sendJson(res, 200, diff);
       });
 
       server.middlewares.use("/api/summary", (req, res, next) => {
