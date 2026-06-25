@@ -11,6 +11,7 @@ import {
   type Decision,
 } from "./hitl-store.js";
 import { getTestRunStatus, isValidTarget, startTestRun } from "./test-run.js";
+import { getJobStatus, isJobId, startJob, type JobParams } from "./jobs.js";
 
 function sendJson(res: import("node:http").ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body);
@@ -232,6 +233,40 @@ export function hitlApiPlugin(): Plugin {
               return;
             }
             sendJson(res, 202, { started: true, status: getTestRunStatus() });
+          } catch (error) {
+            sendJson(res, 500, { error: error instanceof Error ? error.message : "run failed" });
+          }
+        })();
+      });
+
+      // Run an authoring-pipeline stage (mine/generate/repair/triage) from the browser.
+      // GET returns the SAME poll-able job snapshot as /api/tests/run (one global lock);
+      // POST starts a job (409 if one is already going, 400 on a bad job id / params).
+      // The server spawns the allowlisted npm script on the operator's behalf.
+      server.middlewares.use("/api/pipeline/run", (req, res, next) => {
+        if (req.method === "GET") {
+          sendJson(res, 200, getJobStatus());
+          return;
+        }
+        if (req.method !== "POST") {
+          next();
+          return;
+        }
+        void (async () => {
+          try {
+            const body = (await readBody(req)) as { job?: string; params?: JobParams };
+            if (!isJobId(body.job)) {
+              sendJson(res, 400, {
+                error: "job must be one of: mine, generate, repair, triage, test:<target>",
+              });
+              return;
+            }
+            const result = startJob(body.job, body.params ?? {});
+            if (!result.started) {
+              sendJson(res, result.code, { error: result.reason, status: getJobStatus() });
+              return;
+            }
+            sendJson(res, 202, { started: true, status: getJobStatus() });
           } catch (error) {
             sendJson(res, 500, { error: error instanceof Error ? error.message : "run failed" });
           }

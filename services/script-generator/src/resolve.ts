@@ -37,6 +37,15 @@ export interface ResolveCall {
   endpoint: string;
   extract: string;
   auth: AuthRequirement;
+  /** When set, select the bound entity by PREDICATE from a list response instead
+   * of a fixed index: emit `list.find(it => <predicate>) ?? list[0]` and bind
+   * `<field>`. Used where the wrong-state risk can't be filtered server-side (e.g.
+   * an admin order that must be cancelable — not canceled AND not fulfilled).
+   * Falls back to the first element so the resolve never throws; a genuinely
+   * absent state then surfaces as the downstream step's own status mismatch.
+   * `fromEnd` scans from the tail (oldest), used to keep two flows that want the
+   * same state off the same entity (cancel takes the oldest, fulfillment newest). */
+  select?: { collection: string; predicate: string; field: string; fromEnd?: boolean };
   /** When set, bind `scope.<bindTo>` to this literal id and emit NO request —
    * used for an auth-gated resource that an unauthenticated negative step can
    * never create (the gate 4xx's before resource lookup, so a placeholder id
@@ -151,6 +160,8 @@ type ResolveStep = {
   method: string;
   endpoint: string;
   extract: string;
+  /** See ResolveCall.select — predicate selection from a list response. */
+  select?: { collection: string; predicate: string; field: string; fromEnd?: boolean };
   body?: SynthesizedBody;
   query?: SynthesizedBody;
   bestEffort?: boolean;
@@ -179,7 +190,14 @@ const ADMIN_PENDING_ORDERS_WITH_ITEMS = "/admin/orders?status[]=pending&order=-c
 function standaloneResolverFor(
   varName: string,
   auth: AuthRequirement,
-  fulfilledOrder = false
+  fulfilledOrder = false,
+  // When the consuming flow CANCELS the order, pick from the OLD end of the
+  // cancelable set. Cancel and fulfillment both want a pending, uncanceled,
+  // unfulfilled order, but only the newest orders still hold a stock
+  // reservation (fulfillment 400s "No stock reservation found" without one). So
+  // fulfillment keeps the newest match and cancel yields it, taking the oldest —
+  // cancel has no reservation requirement, so an older order cancels fine.
+  cancelFlow = false
 ): ResolveStep[] | null {
   switch (varName) {
     case "regionId":
@@ -248,15 +266,29 @@ function standaloneResolverFor(
           },
         ];
       }
-      // ADMIN: filter to a PENDING order. The unfiltered `orders[0]`
-      // returns an arbitrary order — often an already-canceled one — so cancel
-      // 400s ("has been canceled") and fulfillment 400s (a canceled order can't
-      // be fulfilled). A pending order with items can be canceled, fulfilled, and
-      // returned. The query string is emitted as a literal URL (resolveUrlExpr
-      // JSON.stringifies an endpoint with no path params / query object).
-      // `fulfillment_status` is IGNORED on this Medusa build — do not rely on it.
+      // ADMIN: pick a genuinely CANCELABLE order. Filtering to `status[]=pending`
+      // is not enough — a pending order can carry a partial fulfillment, and
+      // `POST /admin/orders/{id}/cancel` 400s ("All fulfillments must be canceled
+      // first") on those, exactly the residual the resolver-agent repair couldn't
+      // land deterministically (see memory resolver-agent-repair). So request the
+      // state fields and SELECT the first order that is not canceled AND has no
+      // fulfillments. `fields=*fulfillments` inlines the relation on the list
+      // response; the predicate runs client-side because Medusa has no
+      // server-side "uncancelable" filter. This bakes the fix the AI agent would
+      // have authored into the deterministic emit (no agent needed next run).
       return auth === ADMIN
-        ? [{ bindTo: varName, method: "GET", endpoint: "/admin/orders?status[]=pending&order=-created_at", extract: "orders[0].id" }]
+        ? [{
+            bindTo: varName,
+            method: "GET",
+            endpoint: "/admin/orders?status[]=pending&order=-created_at&fields=id,status,canceled_at,*fulfillments",
+            extract: "",
+            select: {
+              collection: "orders",
+              predicate: "!it.canceled_at && (it.fulfillments?.length ?? 0) === 0",
+              field: "id",
+              fromEnd: cancelFlow,
+            },
+          }]
         : [{ bindTo: varName, method: "GET", endpoint: "/store/orders", extract: "orders[0].id" }];
     case "cartId":
       // A bootstrapped cart must be NON-EMPTY: a mined checkout flow frequently
@@ -811,6 +843,13 @@ export function buildFlowPlan(
   // /admin/orders/{id} step, before the /admin/returns step is reached.
   const flowIsReturnLifecycle = steps.some((s) => s.endpoint.startsWith("/admin/returns"));
 
+  // A cancel flow takes the OLDEST cancelable order so it doesn't strip the
+  // newest (reservation-bearing) one the fulfillment flow needs — see
+  // standaloneResolverFor's `cancelFlow` param.
+  const flowIsCancel = steps.some(
+    (s) => s.method === "POST" && /^\/admin\/orders\/\{[^}]+\}\/cancel$/.test(s.endpoint)
+  );
+
   for (const step of steps) {
     let auth = authFor(step.endpoint, flowRequiresAuth);
     // Negative-auth downgrade: a step asserting 401 on a customer-gated
@@ -851,7 +890,7 @@ export function buildFlowPlan(
         scope.add(varName);
         return true;
       }
-      const chain = standaloneResolverFor(varName, auth, flowIsReturnLifecycle);
+      const chain = standaloneResolverFor(varName, auth, flowIsReturnLifecycle, flowIsCancel);
       if (!chain) return false;
       for (const call of chain) {
         if (scope.has(call.bindTo)) continue; // a chained prerequisite already resolved earlier in this flow

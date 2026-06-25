@@ -16,6 +16,12 @@ import {
 import { useFlows } from "./useFlows.js";
 import { EmptyState, Skeleton } from "../ui/primitives.js";
 import { fetchRepairDiff, type Decision, type Lifecycle, type PriorDecision, type RepairDiff, type ReviewFlow } from "./decisions.js";
+import { startJob as startPipelineJob } from "../pipeline/pipeline.js";
+
+/** The 12-hex spec hash a repair run scopes to, from `…/<hash>.spec.ts`. */
+function specHash(testPath: string): string {
+  return testPath.split("/").pop()?.replace(/\.spec\.ts$/, "") ?? testPath;
+}
 
 const PERSONA_LABELS: Record<string, string> = {
   guest_shopper: "Guest Shopper",
@@ -282,11 +288,13 @@ function DetailPanel({
   flow,
   onDecide,
   onDelete,
+  onRepair,
   pending,
 }: {
   flow: ReviewFlow;
   onDecide: (status: Decision) => void;
   onDelete: () => void;
+  onRepair: () => void;
   pending: boolean;
 }) {
   return (
@@ -395,6 +403,21 @@ function DetailPanel({
         </button>
         <button
           type="button"
+          className="repair-test"
+          disabled={pending || !flow.test_path || flow.lifecycle === "approved"}
+          title={
+            !flow.test_path
+              ? "No generated test to repair"
+              : flow.lifecycle === "approved"
+                ? "Approved flows are the source of truth — never auto-repaired"
+                : "Run the resolver agent on this spec (LLM cost; rewrites arrange/setup only)"
+          }
+          onClick={onRepair}
+        >
+          <Wrench size={16} aria-hidden="true" /> Repair this flow
+        </button>
+        <button
+          type="button"
           className="delete-test"
           disabled={pending || !flow.test_path}
           title={
@@ -462,6 +485,7 @@ export function ReviewView() {
   const [selected, setSelected] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const flows = data?.flows ?? [];
   const prior = data?.prior_decisions ?? [];
@@ -514,10 +538,38 @@ export function ReviewView() {
     }
     setPending(true);
     setActionError(null);
+    setNotice(null);
     try {
       await removeTest(flow);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Failed to delete test");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function handleRepair(flow: ReviewFlow) {
+    if (!flow.test_path) return;
+    const hash = specHash(flow.test_path);
+    if (
+      !window.confirm(
+        `Run the resolver agent on ${hash}?\n\nThis calls the Claude agent against the live SUT ` +
+          `(incurs LLM cost) and rewrites only the spec's arrange/setup so it reproduces the mined ` +
+          `outcome. Assertions are oracle-guarded. One job runs at a time.`
+      )
+    ) {
+      return;
+    }
+    setPending(true);
+    setActionError(null);
+    setNotice(null);
+    try {
+      await startPipelineJob("repair", { only: hash });
+      setNotice(
+        `Repair started for ${hash}. Watch progress in the Pipeline tab, then reload here when it finishes.`
+      );
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to start repair");
     } finally {
       setPending(false);
     }
@@ -630,6 +682,7 @@ export function ReviewView() {
       </div>
 
       {actionError ? <p className="review-action-error">{actionError}</p> : null}
+      {notice ? <p className="review-action-note">{notice}</p> : null}
 
       <div className="review-layout">
         <div className="review-list-wrap">
@@ -680,6 +733,7 @@ export function ReviewView() {
             pending={pending}
             onDecide={(decision) => handleDecide(selectedFlow, decision)}
             onDelete={() => handleDelete(selectedFlow)}
+            onRepair={() => handleRepair(selectedFlow)}
           />
         ) : null}
       </div>

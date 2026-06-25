@@ -113,9 +113,21 @@ function renderResolveCall(call: ResolveCall, index: number): string {
       `  expect(${varDecl}.status(), "resolve ${call.method} ${call.endpoint} for ${call.bindTo}").toBe(200);`
     );
   }
-  // A side-effecting resolve (e.g. seeding a cart line item) has no extract: run
-  // the request and assert it succeeded, but bind nothing into scope.
-  if (call.extract !== "") {
+  // Predicate selection: bind the first list entry that satisfies the predicate,
+  // falling back to the first entry so the resolve never throws (a genuinely
+  // absent state then surfaces as the downstream step's own status mismatch — the
+  // honest "doesn't reproduce" outcome — rather than an extract crash here).
+  if (call.select) {
+    const listVar = `${varDecl}List`;
+    const finder = call.select.fromEnd ? "findLast" : "find";
+    const fallback = call.select.fromEnd ? `${listVar}[${listVar}.length - 1]` : `${listVar}[0]`;
+    lines.push(
+      `  const ${listVar} = (await ${varDecl}.json()).${call.select.collection} ?? [];`,
+      `  scope.${call.bindTo} = (${listVar}.${finder}((it: any) => ${call.select.predicate}) ?? ${fallback})?.${call.select.field};`
+    );
+  } else if (call.extract !== "") {
+    // A side-effecting resolve (e.g. seeding a cart line item) has no extract: run
+    // the request and assert it succeeded, but bind nothing into scope.
     lines.push(`  scope.${call.bindTo} = extractPath(await ${varDecl}.json(), ${JSON.stringify(call.extract)});`);
   }
   return lines.join("\n");

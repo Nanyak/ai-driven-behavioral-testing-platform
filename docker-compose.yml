@@ -105,13 +105,26 @@ services:
       # browser, so skip the browser download on install. Saves time/space and dodges the fact
       # that Playwright's browser binaries aren't supported on alpine/musl.
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
-    # On first boot, install the dashboard deps plus the two the in-container test run needs:
-    # generated-tests (@playwright/test) and the test-runner (tsx). Each is guarded so restarts
-    # skip the install; the deps live in named volumes (below) so the musl binaries are correct.
+      # The /api/pipeline/run "repair" job shells out to the `claude` CLI (script-generator's
+      # resolver-agent). Install it globally under a persisted prefix and put it on PATH so the
+      # binary survives restarts. ANTHROPIC_API_KEY must be set in .env (loaded via env_file) for
+      # the CLI to authenticate; without it, repair fails cleanly while mine/generate/triage work.
+      NPM_CONFIG_PREFIX: /workspace/.npm-global
+      PATH: /workspace/.npm-global/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    # On first boot, install every dep the browser-driven pipeline needs in-container, then start
+    # the dashboard. Each step is guarded so restarts skip it; deps live in named volumes (below)
+    # so the musl binaries are correct. curl is for the repair agent's read-only SUT exploration
+    # (Bash(curl:*)); the claude CLI backs the repair job. mine→generate→triage need behavior-engine,
+    # script-generator, golden, and test-runner installed; generate/repair import services/golden.
     command: >-
-      sh -c "(test -d node_modules/.bin || npm ci)
+      sh -c "(command -v curl >/dev/null || apk add --no-cache curl)
+      && (test -d node_modules/.bin || npm ci)
       && (test -d /workspace/generated-tests/node_modules/.bin || npm --prefix /workspace/generated-tests ci)
       && (test -d /workspace/services/test-runner/node_modules/.bin || npm --prefix /workspace/services/test-runner ci)
+      && (test -d /workspace/services/behavior-engine/node_modules/.bin || npm --prefix /workspace/services/behavior-engine ci)
+      && (test -d /workspace/services/script-generator/node_modules/.bin || npm --prefix /workspace/services/script-generator ci)
+      && (test -d /workspace/services/golden/node_modules/.bin || npm --prefix /workspace/services/golden ci)
+      && (command -v claude >/dev/null || npm i -g @anthropic-ai/claude-code)
       && npm run dev"
     ports:
       - "5173:5173"
@@ -122,9 +135,13 @@ services:
       # test-runner; mount both so the run resolves in-container.
       - ./package.json:/workspace/package.json:ro
       - ./services/test-runner:/workspace/services/test-runner
-      # Phase 15 HITL review reads pipeline artifacts via /api/flows; mount them
-      # under /workspace so findRepoRoot() resolves the repo root in-container.
-      - ./services/behavior-engine/data:/workspace/services/behavior-engine/data:ro
+      # The pipeline jobs run these services in-container: mine (behavior-engine, writes its
+      # data/candidates — hence RW, not the old :ro data-only mount), generate + repair
+      # (script-generator, which imports services/golden for the OAS). HITL review (/api/flows)
+      # reads behavior-engine/data via the same mount; findRepoRoot() resolves the repo root.
+      - ./services/behavior-engine:/workspace/services/behavior-engine
+      - ./services/script-generator:/workspace/services/script-generator
+      - ./services/golden:/workspace/services/golden
       # RW (was :ro): the run writes Playwright results + reports, and the delete button
       # unlinks specs under generated-tests/.
       - ./generated-tests:/workspace/generated-tests
@@ -135,6 +152,11 @@ services:
       # persisted across restarts; these shadow any host node_modules.
       - generated_tests_node_modules:/workspace/generated-tests/node_modules
       - test_runner_node_modules:/workspace/services/test-runner/node_modules
+      - behavior_engine_node_modules:/workspace/services/behavior-engine/node_modules
+      - script_generator_node_modules:/workspace/services/script-generator/node_modules
+      - golden_node_modules:/workspace/services/golden/node_modules
+      # The globally-installed `claude` CLI (NPM_CONFIG_PREFIX) for the repair job, persisted.
+      - claude_cli_global:/workspace/.npm-global
 
   elasticsearch:
     profiles: ["elk"]
@@ -203,5 +225,9 @@ volumes:
   platform_dashboard_node_modules:
   generated_tests_node_modules:
   test_runner_node_modules:
+  behavior_engine_node_modules:
+  script_generator_node_modules:
+  golden_node_modules:
+  claude_cli_global:
   elasticsearch_data:
   filebeat_registry:

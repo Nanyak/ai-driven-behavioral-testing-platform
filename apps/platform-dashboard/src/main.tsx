@@ -10,10 +10,12 @@ import {
   PlayCircle,
   Route,
   Sun,
+  Workflow,
 } from "lucide-react";
 import { ReviewView } from "./review/ReviewView.js";
 import { ReportsView } from "./reports/ReportsView.js";
 import { TestRunnerView } from "./runner/TestRunnerView.js";
+import { PipelineView } from "./pipeline/PipelineView.js";
 import { OverviewView } from "./overview/OverviewView.js";
 import {
   CHECK_LABELS,
@@ -34,6 +36,7 @@ import "./styles.css";
 const NAV: Array<{ key: ViewKey; label: string; icon: typeof Route }> = [
   { key: "overview", label: "Overview", icon: LayoutDashboard },
   { key: "review", label: "Flow Review", icon: Route },
+  { key: "pipeline", label: "Pipeline", icon: Workflow },
   { key: "runner", label: "Test Runner", icon: PlayCircle },
   { key: "reports", label: "Reports", icon: FileJson },
 ];
@@ -165,6 +168,21 @@ function App() {
               hand). Approve or discard each flow — the decision feeds the skip gate.
             </p>
             <ReviewView />
+          </section>
+        ) : view === "pipeline" ? (
+          <section className="review-section" aria-label="Authoring pipeline">
+            <div className="workbench-heading">
+              <Workflow size={22} aria-hidden="true" />
+              <h1>Authoring Pipeline</h1>
+            </div>
+            <p className="review-intro">
+              Drive the whole test-authoring loop from the browser — no CLI needed. Run each stage
+              in order: <strong>Mine</strong> flows from ingested traffic, <strong>Generate</strong>{" "}
+              Playwright specs, optionally <strong>Repair</strong> failing ones with the agent,{" "}
+              <strong>Run</strong> the suite, then <strong>Triage</strong>. One job runs at a time;
+              newly mined flows and generated tests appear under <strong>Flow Review</strong>.
+            </p>
+            <PipelineView onViewReports={() => setView("reports")} />
           </section>
         ) : view === "runner" ? (
           <section className="review-section" aria-label="Test runner">
