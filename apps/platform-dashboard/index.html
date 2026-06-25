@@ -4,6 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Behavior Platform Dashboard</title>
+    <script>
+      // Pre-paint theme init (R2 / FOUC fix): set data-theme BEFORE React mounts.
+      // Mirrors src/theme.ts resolveInitialTheme(); kept inline so it runs first.
+      (function () {
+        try {
+          var stored = localStorage.getItem("behavior-dashboard-theme");
+          var theme =
+            stored === "light" || stored === "dark"
+              ? stored
+              : window.matchMedia &&
+                window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+          document.documentElement.setAttribute("data-theme", theme);
+        } catch (e) {
+          document.documentElement.setAttribute("data-theme", "light");
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

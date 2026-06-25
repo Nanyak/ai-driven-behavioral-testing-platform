@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  deleteTest,
   fetchFlows,
   postDecision,
   type Decision,
@@ -38,5 +39,13 @@ export function useFlows() {
     [reload]
   );
 
-  return { data, state, error, reload, decide };
+  const removeTest = useCallback(
+    async (flow: ReviewFlow) => {
+      await deleteTest(flow);
+      await reload();
+    },
+    [reload]
+  );
+
+  return { data, state, error, reload, decide, removeTest };
 }

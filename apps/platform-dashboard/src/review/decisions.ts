@@ -97,3 +97,22 @@ export async function postDecision(flow: ReviewFlow, status: Decision): Promise<
     throw new Error(body.error ?? `/api/decisions returned ${response.status}`);
   }
 }
+
+/**
+ * Delete the generated `.spec.ts` for a flow. The server unlinks it (path-scoped to
+ * generated-tests/) — this is distinct from discarding, which only records a judgment.
+ */
+export async function deleteTest(flow: ReviewFlow): Promise<void> {
+  if (!flow.test_path) {
+    throw new Error("This flow has no generated test to delete.");
+  }
+  const response = await fetch("/api/tests/delete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ test_path: flow.test_path }),
+  });
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? `/api/tests/delete returned ${response.status}`);
+  }
+}

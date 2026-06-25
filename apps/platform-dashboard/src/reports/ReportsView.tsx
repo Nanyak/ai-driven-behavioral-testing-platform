@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { ExternalLink, RefreshCw } from "lucide-react";
+import { ExternalLink, FileJson, RefreshCw } from "lucide-react";
 import { fetchReports, reportViewUrl, type ReportRow } from "./reports.js";
+import { Badge, EmptyState, Skeleton } from "../ui/primitives.js";
 
 function formatWhen(iso: string | null): string {
   if (!iso) return "unknown date";
@@ -37,24 +38,30 @@ export function ReportsView() {
   );
 
   if (state === "loading") {
-    return <p className="review-empty">Loading reports…</p>;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <Skeleton height={28} width={120} />
+        <Skeleton height={64} />
+        <Skeleton height={64} />
+      </div>
+    );
   }
   if (state === "error") {
     return (
-      <div className="review-empty">
+      <EmptyState icon={<FileJson size={28} aria-hidden="true" />}>
         <p>Could not load reports: {error}</p>
         <button type="button" onClick={load}>
           Retry
         </button>
-      </div>
+      </EmptyState>
     );
   }
   if (reports.length === 0) {
     return (
-      <p className="review-empty">
-        No report runs yet. Run <code>npm run test:all</code> — each run is archived under{" "}
-        <code>reports/runs/</code> and listed here.
-      </p>
+      <EmptyState icon={<FileJson size={28} aria-hidden="true" />}>
+        No report runs yet. Head to the <strong>Test Runner</strong> tab and run a suite — each run
+        is archived under <code>reports/runs/</code> and listed here.
+      </EmptyState>
     );
   }
 
@@ -76,7 +83,9 @@ export function ReportsView() {
                 onClick={() => setSelected(r.slug)}
               >
                 <span className="report-row-top">
-                  <span className={`run-status ${r.status}`}>{r.status.toUpperCase()}</span>
+                  <Badge tone={r.status === "green" ? "ok" : "bad"}>
+                    {r.status.toUpperCase()}
+                  </Badge>
                   <span className="report-run-id">{r.run_id}</span>
                 </span>
                 <span className="report-row-meta">

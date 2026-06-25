@@ -1,5 +1,6 @@
 import type { Plugin } from "vite";
 import {
+  deleteTestFile,
   listReports,
   loadFlows,
   readReportHtml,
@@ -8,6 +9,7 @@ import {
   upsertDecision,
   type Decision,
 } from "./hitl-store.js";
+import { getTestRunStatus, isValidTarget, startTestRun } from "./test-run.js";
 
 function sendJson(res: import("node:http").ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body);
@@ -143,6 +145,74 @@ export function hitlApiPlugin(): Plugin {
             sendJson(res, 200, { entry });
           } catch (error) {
             sendJson(res, 500, { error: error instanceof Error ? error.message : "write failed" });
+          }
+        })();
+      });
+
+      // Delete a generated spec from the browser. The server does the unlink on the
+      // operator's behalf (the browser has no filesystem access); deleteTestFile path-scopes
+      // the target to generated-tests/ so only specs can be removed, never arbitrary files.
+      server.middlewares.use("/api/tests/delete", (req, res, next) => {
+        if (req.method !== "POST") {
+          next();
+          return;
+        }
+        void (async () => {
+          try {
+            const body = (await readBody(req)) as { test_path?: string };
+            if (typeof body.test_path !== "string" || body.test_path.trim().length === 0) {
+              sendJson(res, 400, { error: "test_path (string) is required" });
+              return;
+            }
+            const result = deleteTestFile(body.test_path);
+            if (result.deleted) {
+              sendJson(res, 200, { deleted: true, test_path: body.test_path });
+              return;
+            }
+            const status = result.reason === "not_found" ? 404 : 400;
+            const message =
+              result.reason === "not_found"
+                ? "test file not found (already deleted?)"
+                : result.reason === "out_of_scope"
+                  ? "test_path must point inside generated-tests/"
+                  : "test_path is invalid";
+            sendJson(res, status, { error: message });
+          } catch (error) {
+            sendJson(res, 500, { error: error instanceof Error ? error.message : "delete failed" });
+          }
+        })();
+      });
+
+      // Run the Playwright suite from the browser. GET returns a poll-able snapshot; POST starts
+      // a run (one at a time — 409 if already running). The server spawns the npm script on the
+      // operator's behalf; the report endpoints surface the result once it finishes.
+      server.middlewares.use("/api/tests/run", (req, res, next) => {
+        if (req.method === "GET") {
+          sendJson(res, 200, getTestRunStatus());
+          return;
+        }
+        if (req.method !== "POST") {
+          next();
+          return;
+        }
+        void (async () => {
+          try {
+            const body = (await readBody(req)) as { target?: string };
+            const target = body.target ?? "all";
+            if (!isValidTarget(target)) {
+              sendJson(res, 400, {
+                error: "target must be one of: all, guest, customer, admin, happy, failure",
+              });
+              return;
+            }
+            const result = startTestRun(target);
+            if (!result.started) {
+              sendJson(res, 409, { error: result.reason ?? "busy", status: getTestRunStatus() });
+              return;
+            }
+            sendJson(res, 202, { started: true, status: getTestRunStatus() });
+          } catch (error) {
+            sendJson(res, 500, { error: error instanceof Error ? error.message : "run failed" });
           }
         })();
       });

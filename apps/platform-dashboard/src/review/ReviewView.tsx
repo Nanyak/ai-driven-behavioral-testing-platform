@@ -9,9 +9,11 @@ import {
   History,
   RefreshCw,
   ShieldAlert,
+  Trash2,
   XCircle,
 } from "lucide-react";
 import { useFlows } from "./useFlows.js";
+import { EmptyState, Skeleton } from "../ui/primitives.js";
 import type { Decision, Lifecycle, PriorDecision, ReviewFlow } from "./decisions.js";
 
 const PERSONA_LABELS: Record<string, string> = {
@@ -110,9 +112,10 @@ function HowItWorks() {
               <code>behavior:mine</code> (the skip gate).
             </li>
             <li>
-              Neither button creates or deletes the <code>.spec.ts</code> file. Discarding
-              records the rejection — if you also don't want the spec executed, delete the
-              file under <code>generated-tests/</code> separately.
+              Approve/Discard never touch the <code>.spec.ts</code> file — they only record a
+              judgment. To stop a spec from being executed, use <strong>Delete test</strong>,
+              which removes the file from <code>generated-tests/</code>. Deleting is separate
+              from discarding: it changes no decision record.
             </li>
             <li>
               <strong>Persona is derived from observed behavior</strong>, never declared. A{" "}
@@ -144,10 +147,12 @@ function Legend() {
 function DetailPanel({
   flow,
   onDecide,
+  onDelete,
   pending,
 }: {
   flow: ReviewFlow;
   onDecide: (status: Decision) => void;
+  onDelete: () => void;
   pending: boolean;
 }) {
   return (
@@ -251,12 +256,27 @@ function DetailPanel({
         >
           <XCircle size={16} aria-hidden="true" /> Discard
         </button>
+        <button
+          type="button"
+          className="delete-test"
+          disabled={pending || !flow.test_path}
+          title={
+            flow.test_path
+              ? `Delete ${flow.test_path} from generated-tests/`
+              : "No generated test to delete"
+          }
+          onClick={onDelete}
+        >
+          <Trash2 size={16} aria-hidden="true" /> Delete test
+        </button>
       </footer>
       <p className="review-note">
         <strong>Approve</strong> keeps the test and blesses the flow; <strong>Discard</strong>{" "}
         marks it rejected. Both write to <code>data/hitl/approvals.json</code> and feed the
-        The skip gate will prevent the flow from re-surfacing next <code>behavior:mine</code>.
-        Neither touches the <code>.spec.ts</code> file itself.
+        skip gate so the flow won't re-surface on the next <code>behavior:mine</code> — neither
+        touches the <code>.spec.ts</code> file. <strong>Delete test</strong> removes the{" "}
+        <code>.spec.ts</code> from <code>generated-tests/</code> so it won't be executed; it
+        does not record a decision.
       </p>
     </aside>
   );
@@ -298,7 +318,7 @@ function PriorDecisions({ prior }: { prior: PriorDecision[] }) {
 }
 
 export function ReviewView() {
-  const { data, state, error, reload, decide } = useFlows();
+  const { data, state, error, reload, decide, removeTest } = useFlows();
   const [persona, setPersona] = useState<PersonaFilter>("all");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [errorsOnly, setErrorsOnly] = useState(false);
@@ -350,18 +370,41 @@ export function ReviewView() {
     }
   }
 
+  async function handleDelete(flow: ReviewFlow) {
+    if (!flow.test_path) return;
+    if (!window.confirm(`Delete ${flow.test_path}? This removes the spec file from disk.`)) {
+      return;
+    }
+    setPending(true);
+    setActionError(null);
+    try {
+      await removeTest(flow);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to delete test");
+    } finally {
+      setPending(false);
+    }
+  }
+
   if (state === "loading" && !data) {
-    return <p className="review-empty">Loading discovered flows…</p>;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <Skeleton height={32} />
+        <Skeleton height={64} />
+        <Skeleton height={64} />
+        <Skeleton height={64} />
+      </div>
+    );
   }
 
   if (state === "error") {
     return (
-      <div className="review-empty">
+      <EmptyState icon={<FlaskConical size={28} aria-hidden="true" />}>
         <p>Could not load flows: {error}</p>
         <button type="button" onClick={reload}>
           Retry
         </button>
-      </div>
+      </EmptyState>
     );
   }
 
@@ -498,6 +541,7 @@ export function ReviewView() {
             flow={selectedFlow}
             pending={pending}
             onDecide={(decision) => handleDecide(selectedFlow, decision)}
+            onDelete={() => handleDelete(selectedFlow)}
           />
         ) : null}
       </div>

@@ -101,19 +101,40 @@ services:
         condition: service_healthy
     environment:
       MEDUSA_BACKEND_URL: http://medusa:9000
-    command: sh -c "test -d node_modules/.bin || npm ci && npm run dev"
+      # The generated specs are API-only Playwright (request context) — they never launch a
+      # browser, so skip the browser download on install. Saves time/space and dodges the fact
+      # that Playwright's browser binaries aren't supported on alpine/musl.
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+    # On first boot, install the dashboard deps plus the two the in-container test run needs:
+    # generated-tests (@playwright/test) and the test-runner (tsx). Each is guarded so restarts
+    # skip the install; the deps live in named volumes (below) so the musl binaries are correct.
+    command: >-
+      sh -c "(test -d node_modules/.bin || npm ci)
+      && (test -d /workspace/generated-tests/node_modules/.bin || npm --prefix /workspace/generated-tests ci)
+      && (test -d /workspace/services/test-runner/node_modules/.bin || npm --prefix /workspace/services/test-runner ci)
+      && npm run dev"
     ports:
       - "5173:5173"
     volumes:
       - ./apps/platform-dashboard:/workspace/apps/platform-dashboard
       - ./.env:/workspace/.env
+      # /api/tests/run shells out to `npm run test:<target>` (root package.json) which drives the
+      # test-runner; mount both so the run resolves in-container.
+      - ./package.json:/workspace/package.json:ro
+      - ./services/test-runner:/workspace/services/test-runner
       # Phase 15 HITL review reads pipeline artifacts via /api/flows; mount them
       # under /workspace so findRepoRoot() resolves the repo root in-container.
       - ./services/behavior-engine/data:/workspace/services/behavior-engine/data:ro
-      - ./generated-tests:/workspace/generated-tests:ro
-      - ./reports:/workspace/reports:ro
+      # RW (was :ro): the run writes Playwright results + reports, and the delete button
+      # unlinks specs under generated-tests/.
+      - ./generated-tests:/workspace/generated-tests
+      - ./reports:/workspace/reports
       - ./data:/workspace/data
       - platform_dashboard_node_modules:/workspace/apps/platform-dashboard/node_modules
+      # Installed in-container (correct musl binaries for tsx/esbuild + @playwright/test) and
+      # persisted across restarts; these shadow any host node_modules.
+      - generated_tests_node_modules:/workspace/generated-tests/node_modules
+      - test_runner_node_modules:/workspace/services/test-runner/node_modules
 
   elasticsearch:
     profiles: ["elk"]
@@ -180,5 +201,7 @@ volumes:
   medusa_node_modules:
   storefront_node_modules:
   platform_dashboard_node_modules:
+  generated_tests_node_modules:
+  test_runner_node_modules:
   elasticsearch_data:
   filebeat_registry:

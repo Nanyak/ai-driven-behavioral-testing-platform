@@ -11,9 +11,10 @@ import {
   readFileSync,
   readdirSync,
   statSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
@@ -43,7 +44,7 @@ function findRepoRoot(): string {
   return resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 }
 
-const REPO_ROOT = findRepoRoot();
+export const REPO_ROOT = findRepoRoot();
 
 const CANDIDATES_DIR = resolve(
   REPO_ROOT,
@@ -322,6 +323,30 @@ function specsBySignature(): Map<string, string> {
     }
   }
   return map;
+}
+
+/**
+ * Delete a generated spec by its repo-relative path (the `test_path` the UI already holds).
+ * Path-scoped: the resolved target must live strictly inside `generated-tests/`, so a
+ * traversal like `../../services/...` is refused rather than unlinked. This is the platform's
+ * "delete this test from the browser" action — distinct from approve/discard, which never
+ * touch files. Returns a tagged result; the route maps it to an HTTP status.
+ */
+export function deleteTestFile(
+  relPath: string
+): { deleted: true } | { deleted: false; reason: "invalid" | "out_of_scope" | "not_found" } {
+  if (typeof relPath !== "string" || relPath.trim().length === 0) {
+    return { deleted: false, reason: "invalid" };
+  }
+  const target = resolve(REPO_ROOT, relPath);
+  if (!target.startsWith(GENERATED_TESTS_DIR + sep)) {
+    return { deleted: false, reason: "out_of_scope" };
+  }
+  if (!existsSync(target)) {
+    return { deleted: false, reason: "not_found" };
+  }
+  unlinkSync(target);
+  return { deleted: true };
 }
 
 /** Read the approval store as a signature->entry map. Empty if missing/malformed. */
