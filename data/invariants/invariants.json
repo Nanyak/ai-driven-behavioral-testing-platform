@@ -1,0 +1,116 @@
+{
+  "generated_at": "2026-06-26T00:00:00.000Z",
+  "flows": {
+    "511bb4352f00a8319a6a8e86448788f82936bd37987141373a039e4e2e5c05c0": {
+      "flow_name": "Registered Customer Checkout – Update Cart, Ship, Pay, Complete, Confirm Order",
+      "invariants": [
+        {
+          "stepTitle": "POST /store/carts/{id}/line-items/{id}",
+          "path": "cart.items.length",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "the cart still holds at least one line item after the quantity update",
+          "source": "ai-proposed",
+          "verified": true
+        },
+        {
+          "stepTitle": "GET /store/shipping-options",
+          "path": "shipping_options.length",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "a non-empty cart must offer at least one shipping option, or checkout cannot proceed",
+          "source": "ai-proposed",
+          "verified": true
+        },
+        {
+          "stepTitle": "GET /store/payment-providers",
+          "path": "payment_providers.length",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "the region must expose at least one payment provider for the cart to be payable",
+          "source": "ai-proposed",
+          "verified": true
+        },
+        {
+          "stepTitle": "POST /store/carts/{id}/complete",
+          "path": "type",
+          "matcher": "toBe",
+          "expected": "order",
+          "rationale": "complete returns HTTP 200 even when the cart fails to convert ({type:'cart',error}); only type==='order' proves the order was actually created",
+          "source": "ai-proposed",
+          "verified": true
+        },
+        {
+          "stepTitle": "POST /store/carts/{id}/complete",
+          "path": "order.items.length",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "the created order must carry the cart's line items, not be an empty order",
+          "source": "ai-proposed",
+          "verified": true
+        },
+        {
+          "stepTitle": "GET /store/orders/{id}",
+          "path": "order.payment_status",
+          "matcher": "toBeDefined",
+          "rationale": "a completed order must carry a payment status (the payment side effect actually ran)",
+          "source": "ai-proposed",
+          "verified": true
+        }
+      ]
+    },
+    "003f95280ff1f97703b65c99d98d72c9657d80efdf6ac09f9464f1019a675b7c": {
+      "flow_name": "registered_customer_multi_item_browse_and_purchase",
+      "invariants": [
+        {
+          "stepTitle": "POST /store/carts/{id}/line-items",
+          "path": "cart.items.length",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "adding a line item must leave the cart with at least one item",
+          "source": "ai-proposed",
+          "verified": true
+        },
+        {
+          "stepTitle": "POST /store/carts/{id}/complete",
+          "path": "type",
+          "matcher": "toBe",
+          "expected": "order",
+          "rationale": "complete returns 200 even on a failed conversion; type==='order' is the real success oracle",
+          "source": "ai-proposed",
+          "verified": true
+        },
+        {
+          "stepTitle": "GET /store/orders/{id}",
+          "path": "order.id",
+          "matcher": "toBeDefined",
+          "rationale": "the confirmed order must be retrievable with a real id",
+          "source": "ai-proposed",
+          "verified": true
+        }
+      ]
+    },
+    "9814b5a0bf736e66ee3d4ef20ad0fad4c69109bca6c66c0ae5b7dd1368412fa3": {
+      "flow_name": "Admin Order Cancellation Journey",
+      "invariants": [
+        {
+          "stepTitle": "POST /admin/orders/{id}/cancel",
+          "path": "order.status",
+          "matcher": "toBe",
+          "expected": "canceled",
+          "rationale": "cancel returns HTTP 200 regardless; order.status==='canceled' is the only proof the cancellation actually took effect",
+          "source": "ai-proposed",
+          "verified": true
+        },
+        {
+          "stepTitle": "GET /admin/orders/{id}",
+          "path": "order.id",
+          "matcher": "toBeDefined",
+          "rationale": "the order under cancellation must exist and be fetchable before the cancel step",
+          "source": "ai-proposed",
+          "verified": true
+        }
+      ]
+    }
+  }
+}

@@ -57,14 +57,14 @@ export function renderHtml(report: Report, triage?: TriageReport | null): string
   const personaRows = report.by_persona
     .map(
       (p) =>
-        `<tr><td>${esc(p.persona)}</td><td class="num pass">${p.passed}</td><td class="num fail">${p.failed}</td><td class="num skip">${p.skipped}</td></tr>`,
+        `<tr${p.failed > 0 ? ' class="has-fail"' : ""}><td>${esc(p.persona)}</td><td class="num pass">${p.passed}</td><td class="num fail">${p.failed}</td><td class="num skip">${p.skipped}</td></tr>`,
     )
     .join("");
 
   const flowRows = report.by_flow
     .map(
       (f) =>
-        `<tr><td>${esc(f.flow_name)}</td><td>${esc(f.persona)}</td><td class="num pass">${f.passed}</td><td class="num fail">${f.failed}</td><td class="num skip">${f.skipped}</td></tr>`,
+        `<tr${f.failed > 0 ? ' class="has-fail"' : ""}><td>${esc(f.flow_name)}</td><td>${esc(f.persona)}</td><td class="num pass">${f.passed}</td><td class="num fail">${f.failed}</td><td class="num skip">${f.skipped}</td></tr>`,
     )
     .join("");
 
@@ -93,6 +93,26 @@ export function renderHtml(report: Report, triage?: TriageReport | null): string
 
   const banner = report.status === "green" ? "green" : "red";
 
+  // Headline summary line — derived purely from totals/rollups, so the report
+  // stays deterministic. Drives the hero header that makes the verdict legible
+  // from across a room during a live demo.
+  const affectedPersonas = report.by_persona.filter((p) => p.failed > 0).length;
+  const affectedFlows = report.by_flow.filter((f) => f.failed > 0).length;
+  const heroSummary =
+    report.status === "green"
+      ? `All ${totals.executed} tests passed across ${report.by_persona.length} personas and ${report.by_flow.length} flows.`
+      : `${totals.failed} of ${totals.executed} tests failed — ${affectedFlows} flow(s) across ${affectedPersonas} persona(s).`;
+
+  // Proportional pass/fail/skip bar. Guard executed===0 so the bar collapses
+  // rather than dividing by zero.
+  const denom = totals.executed || 1;
+  const pct = (n: number) => ((n / denom) * 100).toFixed(2);
+  const barHtml = `<div class="bar" role="img" aria-label="pass rate">`
+    + `<span class="bar-seg pass" style="width:${pct(totals.passed)}%"></span>`
+    + `<span class="bar-seg fail" style="width:${pct(totals.failed)}%"></span>`
+    + `<span class="bar-seg skip" style="width:${pct(totals.skipped)}%"></span>`
+    + `</div>`;
+
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -109,6 +129,20 @@ export function renderHtml(report: Report, triage?: TriageReport | null): string
   .banner { display:inline-block; padding: 6px 14px; border-radius: 999px; font-weight: 700; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: #fff; }
   .banner.green { background: var(--pass); }
   .banner.red { background: var(--fail); }
+  /* Hero header — the verdict, readable from across a room. */
+  .hero { display:flex; align-items:center; gap: 18px; padding: 18px 22px; border-radius: 16px; margin: 16px 0 22px; border:1px solid var(--line); }
+  .hero.green { background: linear-gradient(90deg, #f0fdf4, #fff); border-color:#bbf7d0; }
+  .hero.red { background: linear-gradient(90deg, #fef2f2, #fff); border-color:#fecaca; }
+  .hero .verdict { font-size: 30px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; line-height: 1; }
+  .hero.green .verdict { color: var(--pass); }
+  .hero.red .verdict { color: var(--fail); }
+  .hero .summary { font-size: 15px; font-weight: 600; color: var(--ink); }
+  .hero .dot { font-size: 34px; line-height: 1; }
+  .hero.green .dot { color: var(--pass); } .hero.red .dot { color: var(--fail); }
+  /* Proportional pass/fail/skip bar. */
+  .bar { display:flex; height: 10px; border-radius: 999px; overflow:hidden; background:#e2e8f0; margin: 4px 0 8px; }
+  .bar-seg { height: 100%; }
+  .bar-seg.pass { background: var(--pass); } .bar-seg.fail { background: var(--fail); } .bar-seg.skip { background: var(--skip); }
   .totals { display:flex; gap: 12px; margin: 18px 0; flex-wrap: wrap; }
   .stat { background:#fff; border:1px solid var(--line); border-radius: 14px; padding: 14px 18px; min-width: 96px; }
   .stat .n { font-size: 26px; font-weight: 700; }
@@ -126,6 +160,8 @@ export function renderHtml(report: Report, triage?: TriageReport | null): string
   .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
   .small { font-size: 11px; color: var(--muted); }
   .muted { color: var(--muted); } .center { text-align:center; }
+  tr.has-fail td { background:#fef2f2; }
+  tr.has-fail td:first-child { font-weight: 700; box-shadow: inset 3px 0 0 var(--fail); }
   .exp { color: var(--muted); } .act { color: var(--fail); font-weight: 700; }
   .diff.missing { color: var(--fail); } .diff.unexpected { color: var(--skip); } .diff.changed { color: #7c3aed; }
   .diff.value { color: #be123c; font-weight: 600; }
@@ -138,8 +174,18 @@ export function renderHtml(report: Report, triage?: TriageReport | null): string
 </head>
 <body>
 <div class="wrap">
-  <h1>Regression Report <span class="banner ${banner}">${esc(report.status)}</span></h1>
+  <h1>Regression Report</h1>
   <div class="sub">${esc(report.run_id)} · generated ${esc(report.generated_at)}</div>
+
+  <div class="hero ${banner}">
+    <span class="dot">${banner === "green" ? "&#10003;" : "&#10007;"}</span>
+    <div>
+      <div class="verdict">${esc(report.status)}</div>
+      <div class="summary">${esc(heroSummary)}</div>
+    </div>
+  </div>
+
+  ${barHtml}
 
   <div class="totals">
     <div class="stat"><div class="n">${totals.executed}</div><div class="l">Executed</div></div>

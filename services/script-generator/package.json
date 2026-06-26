@@ -7,8 +7,11 @@
   "scripts": {
     "generate": "tsx src/run.ts",
     "repair": "tsx src/run.ts --repair",
+    "invariants": "tsx src/invariants/cli.ts",
+    "digest": "tsx src/invariants/digest-cli.ts",
     "test:run": "tsx src/run.test.ts",
     "test:repair": "tsx src/repair/repair.test.ts",
+    "test:invariants": "tsx src/invariants/invariants.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

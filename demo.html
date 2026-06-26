@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Demo Guide · AI-Driven Behavioral Testing Platform</title>
+<style>
+  :root {
+    --bg: #0b0f17;
+    --panel: #121826;
+    --panel-2: #0f1420;
+    --border: #1f2940;
+    --text: #e6ecf5;
+    --muted: #97a3b8;
+    --accent: #5b9dff;
+    --accent-2: #7c5cff;
+    --green: #3fb950;
+    --red: #f85149;
+    --amber: #d29922;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+  body {
+    margin: 0; background: radial-gradient(1200px 600px at 80% -10%, #16203a 0%, var(--bg) 55%);
+    color: var(--text); font-family: var(--sans); line-height: 1.6; font-size: 16px;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); font-size: .9em; }
+
+  header.hero {
+    padding: 56px 24px 40px; max-width: 980px; margin: 0 auto; text-align: left;
+  }
+  .badge {
+    display: inline-block; font-size: 12px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--accent); border: 1px solid var(--border); padding: 4px 10px; border-radius: 999px;
+    background: var(--panel); margin-bottom: 18px;
+  }
+  h1 { font-size: 38px; line-height: 1.15; margin: 0 0 12px; font-weight: 800;
+       background: linear-gradient(90deg, #fff, #9fc0ff); -webkit-background-clip: text;
+       background-clip: text; -webkit-text-fill-color: transparent; }
+  .subtitle { color: var(--muted); font-size: 18px; max-width: 720px; }
+
+  .layout { max-width: 980px; margin: 0 auto; padding: 0 24px 80px; }
+
+  nav.toc {
+    position: sticky; top: 0; z-index: 5; backdrop-filter: blur(8px);
+    background: rgba(11,15,23,.7); border-bottom: 1px solid var(--border);
+    margin: 0 -24px 32px; padding: 12px 24px; display: flex; gap: 18px; flex-wrap: wrap;
+    font-size: 14px;
+  }
+  nav.toc a { color: var(--muted); }
+  nav.toc a:hover { color: var(--text); text-decoration: none; }
+
+  section { margin-bottom: 44px; }
+  h2 { font-size: 24px; margin: 0 0 6px; display: flex; align-items: center; gap: 12px; }
+  h2 .num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border-radius: 8px; font-size: 15px; font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff;
+  }
+  h2 .lead { color: var(--muted); font-weight: 400; font-size: 15px; }
+  h3 { font-size: 17px; margin: 28px 0 8px; }
+  p.note { color: var(--muted); margin-top: 6px; }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    padding: 20px 22px; margin: 16px 0;
+  }
+  .grid { display: grid; gap: 16px; }
+  .grid.cols-2 { grid-template-columns: 1fr 1fr; }
+  .grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  @media (max-width: 720px) { .grid.cols-2, .grid.cols-3 { grid-template-columns: 1fr; } }
+
+  .pill { display:inline-block; font-size:12px; padding:3px 9px; border-radius:999px;
+          border:1px solid var(--border); color:var(--muted); margin-right:6px; }
+  .pill.green { color: var(--green); border-color: rgba(63,185,80,.4); }
+  .pill.red { color: var(--red); border-color: rgba(248,81,73,.4); }
+  .pill.amber { color: var(--amber); border-color: rgba(210,153,34,.4); }
+
+  /* code blocks with copy */
+  .code {
+    position: relative; background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 10px; margin: 12px 0; overflow: hidden;
+  }
+  .code pre { margin: 0; padding: 16px 18px; overflow-x: auto; font-family: var(--mono);
+              font-size: 13.5px; line-height: 1.7; color: #d6e2f5; }
+  .code .copy {
+    position: absolute; top: 8px; right: 8px; background: var(--panel); color: var(--muted);
+    border: 1px solid var(--border); border-radius: 7px; padding: 4px 10px; font-size: 12px;
+    cursor: pointer; transition: all .15s;
+  }
+  .code .copy:hover { color: var(--text); border-color: var(--accent); }
+  .code .copy.done { color: var(--green); border-color: var(--green); }
+  .cmt { color: #5d6b85; }
+
+  ol.steps { counter-reset: step; list-style: none; padding: 0; margin: 0; }
+  ol.steps > li {
+    position: relative; padding: 0 0 4px 0; margin-bottom: 8px;
+  }
+
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14.5px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+  td code { color: #9fc0ff; }
+
+  .callout { border-left: 3px solid var(--accent); background: rgba(91,157,255,.07);
+             padding: 14px 18px; border-radius: 0 10px 10px 0; margin: 16px 0; }
+  .callout.warn { border-color: var(--amber); background: rgba(210,153,34,.08); }
+  .callout.win { border-color: var(--green); background: rgba(63,185,80,.08); }
+  .callout strong { color: var(--text); }
+
+  .flow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px;
+          color: var(--muted); font-family: var(--mono); margin: 8px 0 0; }
+  .flow span.node { background: var(--panel-2); border: 1px solid var(--border);
+                    padding: 5px 10px; border-radius: 7px; color: var(--text); }
+  .flow span.arrow { color: var(--accent); }
+
+  footer { max-width: 980px; margin: 0 auto; padding: 24px; color: var(--muted);
+           font-size: 13px; border-top: 1px solid var(--border); }
+  kbd { font-family: var(--mono); background: var(--panel-2); border: 1px solid var(--border);
+        border-radius: 5px; padding: 1px 6px; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <span class="badge">Demo Runbook</span>
+  <h1>AI-Driven Behavioral Testing Platform</h1>
+  <p class="subtitle">
+    A step-by-step guide to demoing the platform: drive synthetic traffic at a real Medusa
+    e-commerce backend, <em>mine</em> how users behave from the raw logs, auto-generate
+    Playwright API tests, and catch a live regression — red to green and back.
+  </p>
+</header>
+
+<div class="layout">
+  <nav class="toc">
+    <a href="#what">What it does</a>
+    <a href="#prereq">Prerequisites</a>
+    <a href="#bringup">Bring it up</a>
+    <a href="#dashboard">Demo A · Dashboard</a>
+    <a href="#cli">Demo B · CLI</a>
+    <a href="#regression">Demo C · Regression</a>
+    <a href="#talking">Talking points</a>
+    <a href="#urls">URLs &amp; creds</a>
+    <a href="#trouble">Troubleshooting</a>
+  </nav>
+
+  <!-- WHAT -->
+  <section id="what">
+    <h2><span class="num">★</span> The one-sentence pitch</h2>
+    <p>
+      Sessions are <strong>never labelled</strong> with a persona. The platform watches raw API
+      traffic, then statistically <strong>rediscovers</strong> guest / customer / admin personas
+      and their behavior flows, generates executable tests from those flows, and runs them against
+      a golden OpenAPI oracle to produce a red/green regression report.
+    </p>
+    <div class="flow">
+      <span class="node">traffic</span><span class="arrow">→</span>
+      <span class="node">logs (ELK)</span><span class="arrow">→</span>
+      <span class="node">session flows</span><span class="arrow">→</span>
+      <span class="node">mined behavior + personas</span><span class="arrow">→</span>
+      <span class="node">Playwright specs</span><span class="arrow">→</span>
+      <span class="node">run vs golden</span><span class="arrow">→</span>
+      <span class="node">report</span>
+    </div>
+    <div class="grid cols-2" style="margin-top:18px">
+      <div class="card">
+        <h3 style="margin-top:0">Two claims worth demoing</h3>
+        <p class="note">
+          <strong style="color:var(--text)">1. Emergent persona discovery</strong> — personas fall
+          out of mined endpoint sequences, then are scored against held-out JWT
+          <code>user_role</code> ground truth (precision/recall per persona).
+        </p>
+        <p class="note">
+          <strong style="color:var(--text)">2. Holdout validation</strong> — the registered-customer
+          <code>register → login → checkout</code> sequence exists <em>only</em> in LLM-varied
+          traffic. The engine is expected to rediscover it; a negative control proves it doesn't
+          hallucinate flows that were never injected.
+        </p>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Where the AI is — and isn't</h3>
+        <p class="note">
+          <strong style="color:var(--text)">LLM (Haiku 4.5 / Sonnet 4.6):</strong> generates
+          LLM-varied traffic, names flows, flags anomalies, recommends assertions, and triages
+          failures.
+        </p>
+        <p class="note">
+          <strong style="color:var(--text)">Deterministic (no key needed):</strong> mining, persona
+          classification, the golden oracle, and the pass/fail gate. The LLM is <em>never</em> on
+          the oracle or gate path — so the regression demo stays byte-stable.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- PREREQ -->
+  <section id="prereq">
+    <h2><span class="num">1</span> Prerequisites <span class="lead">— check once before you present</span></h2>
+    <table>
+      <tr><th>Tool</th><th>Version</th><th>Why</th></tr>
+      <tr><td>Node.js</td><td>20+</td><td>Medusa, TS services, verification scripts</td></tr>
+      <tr><td>npm</td><td>10+</td><td>Workspaces</td></tr>
+      <tr><td>Docker + Docker Compose</td><td>current</td><td>Postgres, Redis, Medusa, ELK, dashboard</td></tr>
+      <tr><td><code>ANTHROPIC_API_KEY</code></td><td>—</td><td>Optional. Enables LLM-varied traffic + flow naming + triage. Mining/classification work without it.</td></tr>
+    </table>
+    <div class="code">
+      <button class="copy">Copy</button>
+      <pre><span class="cmt"># From a clean checkout — install deps and set up env once</span>
+npm install
+npm install --prefix apps/medusa
+npm install --prefix apps/storefront
+npm install --prefix apps/platform-dashboard
+cp .env.example .env   <span class="cmt"># then set ANTHROPIC_API_KEY (optional but nicer demo)</span></pre>
+    </div>
+  </section>
+
+  <!-- BRINGUP -->
+  <section id="bringup">
+    <h2><span class="num">2</span> Bring up the stack</h2>
+    <div class="code">
+      <button class="copy">Copy</button>
+      <pre><span class="cmt"># 1. Start Medusa + Postgres + Redis, then seed products/regions/keys + admin user</span>
+npm run compose:up
+npm run medusa:setup
+docker-compose restart medusa        <span class="cmt"># pick up the seeded schema</span>
+
+<span class="cmt"># 2. Start ELK (Elasticsearch + Logstash + Kibana + Filebeat)</span>
+npm run elk:up</pre>
+    </div>
+    <div class="callout">
+      <strong>Sanity check before you proceed:</strong> open
+      <a href="http://localhost:9000/health">localhost:9000/health</a> (Medusa) and
+      <a href="http://localhost:5601">localhost:5601</a> (Kibana). One-time in Kibana, create the
+      <code>behavior-logs-*</code> data view so you can show the live log stream.
+    </div>
+    <p class="note">The platform dashboard runs in Docker as part of compose and is served at
+      <a href="http://localhost:5173">localhost:5173</a>. (Or run it locally with
+      <code>npm run dashboard:dev</code>.)</p>
+  </section>
+
+  <!-- DASHBOARD -->
+  <section id="dashboard">
+    <h2><span class="num">A</span> Demo path A — drive everything from the dashboard <span class="lead">(recommended for a live audience)</span></h2>
+    <p>
+      The dashboard is the showpiece: the whole authoring pipeline is wired to buttons, so you never
+      have to touch a terminal in front of the room. Open
+      <a href="http://localhost:5173">localhost:5173</a>.
+    </p>
+    <ol class="steps">
+      <li class="card">
+        <h3 style="margin-top:0">① Generate traffic &amp; ingest</h3>
+        Kick off synthetic traffic against Medusa, then ingest the resulting logs from
+        Elasticsearch into session flows + golden candidates. Show the live log count climbing in
+        Kibana while this runs.
+      </li>
+      <li class="card">
+        <h3 style="margin-top:0">② Mine behavior + personas</h3>
+        Run the behavior engine. Point out the <strong>validation report</strong>: per-persona
+        precision/recall vs. the held-out JWT role, the <strong>holdout recovery</strong> support
+        count where it rediscovers the customer checkout, and the <strong>negative control</strong>.
+        This is the "AI-driven, not scripted" proof.
+      </li>
+      <li class="card">
+        <h3 style="margin-top:0">③ Generate tests</h3>
+        Generate Playwright API specs from the mined candidates — emitted per persona under
+        <code>generated-tests/{guest,customer,admin}</code>. Browse the generated specs in the
+        dashboard.
+      </li>
+      <li class="card">
+        <h3 style="margin-top:0">④ Run the suite &amp; read the report</h3>
+        Run the suite from the browser and watch the report render
+        <span class="pill green">green</span> with per-persona / per-flow / per-endpoint
+        attribution. Optionally trigger <strong>triage</strong> for advisory root-cause chips, and
+        the <strong>repair</strong> agent for any wrong-state resolvers.
+      </li>
+    </ol>
+    <div class="callout">
+      The dashboard drives <code>/api/pipeline/run</code> (mine / generate / repair / triage),
+      <code>/api/tests/run</code>, and <code>/api/tests/delete</code> — all single-flight and
+      allowlisted. No CLI needed. The suite is API-only Playwright (request fixture, no browsers).
+    </div>
+  </section>
+
+  <!-- CLI -->
+  <section id="cli">
+    <h2><span class="num">B</span> Demo path B — the CLI pipeline <span class="lead">(scripted, reproducible)</span></h2>
+    <p class="note">Same pipeline, one command per stage. Good for a recorded walkthrough or when you
+      want to narrate each step.</p>
+    <div class="code">
+      <button class="copy">Copy</button>
+      <pre><span class="cmt"># 3. Generate synthetic traffic against Medusa</span>
+npm run traffic:generate
+
+<span class="cmt"># 4. Ingest ES logs -> session flows + golden candidates</span>
+npm run ingest:run
+
+<span class="cmt"># 5. Mine behavior flows + emergent personas (writes candidates + validation report)</span>
+npm run behavior:mine
+
+<span class="cmt"># 6. Generate Playwright API tests from the candidates</span>
+npm run script-generator:generate
+
+<span class="cmt"># 7. Execute the generated suite (writes reports/report.{json,html})</span>
+npm run test:all
+
+<span class="cmt"># 8. (Optional) Advisory triage of any failures -> reports/triage.json</span>
+npm run triage
+
+<span class="cmt"># 9. Open the report</span>
+open reports/report.html</pre>
+    </div>
+    <p class="note">Scope the run with <code>npm run test:guest</code> / <code>test:customer</code> /
+      <code>test:admin</code> / <code>test:happy</code> / <code>test:failure</code>.</p>
+  </section>
+
+  <!-- REGRESSION -->
+  <section id="regression">
+    <h2><span class="num">C</span> Demo path C — catch a regression live <span class="lead">(the money shot 🎯)</span></h2>
+    <p>
+      This is the most compelling part to show. You break the backend with a feature toggle, watch
+      the suite go <span class="pill red">red</span> with full attribution, then revert and watch it
+      return to <span class="pill green">green</span>.
+    </p>
+    <div class="code">
+      <button class="copy">Copy</button>
+      <pre><span class="cmt"># Restart Medusa with the regression toggle on</span>
+REGRESSION_DEMO=carts_complete_500 docker-compose up -d medusa
+
+<span class="cmt"># Re-run the customer suite — the checkout /complete now 500s</span>
+npm run test:customer
+open reports/report.html        <span class="cmt"># RED, with persona/flow/endpoint attribution</span>
+
+<span class="cmt"># Revert: unset the toggle and restart</span>
+docker-compose up -d medusa     <span class="cmt"># (without REGRESSION_DEMO)</span>
+npm run test:customer           <span class="cmt"># GREEN again — byte-stable</span></pre>
+    </div>
+    <div class="callout win">
+      <strong>Why it lands:</strong> the failing test is a <em>generated</em> customer-checkout spec
+      that reaches <code>/store/carts/{id}/complete</code> — it wasn't hand-written for this bug. The
+      oracle and gate are deterministic, so the same toggle produces the same red report every time.
+    </div>
+    <div class="callout warn">
+      <strong>Note:</strong> some residual customer/guest failures are <em>expected</em> — the SUT
+      gates all cart/checkout mutations behind an authenticated customer, so guest-cart candidates
+      are intentionally unsatisfiable. That's documented drift, not a platform bug.
+    </div>
+  </section>
+
+  <!-- TALKING POINTS -->
+  <section id="talking">
+    <h2><span class="num">3</span> Talking points to hit</h2>
+    <div class="grid cols-3">
+      <div class="card">
+        <h3 style="margin-top:0">Emergent, not scripted</h3>
+        <p class="note">Personas are <em>derived</em> from endpoint sequences + statuses, then scored
+          against held-out JWT roles. Show the precision/recall numbers.</p>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Holdout + negative control</h3>
+        <p class="note">It rediscovers the customer checkout that lived only in LLM-varied traffic —
+          and provably does <em>not</em> report flows that were never injected.</p>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Deterministic gate</h3>
+        <p class="note">The golden OpenAPI oracle and pass/fail gate never touch the LLM, so the
+          regression demo is reproducible to the byte.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- URLS -->
+  <section id="urls">
+    <h2><span class="num">4</span> URLs &amp; credentials</h2>
+    <table>
+      <tr><th>Surface</th><th>URL</th><th>Notes</th></tr>
+      <tr><td>Platform dashboard</td><td><a href="http://localhost:5173">localhost:5173</a></td><td>Drives the whole pipeline</td></tr>
+      <tr><td>Medusa health</td><td><a href="http://localhost:9000/health">:9000/health</a></td><td>Liveness check</td></tr>
+      <tr><td>Medusa Admin UI</td><td><a href="http://localhost:9000/app">:9000/app</a></td><td><code>admin@example.com</code> / <code>change-me</code></td></tr>
+      <tr><td>Storefront</td><td><a href="http://localhost:8000">localhost:8000</a></td><td><code>npm run storefront:dev</code></td></tr>
+      <tr><td>Kibana</td><td><a href="http://localhost:5601">localhost:5601</a></td><td>Live <code>behavior-logs-*</code> stream</td></tr>
+      <tr><td>Store API</td><td><a href="http://localhost:9000/store/products">:9000/store/products</a></td><td>Needs <code>x-publishable-api-key</code></td></tr>
+      <tr><td>Report</td><td><code>reports/report.html</code></td><td>Red/green regression report</td></tr>
+    </table>
+  </section>
+
+  <!-- TROUBLESHOOTING -->
+  <section id="trouble">
+    <h2><span class="num">5</span> Troubleshooting</h2>
+    <div class="grid cols-2">
+      <div class="card">
+        <h3 style="margin-top:0">Dashboard shows zeros</h3>
+        <p class="note">A stale container can drop new compose mounts. Force-recreate it:</p>
+        <div class="code"><button class="copy">Copy</button><pre>docker-compose up -d --force-recreate platform-dashboard</pre></div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Regenerating the full suite</h3>
+        <p class="note">A full regen requires clearing <code>generated-tests/</code> first (the
+          miner won't overwrite an existing suite in place).</p>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Verify offline (no live stack)</h3>
+        <p class="note">Every service ships a fixture-backed check. Run the whole sign-off chain:</p>
+        <div class="code"><button class="copy">Copy</button><pre>npm run check:phase14</pre></div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Reset everything</h3>
+        <p class="note">Tear down with volumes if state gets weird, then bring it back up.</p>
+        <div class="code"><button class="copy">Copy</button><pre>npm run stack:reset
+npm run compose:up</pre></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<footer>
+  Generated demo runbook · see <code>README.md</code>, <code>docs/pipeline.md</code> (full runbook),
+  <code>docs/architecture.md</code>, and <code>docs/limitations.md</code> for the authoritative detail.
+</footer>
+
+<script>
+  document.querySelectorAll('.code .copy').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var pre = btn.parentElement.querySelector('pre');
+      var text = pre.innerText;
+      navigator.clipboard.writeText(text).then(function () {
+        btn.textContent = 'Copied ✓';
+        btn.classList.add('done');
+        setTimeout(function () { btn.textContent = 'Copy'; btn.classList.remove('done'); }, 1400);
+      });
+    });
+  });
+</script>
+</body>
+</html>

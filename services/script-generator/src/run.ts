@@ -16,6 +16,7 @@ import { emitSpec } from "./emit.js";
 import { loadCandidates, type Candidate } from "./load.js";
 import { buildFlowPlan, type OasSpecs } from "./resolve.js";
 import { printRepairSummary, runRepair, type EmittedSpec } from "./repair/repair.js";
+import { loadInvariants, verifiedInvariantsByStep } from "./invariants/types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SERVICE_ROOT = resolvePath(__dirname, "..");
@@ -253,6 +254,32 @@ export async function assertGolden(endpoint: string, liveStatus: number, liveBod
   return current;
 }
 
+/**
+ * Non-throwing path reader used by invariant assertions. Unlike extractPath
+ * (which demands a string and throws on a missing segment), getPath returns the
+ * value at \`path\` or \`undefined\` when any segment is absent — so a missing field
+ * surfaces as a clean assertion failure (\`undefined\` failed the matcher) instead
+ * of a thrown TypeError that would mask the regression. Supports a synthetic
+ * \`.length\` segment on arrays/strings so an invariant can assert e.g.
+ * "cart.items.length" > 0.
+ */
+export function getPath(value: unknown, path: string): unknown {
+  const segments = path
+    .replace(/\\[(\\d+)\\]/g, ".$1")
+    .split(".")
+    .filter(Boolean);
+  let current: unknown = value;
+  for (const segment of segments) {
+    if (current === null || current === undefined) return undefined;
+    if (segment === "length" && (Array.isArray(current) || typeof current === "string")) {
+      current = (current as { length: number }).length;
+      continue;
+    }
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return current;
+}
+
 export async function safeJson(response: { json: () => Promise<unknown> }): Promise<unknown> {
   try {
     return await response.json();
@@ -369,6 +396,13 @@ function main(): void {
 
   const specs: OasSpecs = loadAugmentedSpecs() as { store: OasDocument; admin: OasDocument };
 
+  // Verified behavioral invariants (data/invariants/invariants.json), proposed by
+  // the AI invariant step and checked against the live known-good backend. Empty
+  // artifact -> every spec is status-only, exactly as before (zero behavior change
+  // when no invariants exist). Generation stays deterministic: no LLM call here.
+  const invariantsArtifact = loadInvariants();
+  let invariantStepCount = 0;
+
   // The blessed outcome(s) per approved journey — drives BOTH spec preservation
   // (a still-blessed oracle survives a regen) and conflict withholding below.
   const approved = approvedOutcomes();
@@ -422,7 +456,9 @@ function main(): void {
 
     const flowPlan = buildFlowPlan(candidate.steps, specs, candidate.attributes.requires_auth);
     const golden = route.path === "happy-path";
-    const { source, fixmeCount } = emitSpec({ candidate, plan: flowPlan, golden });
+    const invariantsByStep = verifiedInvariantsByStep(invariantsArtifact, candidate.signature);
+    for (const list of invariantsByStep.values()) invariantStepCount += list.length;
+    const { source, fixmeCount } = emitSpec({ candidate, plan: flowPlan, golden, invariantsByStep });
 
     writeFileSync(filePath, source);
     perFolderCount[relDir]++;
@@ -467,6 +503,7 @@ function main(): void {
       }
     }
   }
+  console.log(`  Behavioral invariants:    ${invariantStepCount} verified, rendered into specs`);
   console.log(`  Vendored _golden/ from:   services/golden/src/`);
   console.log(`  Output dir:               ${GENERATED_TESTS_DIR}`);
 
