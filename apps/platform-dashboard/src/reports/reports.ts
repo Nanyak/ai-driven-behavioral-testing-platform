@@ -4,7 +4,7 @@ export interface ReportRow {
   run_id: string;
   slug: string;
   generated_at: string | null;
-  status: "green" | "red";
+  status: "green" | "red" | "invalid";
   totals: { executed: number; passed: number; failed: number; skipped: number };
 }
 

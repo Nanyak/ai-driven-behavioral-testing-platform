@@ -76,7 +76,11 @@ export interface FailureEntry {
 export interface Report {
   run_id: string;
   generated_at: string;
-  status: "green" | "red";
+  /**
+   * `invalid` means the runner produced no executable evidence (zero tests, or
+   * every discovered test was skipped). It must never be presented as GREEN.
+   */
+  status: "green" | "red" | "invalid";
   totals: RunTotals;
   by_persona: PersonaRollup[];
   by_flow: FlowRollup[];

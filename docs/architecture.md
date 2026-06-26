@@ -13,8 +13,9 @@ captured as a structured log line, shipped through ELK into Elasticsearch, and
 then **mined** — without persona labels — to discover how users actually behave.
 The mined behavior flows are turned into executable Playwright API specs, run back
 against Medusa, and each response is compared against an OpenAPI-derived **golden
-schema** to produce a red/green regression report. The pipeline is one-directional
-and each stage writes a durable artifact the next stage reads.
+schema** to produce a green/red regression report. A run with no runnable test
+evidence is **invalid**, never green. The pipeline is one-directional and each
+stage writes a durable artifact the next stage reads.
 
 ## Component / data-flow diagram
 
@@ -158,6 +159,12 @@ observation. Where the spec has no entry, it falls back to an observed schema
 (`schema_source: "observed"`). A shared, auditable ignore-fields list strips
 volatile fields (`id`, timestamps, tokens, `cart_id`, …) so they are not flagged as
 regressions.
+
+Before emitting happy-path specs, the script generator materializes the required
+golden files from OpenAPI, merging an observed schema when one exists. If an
+operation has neither an OpenAPI response schema nor an observed schema,
+generation fails. At runtime, a missing golden also fails the test rather than
+silently reducing it to a status-only assertion.
 
 ## Where the LLM is — and is not
 

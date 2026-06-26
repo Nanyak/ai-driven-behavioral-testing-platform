@@ -53,7 +53,13 @@ async function main(): Promise<void> {
 
   console.log(`\nRegression Triage (${triage.model})`);
   if (triage.verdicts.length === 0) {
-    console.log(report.status === "green" ? "  No failures to triage — report is green." : "  No failure entries found.");
+    console.log(
+      report.status === "green"
+        ? "  No failures to triage — report is green."
+        : report.status === "invalid"
+          ? "  No failures to triage — the run is invalid because no runnable test evidence was produced."
+          : "  No failure entries found."
+    );
   } else {
     const counts = new Map<string, number>();
     for (const v of triage.verdicts) counts.set(v.verdict, (counts.get(v.verdict) ?? 0) + 1);

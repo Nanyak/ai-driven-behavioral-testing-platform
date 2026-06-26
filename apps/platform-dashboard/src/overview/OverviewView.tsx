@@ -30,7 +30,7 @@ type Summary = {
     discarded: number;
     awaiting_review?: number;
   };
-  report?: { executed: number; passed: number; failed: number; status: "green" | "red" } | null;
+  report?: { executed: number; passed: number; failed: number; status: "green" | "red" | "invalid" } | null;
 };
 
 function checkTone(state: StatusCheck["state"]): "ok" | "bad" | "warn" {

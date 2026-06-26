@@ -15,7 +15,7 @@ import type { PipelineJob } from "./pipeline.js";
 /** Counts + report summary the stages show as input/output context. */
 interface Summary {
   flows: { total: number; with_test: number; awaiting_review: number; discovered: number };
-  report: { executed: number; passed: number; failed: number; status: "green" | "red" } | null;
+  report: { executed: number; passed: number; failed: number; status: "green" | "red" | "invalid" } | null;
 }
 
 async function fetchSummary(): Promise<Summary | null> {

@@ -3,9 +3,13 @@ import type { Report } from "./schema.js";
 export function formatReportSummary(report: Report): string {
   const { totals } = report;
   const lines: string[] = [];
-  const verdict = report.status === "green" ? "GREEN ✓" : "RED ✗";
+  const verdict =
+    report.status === "green" ? "GREEN ✓" : report.status === "red" ? "RED ✗" : "INVALID !";
   lines.push(`Regression report: ${verdict}  (${report.run_id})`);
   lines.push(`  Executed ${totals.executed}  Passed ${totals.passed}  Failed ${totals.failed}  Skipped ${totals.skipped}`);
+  if (report.status === "invalid") {
+    lines.push("  No runnable test evidence was produced; this run cannot pass the regression gate.");
+  }
 
   const top = report.endpoint_failures[0];
   if (top) {

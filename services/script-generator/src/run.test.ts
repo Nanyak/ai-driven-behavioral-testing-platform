@@ -11,10 +11,15 @@
  */
 
 import { strict as assert } from "node:assert";
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { approvedOutcomes, cleanPersonaFolderPreservingApproved } from "./run.js";
+import { loadAugmentedSpecs } from "../../golden/src/oas-source.js";
+import {
+  approvedOutcomes,
+  cleanPersonaFolderPreservingApproved,
+  ensureGoldenResponses,
+} from "./run.js";
 
 let passed = 0;
 function check(name: string, fn: () => void): void {
@@ -81,6 +86,53 @@ check("clean retires a stale oracle whose blessed outcome changed", () => {
 
   assert.equal(preserved, 0, "stale oracle is not preserved");
   assert.equal(existsSync(staleOracle), false, "old-outcome spec is retired");
+});
+
+// 4. Bodies-off runs still get a real OpenAPI-backed golden before emission.
+check("ensureGoldenResponses writes a spec-only OpenAPI golden for a happy path", () => {
+  const dir = mkdtempSync(join(tmpdir(), "goldens-"));
+  const specs = loadAugmentedSpecs();
+  const summary = ensureGoldenResponses(
+    [
+      {
+        attributes: { requires_auth: false, is_admin: false, has_errors: false },
+        steps: [{ method: "GET", endpoint: "/store/products", expected_status: 200 }],
+      },
+    ],
+    specs,
+    dir,
+    "2026-06-27T00:00:00.000Z"
+  );
+  assert.equal(summary.written, 1);
+  const files = ["get-store-products-200.json"];
+  const golden = JSON.parse(readFileSync(join(dir, files[0]), "utf8"));
+  assert.equal(golden.endpoint, "GET /store/products");
+  assert.equal(golden.expected_status, 200);
+  assert.equal(golden.schema_source, "openapi");
+  assert.ok(golden.expected_schema.products, "golden contains a real response schema");
+  rmSync(dir, { recursive: true, force: true });
+});
+
+// 5. An undocumented/unobserved happy response cannot degrade to status-only.
+check("ensureGoldenResponses fails closed when no schema source exists", () => {
+  const dir = mkdtempSync(join(tmpdir(), "goldens-"));
+  const specs = loadAugmentedSpecs();
+  assert.throws(
+    () =>
+      ensureGoldenResponses(
+        [
+          {
+            attributes: { requires_auth: false, is_admin: false, has_errors: false },
+            steps: [{ method: "GET", endpoint: "/store/not-a-real-operation", expected_status: 200 }],
+          },
+        ],
+        specs,
+        dir
+      ),
+    /Cannot generate happy-path tests without golden schemas/
+  );
+  assert.equal(existsSync(join(dir, "get-store-not-a-real-operation-200.json")), false);
+  rmSync(dir, { recursive: true, force: true });
 });
 
 console.log(`\nrun.test: ${passed} checks passed`);

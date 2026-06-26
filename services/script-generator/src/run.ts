@@ -9,8 +9,10 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, cpSync } from "node:fs";
 import { dirname, join, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadAugmentedSpecs } from "../../golden/src/oas-source.js";
+import { loadAugmentedSpecs, resolveOperation } from "../../golden/src/oas-source.js";
 import type { OasDocument } from "../../golden/src/oas-types.js";
+import { buildGolden } from "../../golden/src/schema/schema-merge.js";
+import type { GoldenResponse } from "../../golden/src/types.js";
 import { dedup } from "./dedup.js";
 import { emitSpec } from "./emit.js";
 import { loadCandidates, type Candidate } from "./load.js";
@@ -26,6 +28,7 @@ const REPO_ROOT = resolvePath(SERVICE_ROOT, "..", "..");
 const GENERATED_TESTS_DIR = resolvePath(REPO_ROOT, "generated-tests");
 const GOLDEN_VENDOR_DIR = resolvePath(GENERATED_TESTS_DIR, "_golden");
 const GOLDEN_SOURCE_DIR = resolvePath(REPO_ROOT, "services", "golden", "src");
+const GOLDEN_RESPONSES_DIR = resolvePath(REPO_ROOT, "golden-responses");
 const HITL_STORE = resolvePath(REPO_ROOT, "data", "hitl", "approvals.json");
 
 // Each generated spec stamps its flow_signature (ADR 0002). Same permissive
@@ -159,6 +162,110 @@ function outcomeOf(candidate: Candidate): string {
   return candidate.steps.map((s) => s.expected_status).join(",");
 }
 
+function goldenResponseFileName(endpoint: string, status: number): string {
+  const slug = `${endpoint}-${status}`
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `${slug}.json`;
+}
+
+function readExistingGolden(path: string): GoldenResponse | null {
+  if (!existsSync(path)) return null;
+  try {
+    const value = JSON.parse(readFileSync(path, "utf8")) as Partial<GoldenResponse>;
+    if (
+      typeof value.endpoint !== "string" ||
+      typeof value.expected_status !== "number" ||
+      value.expected_schema === undefined
+    ) {
+      return null;
+    }
+    return value as GoldenResponse;
+  } catch {
+    return null;
+  }
+}
+
+export interface GoldenSyncSummary {
+  written: number;
+  reusedObserved: number;
+}
+
+/**
+ * Materialize the oracle before emitting happy-path specs.
+ *
+ * OpenAPI is authoritative when it documents the operation/status. A bodies-on
+ * ingestion artifact is merged in when present; otherwise buildGolden() creates
+ * a spec-only schema. For an operation absent from OpenAPI, an observed schema
+ * is still valid. If neither exists, generation fails before cleaning/emitting
+ * specs so a missing oracle can never silently become a status-only green test.
+ */
+export function ensureGoldenResponses(
+  candidates: Array<Pick<Candidate, "attributes" | "steps">>,
+  specs: OasSpecs,
+  outputDir: string = GOLDEN_RESPONSES_DIR,
+  capturedAt: string = new Date().toISOString()
+): GoldenSyncSummary {
+  const required = new Map<string, { endpoint: string; method: string; status: number }>();
+  for (const candidate of candidates) {
+    if (candidate.attributes.has_errors) continue;
+    for (const step of candidate.steps) {
+      const endpoint = `${step.method.toUpperCase()} ${step.endpoint}`;
+      required.set(`${endpoint}::${step.expected_status}`, {
+        endpoint,
+        method: step.method.toUpperCase(),
+        status: step.expected_status,
+      });
+    }
+  }
+
+  const pending: Array<{ path: string; golden: GoldenResponse }> = [];
+  const missing: string[] = [];
+  let reusedObserved = 0;
+
+  for (const item of required.values()) {
+    const path = resolvePath(outputDir, goldenResponseFileName(item.endpoint, item.status));
+    const existing = readExistingGolden(path);
+    const oas = resolveOperation(specs, item.method, item.endpoint.slice(item.method.length + 1), item.status);
+
+    if (!oas) {
+      if (existing) {
+        reusedObserved++;
+      } else {
+        missing.push(`${item.endpoint} -> ${item.status}`);
+      }
+      continue;
+    }
+
+    const observedSchema =
+      existing && existing.schema_source !== "openapi" ? existing.expected_schema : null;
+    const golden = buildGolden({
+      endpoint: item.endpoint,
+      observedStatus: item.status,
+      observedSchema,
+      oas,
+      capturedAt: existing?.captured_at ?? capturedAt,
+      sourceSessions: existing?.source_sessions ?? [],
+    });
+    pending.push({ path, golden });
+  }
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Cannot generate happy-path tests without golden schemas:\n${missing
+        .map((item) => `  - ${item}`)
+        .join("\n")}\nCapture response bodies for these operations or add them to the OpenAPI specification.`
+    );
+  }
+
+  mkdirSync(outputDir, { recursive: true });
+  for (const { path, golden } of pending) {
+    writeFileSync(path, `${JSON.stringify(golden, null, 2)}\n`, "utf8");
+  }
+  return { written: pending.length, reusedObserved };
+}
+
 // Vendor services/golden/src/ into generated-tests/_golden/ so generated-tests/
 // is self-contained and never reaches back into services/ at test-run time.
 function vendorGoldenComparator(): void {
@@ -169,19 +276,15 @@ function vendorGoldenComparator(): void {
   cpSync(GOLDEN_SOURCE_DIR, GOLDEN_VENDOR_DIR, { recursive: true });
 
   // compare.ts exports compareResponse(golden, status, body), not assertGolden.
-  // golden-responses/ is empty (bodies-off logs yield 0 goldens, ADR 0001) so
-  // this MUST no-op gracefully when no golden file exists for an endpoint+status,
-  // never throw.
+  // The generator materializes every required happy-path golden before emitting
+  // specs. The runtime helper still fails closed if files are later removed.
   const assertGoldenSource = `/**
  * assertGolden — a thin Playwright-test wrapper around compareResponse()
  * (vendored from services/golden/src/compare.ts; see ADR 0001).
  *
- * golden-responses/ is populated only once log-ingestion + golden generation has
- * run end-to-end against a live, bodies-on backend; on a clean
- * checkout it is EMPTY (bodies-off logs yield 0 goldens, by design). When no
- * golden exists for (endpoint, status), this helper is a deliberate no-op —
- * it never throws and never fails a test. When a golden DOES exist, it loads
- * it and asserts the live response matches via compareResponse().
+ * The script generator creates OpenAPI-backed goldens even when response bodies
+ * were not captured. Missing files are an invalid oracle configuration and fail
+ * closed instead of silently degrading a schema test into a status-only test.
  */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
@@ -207,8 +310,7 @@ function loadGoldens(): GoldenResponse[] {
 }
 
 /**
- * Assert a live (endpoint, status, body) against its stored golden, if one
- * exists. No-op otherwise (golden-responses/ is empty on a clean checkout).
+ * Assert a live (endpoint, status, body) against its stored golden.
  *
  * When a golden DOES exist, the schema diff is ATTACHED to the test info as
  * "golden-diff" (a JSON array) on BOTH pass and fail, BEFORE the expect — so the
@@ -221,7 +323,9 @@ function loadGoldens(): GoldenResponse[] {
 export async function assertGolden(endpoint: string, liveStatus: number, liveBody: unknown): Promise<void> {
   const golden = loadGoldens().find((g) => g.endpoint === endpoint && g.expected_status === liveStatus);
   if (!golden) {
-    return; // no golden for this (endpoint, status) yet -- skip, never fail.
+    throw new Error(
+      \`Missing golden schema for \${endpoint} -> \${liveStatus}. Regenerate tests before running the suite.\`
+    );
   }
   const result = compareResponse(golden, liveStatus, liveBody);
   await test.info().attach("golden-diff", {
@@ -409,6 +513,14 @@ function main(): void {
   // The blessed outcome(s) per approved journey — drives BOTH spec preservation
   // (a still-blessed oracle survives a regen) and conflict withholding below.
   const approved = approvedOutcomes();
+  const candidatesToEmit = dedupResult.candidates.filter((candidate) => {
+    const blessed = approved.get(candidate.signature);
+    return !(blessed && !blessed.has(outcomeOf(candidate)));
+  });
+
+  // Fail before cleaning existing specs if any emitted happy path cannot be
+  // backed by either OpenAPI or an observed response schema.
+  const goldenSync = ensureGoldenResponses(candidatesToEmit, specs);
 
   // Clean stale specs so a structural change (the happy-path/failure-path split,
   // a renamed flow, or a candidate that no longer routes here) never leaves an
@@ -510,6 +622,9 @@ function main(): void {
     }
   }
   console.log(`  Behavioral invariants:    ${invariantStepCount} verified, rendered into specs`);
+  console.log(
+    `  Golden schemas:           ${goldenSync.written} OpenAPI-backed, ${goldenSync.reusedObserved} observed-only reused`
+  );
   console.log(`  Vendored _golden/ from:   services/golden/src/`);
   console.log(`  Output dir:               ${GENERATED_TESTS_DIR}`);
 

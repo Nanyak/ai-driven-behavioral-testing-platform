@@ -6,7 +6,7 @@
  * the same key the rest of the stack uses.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -45,6 +45,16 @@ export interface RunResult {
   htmlReportDir: string;
   stdout: string;
   stderr: string;
+}
+
+/**
+ * Remove fixed-path reporter artifacts before Playwright starts. Without this,
+ * a startup/configuration failure could leave the previous run's JSON in place
+ * for the CLI to normalize as if it belonged to the current run.
+ */
+export function clearPreviousRunArtifacts(jsonReportPath: string, htmlReportDir: string): void {
+  rmSync(jsonReportPath, { force: true });
+  rmSync(htmlReportDir, { recursive: true, force: true });
 }
 
 function parseEnvFile(path: string): Record<string, string> {
@@ -109,6 +119,8 @@ export function runPlaywright(options: RunOptions): RunResult {
   if (!execute) {
     return { status: 0, jsonReportPath, htmlReportDir, stdout: "", stderr: "" };
   }
+
+  clearPreviousRunArtifacts(jsonReportPath, htmlReportDir);
 
   const proc = spawnSync("npx", buildArgs(target, extraArgs), {
     cwd: GENERATED_TESTS_DIR,

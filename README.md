@@ -7,7 +7,8 @@ captures every request as a structured log, ships those logs through ELK, and
 then **mines the raw log stream** to discover how users actually behave. From the
 discovered behavior flows it generates executable Playwright API tests, runs them
 against Medusa, and compares each response against a golden OpenAPI-derived schema
-to produce a red/green regression report.
+to produce a green/red regression report. A run with no runnable test evidence is
+reported as **INVALID**, never green.
 
 The two claims that make this "AI-driven" rather than a scripted round-trip:
 
@@ -106,7 +107,7 @@ npm run ingest:run
 # 5. Mine behavior flows + emergent personas (writes test candidates + validation report)
 npm run behavior:mine
 
-# 6. Generate Playwright API tests from the candidates
+# 6. Generate Playwright API tests + required OpenAPI-backed golden schemas
 npm run script-generator:generate
 
 # 7. Execute the generated suite against Medusa (writes reports/report.{json,html})

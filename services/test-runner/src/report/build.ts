@@ -102,11 +102,12 @@ export function buildReport(result: NormalizedRunResult, opts: BuildOptions = {}
   const endpoint_failures: EndpointFailure[] = [...endpointMap.entries()]
     .map(([endpoint, count]) => ({ endpoint, failures: count }))
     .sort((a, b) => b.failures - a.failures || a.endpoint.localeCompare(b.endpoint));
+  const hasExecutedEvidence = result.totals.executed > 0 && result.totals.passed + result.totals.failed > 0;
 
   return {
     run_id: runId,
     generated_at: result.generated_at,
-    status: result.totals.failed > 0 ? "red" : "green",
+    status: !hasExecutedEvidence ? "invalid" : result.totals.failed > 0 ? "red" : "green",
     totals: result.totals,
     by_persona,
     by_flow,

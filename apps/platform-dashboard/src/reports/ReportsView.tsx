@@ -83,7 +83,7 @@ export function ReportsView() {
                 onClick={() => setSelected(r.slug)}
               >
                 <span className="report-row-top">
-                  <Badge tone={r.status === "green" ? "ok" : "bad"}>
+                  <Badge tone={r.status === "green" ? "ok" : r.status === "invalid" ? "warn" : "bad"}>
                     {r.status.toUpperCase()}
                   </Badge>
                   <span className="report-run-id">{r.run_id}</span>

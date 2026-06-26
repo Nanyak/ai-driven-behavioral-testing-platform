@@ -68,20 +68,26 @@ export interface ReportRow {
   /** Filename stem, also the id used by /api/reports/view?run=<slug>. */
   slug: string;
   generated_at: string | null;
-  status: "green" | "red";
+  status: "green" | "red" | "invalid";
   totals: { executed: number; passed: number; failed: number; skipped: number };
 }
 
 function parseTotals(r: {
   status?: string;
   totals?: { executed?: number; passed?: number; failed?: number; skipped?: number };
-}): { status: "green" | "red"; totals: ReportRow["totals"] } {
+}): { status: ReportRow["status"]; totals: ReportRow["totals"] } {
   const executed = r.totals?.executed ?? 0;
   const passed = r.totals?.passed ?? 0;
   const failed = r.totals?.failed ?? 0;
   const skipped = r.totals?.skipped ?? 0;
+  const status =
+    r.status === "invalid" || executed === 0 || passed + failed === 0
+      ? "invalid"
+      : r.status === "red" || failed > 0
+        ? "red"
+        : "green";
   return {
-    status: r.status === "red" || failed > 0 ? "red" : "green",
+    status,
     totals: { executed, passed, failed, skipped },
   };
 }
@@ -130,7 +136,7 @@ export function readReportSummary(): {
   passed: number;
   failed: number;
   skipped: number;
-  status: "green" | "red";
+  status: "green" | "red" | "invalid";
 } | null {
   if (!existsSync(REPORT_JSON)) {
     return null;
@@ -144,7 +150,13 @@ export function readReportSummary(): {
     const passed = r.totals?.passed ?? 0;
     const failed = r.totals?.failed ?? 0;
     const skipped = r.totals?.skipped ?? 0;
-    return { executed, passed, failed, skipped, status: r.status === "red" || failed > 0 ? "red" : "green" };
+    const status =
+      r.status === "invalid" || executed === 0 || passed + failed === 0
+        ? "invalid"
+        : r.status === "red" || failed > 0
+          ? "red"
+          : "green";
+    return { executed, passed, failed, skipped, status };
   } catch {
     return null;
   }

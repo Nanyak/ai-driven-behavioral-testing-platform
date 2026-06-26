@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { resolve as resolvePath } from "node:path";
 import { collectFromFile, type NormalizedRunResult } from "./collect.js";
 import { formatFailures } from "./failure.js";
@@ -46,7 +46,16 @@ function main(): void {
   if (run.stdout) process.stdout.write(run.stdout);
   if (run.stderr) process.stderr.write(run.stderr);
 
-  const result = collectFromFile(run.jsonReportPath);
+  const result: NormalizedRunResult = existsSync(run.jsonReportPath)
+    ? collectFromFile(run.jsonReportPath)
+    : {
+        generated_at: new Date().toISOString(),
+        totals: { executed: 0, passed: 0, failed: 0, skipped: 0 },
+        tests: [],
+      };
+  if (!existsSync(run.jsonReportPath)) {
+    console.error("\nPlaywright did not produce a fresh JSON report; the run is INVALID.");
+  }
   const normalizedPath = resolvePath(REPORTS_DIR, "normalized.json");
   writeFileSync(normalizedPath, JSON.stringify(result, null, 2));
 
@@ -61,7 +70,8 @@ function main(): void {
   console.log(`  Report (JSON):     ${jsonPath}`);
   console.log(`  Report (HTML):     ${htmlPath}`);
 
-  process.exit(run.status);
+  const exitStatus = run.status !== 0 ? run.status : report.status === "invalid" ? 1 : 0;
+  process.exit(exitStatus);
 }
 
 main();

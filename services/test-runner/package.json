@@ -7,6 +7,7 @@
   "scripts": {
     "run": "tsx src/cli.ts",
     "triage": "tsx src/triage/cli.ts",
+    "test:run": "tsx src/run.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

@@ -85,13 +85,17 @@ export function renderHtml(report: Report, triage?: TriageReport | null): string
       </tr>`;
         })
         .join("")
-    : `<tr><td colspan="${hasTriage ? 7 : 6}" class="muted center">No failures — all executed tests passed.</td></tr>`;
+    : `<tr><td colspan="${hasTriage ? 7 : 6}" class="muted center">${
+        report.status === "invalid"
+          ? "No runnable test evidence was produced."
+          : "No failures — all executed tests passed."
+      }</td></tr>`;
 
   const topCallout = top
     ? `<div class="callout fail-bg">Most-failing endpoint: <span class="mono">${esc(top.endpoint)}</span> — ${top.failures} failure(s)</div>`
     : "";
 
-  const banner = report.status === "green" ? "green" : "red";
+  const banner = report.status;
 
   // Headline summary line — derived purely from totals/rollups, so the report
   // stays deterministic. Drives the hero header that makes the verdict legible
@@ -101,7 +105,9 @@ export function renderHtml(report: Report, triage?: TriageReport | null): string
   const heroSummary =
     report.status === "green"
       ? `All ${totals.executed} tests passed across ${report.by_persona.length} personas and ${report.by_flow.length} flows.`
-      : `${totals.failed} of ${totals.executed} tests failed — ${affectedFlows} flow(s) across ${affectedPersonas} persona(s).`;
+      : report.status === "red"
+        ? `${totals.failed} of ${totals.executed} tests failed — ${affectedFlows} flow(s) across ${affectedPersonas} persona(s).`
+        : "No runnable tests completed. This run is invalid and cannot be treated as a pass.";
 
   // Proportional pass/fail/skip bar. Guard executed===0 so the bar collapses
   // rather than dividing by zero.
@@ -129,16 +135,19 @@ export function renderHtml(report: Report, triage?: TriageReport | null): string
   .banner { display:inline-block; padding: 6px 14px; border-radius: 999px; font-weight: 700; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: #fff; }
   .banner.green { background: var(--pass); }
   .banner.red { background: var(--fail); }
+  .banner.invalid { background: var(--skip); }
   /* Hero header — the verdict, readable from across a room. */
   .hero { display:flex; align-items:center; gap: 18px; padding: 18px 22px; border-radius: 16px; margin: 16px 0 22px; border:1px solid var(--line); }
   .hero.green { background: linear-gradient(90deg, #f0fdf4, #fff); border-color:#bbf7d0; }
   .hero.red { background: linear-gradient(90deg, #fef2f2, #fff); border-color:#fecaca; }
+  .hero.invalid { background: linear-gradient(90deg, #fffbeb, #fff); border-color:#fde68a; }
   .hero .verdict { font-size: 30px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; line-height: 1; }
   .hero.green .verdict { color: var(--pass); }
   .hero.red .verdict { color: var(--fail); }
+  .hero.invalid .verdict { color: var(--skip); }
   .hero .summary { font-size: 15px; font-weight: 600; color: var(--ink); }
   .hero .dot { font-size: 34px; line-height: 1; }
-  .hero.green .dot { color: var(--pass); } .hero.red .dot { color: var(--fail); }
+  .hero.green .dot { color: var(--pass); } .hero.red .dot { color: var(--fail); } .hero.invalid .dot { color: var(--skip); }
   /* Proportional pass/fail/skip bar. */
   .bar { display:flex; height: 10px; border-radius: 999px; overflow:hidden; background:#e2e8f0; margin: 4px 0 8px; }
   .bar-seg { height: 100%; }
@@ -178,7 +187,7 @@ export function renderHtml(report: Report, triage?: TriageReport | null): string
   <div class="sub">${esc(report.run_id)} · generated ${esc(report.generated_at)}</div>
 
   <div class="hero ${banner}">
-    <span class="dot">${banner === "green" ? "&#10003;" : "&#10007;"}</span>
+    <span class="dot">${banner === "green" ? "&#10003;" : banner === "red" ? "&#10007;" : "&#9888;"}</span>
     <div>
       <div class="verdict">${esc(report.status)}</div>
       <div class="summary">${esc(heroSummary)}</div>
