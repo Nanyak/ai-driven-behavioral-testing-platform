@@ -1,9 +1,10 @@
 /**
- * Repair loop (plan §New module #5). For each emitted spec that fails to reproduce
- * its mined `status_signature`, escalate to the agent: build the context bundle,
- * get a rewritten spec, REJECT it if it touched the oracle (oracle-guard), write
- * it, and RE-VERIFY against the live SUT. Loop up to N; keep the agent's version
- * only when it goes genuinely green, otherwise restore the deterministic original.
+ * Setup/arrange repair loop (plan §New module #5). For each emitted spec that
+ * fails to reproduce its mined `status_signature`, escalate to the agent: build
+ * the context bundle, get a rewritten spec with fixed prerequisites/path/auth/body
+ * setup, REJECT it if it touched the oracle (oracle-guard), write it, and
+ * RE-VERIFY against the live SUT. Loop up to N; keep the agent's version only
+ * when it goes genuinely green, otherwise restore the deterministic original.
  *
  * This runs ONLY when opted in (run.ts `--repair`), against a known-good SUT — it
  * is baseline establishment, not a "keep tests green" autopilot. Approved/blessed
@@ -78,9 +79,9 @@ export interface RepairOutcome {
   attempts: number;
   violations: string[];
   finalFailures: { endpoint: string; expected: number | null; actual: number | null }[];
-  /** Deterministic spec before repair (set only on `repaired`) — for the review diff. */
+  /** Deterministic spec before setup/arrange repair (set only on `repaired`) — for the review diff. */
   beforeSource?: string;
-  /** Agent-repaired spec after repair (set only on `repaired`) — for the review diff. */
+  /** Agent setup/arrange-repaired spec after repair (set only on `repaired`) — for the review diff. */
   afterSource?: string;
 }
 
@@ -203,7 +204,7 @@ export function runRepair(specsToConsider: EmittedSpec[], options: RunRepairOpti
   const approved = options.approvedSignatures ?? new Set<string>();
   const maxAttempts = options.maxAttempts ?? 3;
   // Default agent explores the live SUT read-only (curl) to discover the right
-  // arrange — a tool-less agent can't reliably reproduce a stateful precondition.
+  // setup/arrange — a tool-less agent can't reliably reproduce a stateful precondition.
   const agent = options.agent ?? makeClaudeCliAgent({ explore: true });
   const oas = options.specs ?? (loadAugmentedSpecs() as OasSpecs);
   const sut = readSutInfo();
@@ -264,7 +265,7 @@ function writeRepairReport(outcomes: RepairOutcome[]): void {
 export function printRepairSummary(outcomes: RepairOutcome[]): void {
   const by: Record<string, number> = {};
   for (const o of outcomes) by[o.result] = (by[o.result] ?? 0) + 1;
-  console.log("\nResolver-agent repair summary");
+  console.log("\nSetup/arrange resolver-agent repair summary");
   for (const [k, v] of Object.entries(by)) console.log(`  ${k.padEnd(18)} ${v}`);
   for (const o of outcomes) {
     if (o.result === "repaired") console.log(`  ✓ repaired   ${o.relPath} (${o.attempts} attempt(s))`);

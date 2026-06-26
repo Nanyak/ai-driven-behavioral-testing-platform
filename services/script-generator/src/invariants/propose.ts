@@ -18,7 +18,7 @@ import { isRefSchema } from "../../../golden/src/oas-types.js";
 import type { Candidate } from "../load.js";
 import type { OasSpecs } from "../resolve.js";
 import { stepTitle } from "./codebase.js";
-import { isValidInvariant, type Invariant } from "./types.js";
+import { APPROVED_TEMPLATE_NAMES, isValidInvariant, type Invariant } from "./types.js";
 
 /** Bumped whenever the prompt CONTRACT changes (so the template cache, keyed in
  * part on this, invalidates and the agent re-proposes). v2 added the codebase
@@ -86,9 +86,11 @@ const MATCHER_LINE =
   '- Include "expected" for every matcher EXCEPT toBeTruthy/toBeDefined (which take no argument).';
 
 const OUTPUT_LINE =
-  "Output ONLY a JSON array, no prose, no code fences. Each element:\n" +
-  '{ "stepTitle": string, "path": string, "matcher": string, "expected"?: string|number|boolean, "rationale": string }\n' +
-  "If you cannot propose any sound invariant, output [].";
+  "Output ONLY a JSON array, no prose, no code fences. Each element must be ONE of:\n" +
+  '{ "kind": "field", "stepTitle": string, "path": string, "matcher": string, "expected"?: string|number|boolean, "rationale": string }\n' +
+  '{ "kind": "template", "template": string, "stepTitle": string, "path": string, "rationale": string }\n' +
+  "Approved templates: " + APPROVED_TEMPLATE_NAMES.join(", ") + ".\n" +
+  "If no approved field or template invariant is sound, output [].";
 
 /** The per-step "behavior the handler code exhibits" block — the digest is what
  * lets the agent propose invariants the OAS shape can't express (side effects,
@@ -152,6 +154,9 @@ Rules:
 - One invariant = one assertion over one path in that step's response body.
 - "path" is a dotted path into the JSON body (e.g. "type", "message", "code").
 ${MATCHER_LINE}
+- You may use an approved template when it fits the response body. For templates,
+  "path" points to the object the template checks, e.g. "cart", "order", or "" for
+  the whole response.
 - Prefer invariants that catch a CONTRACT drift in the failure (the right error code/type),
   not just "it failed". Use the custom auth gate above to know WHY a step is blocked.
 
@@ -173,6 +178,9 @@ Rules:
 - "path" is a dotted path into the JSON body (e.g. "order.payment_status", "cart.items.length").
   A trailing ".length" is allowed on arrays.
 ${MATCHER_LINE}
+- You may use an approved template when it fits the response body. For templates,
+  "path" points to the object the template checks, e.g. "cart", "order", or "" for
+  the whole response.
 - Prefer invariants that catch silent behavioral regressions (e.g. a cart that returns 200
   but did NOT convert to an order: assert body "type" toBe "order"). The endpoint-behavior
   notes above (side effects, success discriminator) are your best source for these.

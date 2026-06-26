@@ -4,7 +4,16 @@
  * pre-label sessions or the discovery claim collapses.
  */
 
+import { createHash } from "node:crypto";
+
 import type {
+  BodyArrayFeature,
+  BodyArrayLengthBucket,
+  BodyFeatures,
+  BodyPrimitivePath,
+  BodyPrimitiveType,
+  BodyRootKind,
+  BodyScalarHint,
   FlowStep,
   GoldenCandidate,
   ObservedRole,
@@ -146,6 +155,452 @@ function toObservedRole(userRole: string | null | undefined): ObservedRole {
   }
 }
 
+const MAX_BODY_NODES = 500;
+const MAX_BODY_DEPTH = 8;
+const MAX_FEATURE_PATHS = 200;
+const MAX_ARRAY_ITEMS_TO_SCAN = 20;
+const MAX_SAFE_STRING_LENGTH = 48;
+
+const SAFE_STRING_FIELD_NAMES = new Set([
+  "action",
+  "currency",
+  "currency_code",
+  "country_code",
+  "event",
+  "fulfillment_status",
+  "kind",
+  "language",
+  "locale",
+  "mode",
+  "payment_status",
+  "state",
+  "status",
+  "type",
+]);
+
+const SAFE_NUMBER_FIELD_NAMES = new Set([
+  "count",
+  "limit",
+  "offset",
+  "page",
+  "page_size",
+  "quantity",
+]);
+
+const MASKED_VALUE_PATTERNS: RegExp[] = [
+  /^\*+$/,
+  /^x+$/i,
+  /^\[?(?:masked|redacted|hidden)\]?$/i,
+  /^<\s*(?:masked|redacted|hidden)\s*>$/i,
+];
+
+const SENSITIVE_FIELD_PATTERNS: RegExp[] = [
+  /password/i,
+  /passcode/i,
+  /secret/i,
+  /token/i,
+  /authorization/i,
+  /^auth$/i,
+  /cookie/i,
+  /session/i,
+  /jwt/i,
+  /email/i,
+  /phone/i,
+  /address/i,
+  /^name$/i,
+  /first_name/i,
+  /last_name/i,
+  /ip_address/i,
+  /ssn/i,
+  /card/i,
+  /cvv/i,
+];
+
+const UNSAFE_SCALAR_FIELD_PATTERNS: RegExp[] = [
+  ...SENSITIVE_FIELD_PATTERNS,
+  /^id$/i,
+  /_id$/i,
+  /uuid/i,
+];
+
+interface BodyFeatureAccumulator {
+  fieldPaths: Set<string>;
+  maskedFieldPaths: Set<string>;
+  primitiveTypePaths: Map<string, BodyPrimitivePath>;
+  arrayLengths: Map<string, BodyArrayFeature>;
+  safeScalarHints: Map<string, BodyScalarHint>;
+  nodeCount: number;
+  truncated: boolean;
+}
+
+function createAccumulator(): BodyFeatureAccumulator {
+  return {
+    fieldPaths: new Set(),
+    maskedFieldPaths: new Set(),
+    primitiveTypePaths: new Map(),
+    arrayLengths: new Map(),
+    safeScalarHints: new Map(),
+    nodeCount: 0,
+    truncated: false,
+  };
+}
+
+function rootKind(value: unknown): BodyRootKind {
+  if (value === undefined) {
+    return "absent";
+  }
+  if (value === null) {
+    return "null";
+  }
+  if (Array.isArray(value)) {
+    return "array";
+  }
+  switch (typeof value) {
+    case "string":
+      return "string";
+    case "number":
+      return "number";
+    case "boolean":
+      return "boolean";
+    case "object":
+      return "object";
+    default:
+      return "object";
+  }
+}
+
+function primitiveType(value: unknown): BodyPrimitiveType | null {
+  if (value === null || value === undefined) {
+    return "null";
+  }
+  switch (typeof value) {
+    case "string":
+      return "string";
+    case "number":
+      return "number";
+    case "boolean":
+      return "boolean";
+    default:
+      return null;
+  }
+}
+
+function arrayLengthBucket(length: number): BodyArrayLengthBucket {
+  if (length === 0) {
+    return "0";
+  }
+  if (length === 1) {
+    return "1";
+  }
+  if (length <= 5) {
+    return "2-5";
+  }
+  if (length <= 20) {
+    return "6-20";
+  }
+  if (length <= 100) {
+    return "21-100";
+  }
+  return "101+";
+}
+
+function childPath(parentPath: string, key: string): string {
+  return parentPath === "$" ? `$.${key}` : `${parentPath}.${key}`;
+}
+
+function arrayItemPath(path: string): string {
+  return `${path}[]`;
+}
+
+function pathFieldNames(path: string): string[] {
+  if (path === "$") {
+    return [];
+  }
+  return path
+    .replace(/^\$\./, "")
+    .split(".")
+    .map((segment) => segment.replace(/\[\]/g, ""));
+}
+
+function lastFieldName(path: string): string | null {
+  const names = pathFieldNames(path);
+  return names.length > 0 ? names[names.length - 1] : null;
+}
+
+function hasPatternMatch(path: string, patterns: RegExp[]): boolean {
+  return pathFieldNames(path).some((fieldName) =>
+    patterns.some((pattern) => pattern.test(fieldName))
+  );
+}
+
+function isMaskedValue(value: unknown): boolean {
+  if (typeof value !== "string") {
+    return false;
+  }
+  const normalized = value.trim();
+  return MASKED_VALUE_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
+function isSafeEnumString(path: string, value: string): boolean {
+  const fieldName = lastFieldName(path);
+  if (!fieldName || !SAFE_STRING_FIELD_NAMES.has(fieldName)) {
+    return false;
+  }
+  if (value.length === 0 || value.length > MAX_SAFE_STRING_LENGTH) {
+    return false;
+  }
+  return /^[a-z0-9][a-z0-9_.:-]*$/i.test(value);
+}
+
+function numberHint(value: number): string {
+  if (!Number.isFinite(value)) {
+    return "non_finite";
+  }
+  if (!Number.isInteger(value)) {
+    return "decimal";
+  }
+  if (value < 0) {
+    return "negative";
+  }
+  if (value === 0) {
+    return "zero";
+  }
+  if (value === 1) {
+    return "one";
+  }
+  if (value <= 5) {
+    return "2-5";
+  }
+  if (value <= 20) {
+    return "6-20";
+  }
+  if (value <= 100) {
+    return "21-100";
+  }
+  return "101+";
+}
+
+function addFieldPath(acc: BodyFeatureAccumulator, path: string): void {
+  if (acc.fieldPaths.size >= MAX_FEATURE_PATHS) {
+    acc.truncated = true;
+    return;
+  }
+  acc.fieldPaths.add(path);
+}
+
+function addMaskedFieldPath(acc: BodyFeatureAccumulator, path: string): void {
+  if (acc.maskedFieldPaths.size >= MAX_FEATURE_PATHS) {
+    acc.truncated = true;
+    return;
+  }
+  acc.maskedFieldPaths.add(path);
+}
+
+function addPrimitiveTypePath(
+  acc: BodyFeatureAccumulator,
+  path: string,
+  type: BodyPrimitiveType
+): void {
+  if (acc.primitiveTypePaths.size >= MAX_FEATURE_PATHS) {
+    acc.truncated = true;
+    return;
+  }
+  acc.primitiveTypePaths.set(`${path}:${type}`, { path, type });
+}
+
+function addArrayLength(
+  acc: BodyFeatureAccumulator,
+  path: string,
+  length: number
+): void {
+  if (acc.arrayLengths.size >= MAX_FEATURE_PATHS) {
+    acc.truncated = true;
+    return;
+  }
+  const bucket = arrayLengthBucket(length);
+  acc.arrayLengths.set(`${path}:${length}:${bucket}`, { path, length, bucket });
+}
+
+function addSafeScalarHint(
+  acc: BodyFeatureAccumulator,
+  hint: BodyScalarHint
+): void {
+  if (acc.safeScalarHints.size >= MAX_FEATURE_PATHS) {
+    acc.truncated = true;
+    return;
+  }
+  acc.safeScalarHints.set(
+    `${hint.path}:${hint.type}:${String(hint.hint)}`,
+    hint
+  );
+}
+
+function maybeAddSafeScalarHint(
+  acc: BodyFeatureAccumulator,
+  path: string,
+  value: unknown,
+  type: BodyPrimitiveType
+): void {
+  if (hasPatternMatch(path, UNSAFE_SCALAR_FIELD_PATTERNS)) {
+    return;
+  }
+
+  switch (type) {
+    case "boolean":
+      addSafeScalarHint(acc, { path, type, hint: value as boolean });
+      return;
+    case "null":
+      addSafeScalarHint(acc, { path, type, hint: null });
+      return;
+    case "number": {
+      const fieldName = lastFieldName(path);
+      if (fieldName && SAFE_NUMBER_FIELD_NAMES.has(fieldName)) {
+        addSafeScalarHint(acc, { path, type, hint: numberHint(value as number) });
+      }
+      return;
+    }
+    case "string": {
+      const stringValue = value as string;
+      if (isSafeEnumString(path, stringValue)) {
+        addSafeScalarHint(acc, { path, type, hint: stringValue });
+      }
+    }
+  }
+}
+
+function visitBodyValue(
+  value: unknown,
+  path: string,
+  depth: number,
+  acc: BodyFeatureAccumulator
+): void {
+  acc.nodeCount++;
+  if (acc.nodeCount > MAX_BODY_NODES || depth > MAX_BODY_DEPTH) {
+    acc.truncated = true;
+    return;
+  }
+
+  const type = primitiveType(value);
+  if (type) {
+    addPrimitiveTypePath(acc, path, type);
+    if (isMaskedValue(value) || hasPatternMatch(path, SENSITIVE_FIELD_PATTERNS)) {
+      addMaskedFieldPath(acc, path);
+      return;
+    }
+    maybeAddSafeScalarHint(acc, path, value, type);
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    addArrayLength(acc, path, value.length);
+    const itemPath = arrayItemPath(path);
+    for (const item of value.slice(0, MAX_ARRAY_ITEMS_TO_SCAN)) {
+      visitBodyValue(item, itemPath, depth + 1, acc);
+    }
+    if (value.length > MAX_ARRAY_ITEMS_TO_SCAN) {
+      acc.truncated = true;
+    }
+    return;
+  }
+
+  if (typeof value === "object") {
+    for (const key of Object.keys(value as Record<string, unknown>).sort()) {
+      const pathForKey = childPath(path, key);
+      addFieldPath(acc, pathForKey);
+      if (hasPatternMatch(pathForKey, SENSITIVE_FIELD_PATTERNS)) {
+        addMaskedFieldPath(acc, pathForKey);
+      }
+      visitBodyValue(
+        (value as Record<string, unknown>)[key],
+        pathForKey,
+        depth + 1,
+        acc
+      );
+    }
+  }
+}
+
+function sortPrimitivePaths(paths: BodyPrimitivePath[]): BodyPrimitivePath[] {
+  return paths.sort((a, b) =>
+    a.path === b.path ? a.type.localeCompare(b.type) : a.path.localeCompare(b.path)
+  );
+}
+
+function sortArrayFeatures(features: BodyArrayFeature[]): BodyArrayFeature[] {
+  return features.sort((a, b) => {
+    if (a.path !== b.path) {
+      return a.path.localeCompare(b.path);
+    }
+    if (a.length !== b.length) {
+      return a.length - b.length;
+    }
+    return a.bucket.localeCompare(b.bucket);
+  });
+}
+
+function sortScalarHints(hints: BodyScalarHint[]): BodyScalarHint[] {
+  return hints.sort((a, b) => {
+    if (a.path !== b.path) {
+      return a.path.localeCompare(b.path);
+    }
+    if (a.type !== b.type) {
+      return a.type.localeCompare(b.type);
+    }
+    return String(a.hint).localeCompare(String(b.hint));
+  });
+}
+
+function shapeHash(features: Omit<BodyFeatures, "shape_hash">): string {
+  const hashInput = {
+    kind: features.kind,
+    field_paths: features.field_paths,
+    masked_field_paths: features.masked_field_paths,
+    primitive_type_paths: features.primitive_type_paths,
+    array_lengths: features.array_lengths,
+    truncated: features.truncated,
+  };
+  return createHash("sha256")
+    .update(JSON.stringify(hashInput))
+    .digest("hex")
+    .slice(0, 16);
+}
+
+export function extractBodyFeatures(body: unknown): BodyFeatures {
+  const kind = rootKind(body);
+  if (kind === "absent") {
+    return {
+      present: false,
+      kind,
+      field_paths: [],
+      masked_field_paths: [],
+      primitive_type_paths: [],
+      array_lengths: [],
+      safe_scalar_hints: [],
+      shape_hash: null,
+      truncated: false,
+    };
+  }
+
+  const acc = createAccumulator();
+  visitBodyValue(body, "$", 0, acc);
+
+  const featuresWithoutHash: Omit<BodyFeatures, "shape_hash"> = {
+    present: true,
+    kind,
+    field_paths: [...acc.fieldPaths].sort(),
+    masked_field_paths: [...acc.maskedFieldPaths].sort(),
+    primitive_type_paths: sortPrimitivePaths([...acc.primitiveTypePaths.values()]),
+    array_lengths: sortArrayFeatures([...acc.arrayLengths.values()]),
+    safe_scalar_hints: sortScalarHints([...acc.safeScalarHints.values()]),
+    truncated: acc.truncated,
+  };
+
+  return {
+    ...featuresWithoutHash,
+    shape_hash: shapeHash(featuresWithoutHash),
+  };
+}
+
 function toStep(doc: RawLogDoc): FlowStep {
   const status = doc.status ?? 0;
   return {
@@ -156,6 +611,8 @@ function toStep(doc: RawLogDoc): FlowStep {
     trace_id: doc.trace_id ?? null,
     timestamp: doc.timestamp,
     request_payload: doc.request_payload ?? null,
+    request_body_features: extractBodyFeatures(doc.request_payload),
+    response_body_features: extractBodyFeatures(doc.response_body),
     has_error: status >= 400,
   };
 }

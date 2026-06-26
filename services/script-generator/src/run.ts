@@ -17,6 +17,8 @@ import { loadCandidates, type Candidate } from "./load.js";
 import { buildFlowPlan, type OasSpecs } from "./resolve.js";
 import { printRepairSummary, runRepair, type EmittedSpec } from "./repair/repair.js";
 import { loadInvariants, verifiedInvariantsByStep } from "./invariants/types.js";
+import { deterministicInvariantsByStep, mergeInvariantMaps } from "./invariants/deterministic.js";
+import { businessInvariantRuntimeSource } from "./invariants/templates.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SERVICE_ROOT = resolvePath(__dirname, "..");
@@ -235,6 +237,7 @@ export async function assertGolden(endpoint: string, liveStatus: number, liveBod
 }
 `;
   writeFileSync(resolvePath(GOLDEN_VENDOR_DIR, "assert-golden.ts"), assertGoldenSource);
+  writeFileSync(resolvePath(GOLDEN_VENDOR_DIR, "business-invariants.ts"), businessInvariantRuntimeSource());
 
   const utilSource = `export function extractPath(value: unknown, path: string): string {
   const segments = path
@@ -456,7 +459,10 @@ function main(): void {
 
     const flowPlan = buildFlowPlan(candidate.steps, specs, candidate.attributes.requires_auth);
     const golden = route.path === "happy-path";
-    const invariantsByStep = verifiedInvariantsByStep(invariantsArtifact, candidate.signature);
+    const invariantsByStep = mergeInvariantMaps(
+      verifiedInvariantsByStep(invariantsArtifact, candidate.signature),
+      deterministicInvariantsByStep(candidate)
+    );
     for (const list of invariantsByStep.values()) invariantStepCount += list.length;
     const { source, fixmeCount } = emitSpec({ candidate, plan: flowPlan, golden, invariantsByStep });
 

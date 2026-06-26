@@ -9,6 +9,9 @@
  *
  * Provenance & trust (the anti-hallucination contract):
  *   - `source: "ai-proposed"` invariants come from an LLM reading the flow + OAS.
+ *   - `source: "deterministic"` invariants come from hard-coded endpoint
+ *     contracts whose response shape is stable in this repo (see
+ *     deterministic.ts).
  *     The LLM only ever PROPOSES a structured invariant — it never writes test
  *     code and never touches the status oracle (see oracle-guard.ts).
  *   - An invariant is rendered into a spec ONLY when `verified === true`: it was
@@ -43,6 +46,7 @@ export type InvariantMatcher =
   | "toBeLessThanOrEqual"
   | "toBeTruthy"
   | "toBeDefined"
+  | "toBeUndefined"
   | "toContain";
 
 const MATCHERS: ReadonlySet<string> = new Set<InvariantMatcher>([
@@ -54,6 +58,7 @@ const MATCHERS: ReadonlySet<string> = new Set<InvariantMatcher>([
   "toBeLessThanOrEqual",
   "toBeTruthy",
   "toBeDefined",
+  "toBeUndefined",
   "toContain",
 ]);
 
@@ -61,16 +66,29 @@ const MATCHERS: ReadonlySet<string> = new Set<InvariantMatcher>([
 export const NULLARY_MATCHERS: ReadonlySet<InvariantMatcher> = new Set<InvariantMatcher>([
   "toBeTruthy",
   "toBeDefined",
+  "toBeUndefined",
 ]);
 
-export interface Invariant {
+export const APPROVED_TEMPLATE_NAMES = [
+  "auth_success_token",
+  "auth_failure_error",
+  "cart_totals_balance",
+  "cart_has_items",
+  "invalid_promotion_not_applied",
+  "checkout_returns_order",
+  "order_totals_balance",
+  "admin_order_canceled",
+] as const;
+
+export type ApprovedTemplateName = (typeof APPROVED_TEMPLATE_NAMES)[number];
+
+export function isApprovedTemplateName(value: unknown): value is ApprovedTemplateName {
+  return typeof value === "string" && (APPROVED_TEMPLATE_NAMES as readonly string[]).includes(value);
+}
+
+interface BaseInvariant {
   /** The emitted step title this attaches to, e.g. "POST /store/carts/{id}/complete". */
   stepTitle: string;
-  /** Dotted path into the JSON response body, e.g. "order.payment_status" or "cart.items.length". */
-  path: string;
-  matcher: InvariantMatcher;
-  /** Expected value; omitted for nullary matchers (toBeTruthy/toBeDefined). */
-  expected?: string | number | boolean;
   /** One-line behavioral rationale — emitted as the assertion label so a failure reads clearly. */
   rationale: string;
   source: "ai-proposed" | "deterministic";
@@ -80,6 +98,43 @@ export interface Invariant {
   polarity?: "success" | "error";
   /** True once the invariant held against the live known-good backend. ONLY verified invariants render. */
   verified: boolean;
+}
+
+export interface FieldInvariant extends BaseInvariant {
+  kind?: "field";
+  /** Dotted path into the JSON response body, e.g. "order.payment_status" or "cart.items.length". */
+  path: string;
+  matcher: InvariantMatcher;
+  /** Expected value; omitted for nullary matchers (toBeTruthy/toBeDefined). */
+  expected?: string | number | boolean;
+}
+
+export interface TemplateInvariant extends BaseInvariant {
+  kind: "template";
+  template: ApprovedTemplateName;
+  /** Dotted path to the object the template asserts over. Empty string means the full response body. */
+  path: string;
+}
+
+export interface DraftTemplateProposal {
+  kind: "draft_template";
+  name: string;
+  stepTitle: string;
+  intent: string;
+  rationale: string;
+  evidence?: string[];
+  source: "ai-proposed";
+  status: "needs_review";
+}
+
+export type Invariant = FieldInvariant | TemplateInvariant;
+
+export function isTemplateInvariant(value: Invariant): value is TemplateInvariant {
+  return value.kind === "template";
+}
+
+export function isFieldInvariant(value: Invariant): value is FieldInvariant {
+  return value.kind === undefined || value.kind === "field";
 }
 
 export interface FlowInvariants {
@@ -108,12 +163,20 @@ export function isValidInvariant(value: unknown): value is Invariant {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   if (typeof v.stepTitle !== "string" || v.stepTitle.length === 0) return false;
-  if (typeof v.path !== "string" || v.path.length === 0) return false;
-  if (typeof v.matcher !== "string" || !MATCHERS.has(v.matcher)) return false;
   if (typeof v.rationale !== "string" || v.rationale.length === 0) return false;
+  if (v.source !== "ai-proposed" && v.source !== "deterministic") return false;
+  if (typeof v.verified !== "boolean") return false;
   if ("polarity" in v && v.polarity !== undefined && v.polarity !== "success" && v.polarity !== "error") {
     return false;
   }
+
+  if (v.kind === "template") {
+    return isApprovedTemplateName(v.template) && typeof v.path === "string";
+  }
+
+  if (v.kind !== undefined && v.kind !== "field") return false;
+  if (typeof v.path !== "string" || v.path.length === 0) return false;
+  if (typeof v.matcher !== "string" || !MATCHERS.has(v.matcher)) return false;
   const nullary = NULLARY_MATCHERS.has(v.matcher as InvariantMatcher);
   if (nullary) {
     if ("expected" in v && v.expected !== undefined) return false;

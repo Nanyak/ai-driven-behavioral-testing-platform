@@ -1,6 +1,8 @@
 /**
  * Unit tests for the PURE repair modules (no live SUT, no agent). Run:
- * `npm run test:repair`. Plain assertions, no framework — mirrors run.test.ts.
+ * `npm run test:repair-guard` from this service, or
+ * `npm run script-generator:test:repair` from the repo root. Plain assertions,
+ * no framework — mirrors run.test.ts.
  *
  * Covers the safety-critical pieces:
  *   1. oracle-guard ACCEPTS arrange-only edits and REJECTS any oracle tampering
@@ -28,7 +30,8 @@ const baseSpec = `// flow_signature: ${SIG}
 // status_signature: 200,200,200,200
 // persona: admin_operator | priority: high | support: 5
 import { test, expect } from "@playwright/test";
-import { extractPath, safeJson, safeText } from "../../_golden/util.js";
+import { assertGolden } from "../../_golden/assert-golden.js";
+import { extractPath, getPath, safeJson, safeText } from "../../_golden/util.js";
 
 test("admin_operator — Admin Order Cancellation Journey", async ({ request }) => {
   test.info().annotations.push({ type: "status_signature", description: "200,200,200,200" });
@@ -39,7 +42,13 @@ test("admin_operator — Admin Order Cancellation Journey", async ({ request }) 
     expect(resolve0.status(), "resolve GET /admin/orders for orderId").toBe(200);
     scope.orderId = extractPath(await resolve0.json(), "orders[0].id");
     const resp0 = await request.post(\`/admin/orders/\${scope.orderId}/cancel\`, { headers: { Authorization: \`Bearer \${scope.adminToken}\` } });
+    await test.info().attach("response-body", { body: JSON.stringify({ endpoint: "POST /admin/orders/{id}/cancel", status: resp0.status(), body: (await safeText(resp0)).slice(0, 4000) }), contentType: "application/json" });
     expect(resp0.status(), "POST /admin/orders/{id}/cancel").toBe(200);
+    await assertGolden("POST /admin/orders/{id}/cancel", resp0.status(), await safeJson(resp0));
+    const resp0Body = await safeJson(resp0);
+    // invariant (ai-proposed): canceled order returns a canceled marker
+    const resp0BodyInv0 = getPath(resp0Body, "order.canceled_at");
+    expect(resp0BodyInv0, "POST /admin/orders/{id}/cancel — order.canceled_at: canceled order returns a canceled marker").toBeDefined();
   });
 });
 `;
@@ -67,7 +76,7 @@ check("oracle-guard rejects a changed expected status", () => {
   assert.ok(res.violations.some((v) => v.includes("behavioral assertion")), res.violations.join("; "));
 });
 
-// 1c. Dropping a behavioral step is REJECTED.
+// 1c. Dropping a behavioral step/assertion block is REJECTED.
 check("oracle-guard rejects a dropped behavioral step", () => {
   const cheated = baseSpec.replace('await test.step("POST /admin/orders/{id}/cancel"', 'await test.skip; async function _dead(');
   const res = checkOracleUnchanged(baseSpec, cheated);
@@ -93,12 +102,79 @@ check("oracle-guard rejects a newly introduced test.fixme", () => {
   assert.ok(res.violations.some((v) => v.includes("neutralization")), res.violations.join("; "));
 });
 
-// 1f. Fingerprint surfaces the behavioral assertion with its expected number.
+// 1f. Removing or altering assertGolden is REJECTED.
+check("oracle-guard rejects removed or altered assertGolden calls", () => {
+  const removed = baseSpec.replace(
+    '    await assertGolden("POST /admin/orders/{id}/cancel", resp0.status(), await safeJson(resp0));\n',
+    ""
+  );
+  const removedRes = checkOracleUnchanged(baseSpec, removed);
+  assert.equal(removedRes.ok, false);
+  assert.ok(removedRes.violations.some((v) => v.includes("golden assertion")), removedRes.violations.join("; "));
+
+  const altered = baseSpec.replace(
+    'await assertGolden("POST /admin/orders/{id}/cancel", resp0.status(), await safeJson(resp0));',
+    'await assertGolden("POST /admin/orders/{id}/cancel", 400, await safeJson(resp0));'
+  );
+  const alteredRes = checkOracleUnchanged(baseSpec, altered);
+  assert.equal(alteredRes.ok, false);
+  assert.ok(alteredRes.violations.some((v) => v.includes("golden assertion")), alteredRes.violations.join("; "));
+});
+
+// 1g. Removing or altering verified business invariant assertion blocks is REJECTED.
+check("oracle-guard rejects removed or altered business invariant assertions", () => {
+  const removed = baseSpec.replace(
+    `    // invariant (ai-proposed): canceled order returns a canceled marker
+    const resp0BodyInv0 = getPath(resp0Body, "order.canceled_at");
+    expect(resp0BodyInv0, "POST /admin/orders/{id}/cancel — order.canceled_at: canceled order returns a canceled marker").toBeDefined();
+`,
+    ""
+  );
+  const removedRes = checkOracleUnchanged(baseSpec, removed);
+  assert.equal(removedRes.ok, false);
+  assert.ok(
+    removedRes.violations.some((v) => v.includes("business invariant assertion")),
+    removedRes.violations.join("; ")
+  );
+
+  const altered = baseSpec.replace(
+    'const resp0BodyInv0 = getPath(resp0Body, "order.canceled_at");',
+    'const resp0BodyInv0 = getPath(resp0Body, "order.id");'
+  );
+  const alteredRes = checkOracleUnchanged(baseSpec, altered);
+  assert.equal(alteredRes.ok, false);
+  assert.ok(
+    alteredRes.violations.some((v) => v.includes("business invariant assertion")),
+    alteredRes.violations.join("; ")
+  );
+});
+
+// 1h. Wrapping the oracle in try/catch is REJECTED even if the assertion text remains.
+check("oracle-guard rejects new try/catch assertion neutralization", () => {
+  const cheated = baseSpec
+    .replace(
+      'expect(resp0.status(), "POST /admin/orders/{id}/cancel").toBe(200);',
+      'try {\n    expect(resp0.status(), "POST /admin/orders/{id}/cancel").toBe(200);\n    } catch (err) {}'
+    );
+  const res = checkOracleUnchanged(baseSpec, cheated);
+  assert.equal(res.ok, false);
+  assert.ok(res.violations.some((v) => v.includes("neutralization")), res.violations.join("; "));
+});
+
+// 1i. Fingerprint surfaces status, golden, and invariant assertions.
 check("oracleFingerprint captures behavioral assertion + expected", () => {
   const fp = oracleFingerprint(baseSpec);
   assert.equal(fp.statusSignature, "200,200,200,200");
   assert.deepEqual(fp.assertions, ["POST /admin/orders/{id}/cancel=>200"]);
   assert.deepEqual(fp.stepTitles, ["POST /admin/orders/{id}/cancel"]);
+  assert.deepEqual(fp.goldenAssertions, [
+    'await assertGolden("POST /admin/orders/{id}/cancel", resp0.status(), await safeJson(resp0));',
+  ]);
+  assert.deepEqual(fp.invariantAssertions, [
+    "// invariant (ai-proposed): canceled order returns a canceled marker",
+    'const resp0BodyInv0 = getPath(resp0Body, "order.canceled_at");',
+    'expect(resp0BodyInv0, "POST /admin/orders/{id}/cancel — order.canceled_at: canceled order returns a canceled marker").toBeDefined();',
+  ]);
 });
 
 // 2. repair-task bundles the live diff + a matching OAS slice into the prompt.

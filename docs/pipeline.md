@@ -63,6 +63,11 @@ npm run test:all
 open reports/report.html
 ```
 
+For a bodies-on golden-capture run, set `LOG_CAPTURE_BODIES=true` before
+starting or recreating Medusa. For local fixture simulation that intentionally
+keeps PII in `request_payload` and `response_body`, also set
+`LOG_CAPTURE_RAW_BODIES=true`; leave the raw switch off for shared environments.
+
 ### Per-persona runs
 
 ```bash

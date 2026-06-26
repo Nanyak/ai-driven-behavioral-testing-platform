@@ -42,6 +42,10 @@ function getBodyCaptureEnabled(): boolean {
   return process.env.LOG_CAPTURE_BODIES === "true"
 }
 
+function getRawBodyCaptureEnabled(): boolean {
+  return process.env.LOG_CAPTURE_RAW_BODIES === "true"
+}
+
 function getTraceId(req: MedusaRequest): string {
   const explicitTraceId = getHeader(req, "x-trace-id") || getHeader(req, "trace-id")
   if (explicitTraceId) {
@@ -156,7 +160,7 @@ function maskValueByKey(key: string, value: unknown): unknown {
   return MASKED_VALUE
 }
 
-function reduceValue(value: unknown, depth = 0): unknown {
+function reduceValue(value: unknown, depth = 0, maskSensitive = true): unknown {
   if (value === null || value === undefined) {
     return value
   }
@@ -186,7 +190,7 @@ function reduceValue(value: unknown, depth = 0): unknown {
   if (Array.isArray(value)) {
     const reducedItems = value
       .slice(0, MAX_ARRAY_ITEMS)
-      .map((item) => reduceValue(item, depth + 1))
+      .map((item) => reduceValue(item, depth + 1, maskSensitive))
 
     if (value.length > MAX_ARRAY_ITEMS) {
       reducedItems.push(`[${value.length - MAX_ARRAY_ITEMS} more items]`)
@@ -198,12 +202,14 @@ function reduceValue(value: unknown, depth = 0): unknown {
   if (typeof value === "object") {
     const entries = Object.entries(value as Record<string, unknown>)
     const reducedEntries = entries.slice(0, MAX_OBJECT_KEYS).map(([key, entryValue]) => {
-      const maskedValue = maskValueByKey(key, entryValue)
-      if (maskedValue !== undefined) {
-        return [key, maskedValue]
+      if (maskSensitive) {
+        const maskedValue = maskValueByKey(key, entryValue)
+        if (maskedValue !== undefined) {
+          return [key, maskedValue]
+        }
       }
 
-      return [key, reduceValue(entryValue, depth + 1)]
+      return [key, reduceValue(entryValue, depth + 1, maskSensitive)]
     })
 
     if (entries.length > MAX_OBJECT_KEYS) {
@@ -461,6 +467,7 @@ async function structuredRequestLogger(
     const durationMs = Number(process.hrtime.bigint() - startTime) / 1_000_000
     const auth = getAuthContext(req)
     const captureBodies = getBodyCaptureEnabled()
+    const maskSensitiveBodies = !getRawBodyCaptureEnabled()
     const requestBody = (req as MedusaRequest & { body?: unknown }).body
     const template = endpointTemplate(normalizeEndpoint(rawEndpoint))
 
@@ -482,10 +489,13 @@ async function structuredRequestLogger(
       source: "medusa",
       // Bodies are off by default in production shape (cost + PII); the OpenAPI
       // spec is the golden oracle (ADR 0001). This is an optional dev enrichment.
+      // LOG_CAPTURE_RAW_BODIES=true is intentionally separate for synthetic/fixture
+      // capture runs that need PII-bearing payloads and responses.
       ...(captureBodies
         ? {
-            request_payload: reduceValue(requestBody) ?? null,
-            response_body: reduceValue(tryParseResponseBody(responseBody)) ?? null
+            request_payload: reduceValue(requestBody, 0, maskSensitiveBodies) ?? null,
+            response_body:
+              reduceValue(tryParseResponseBody(responseBody), 0, maskSensitiveBodies) ?? null
           }
         : {})
     })

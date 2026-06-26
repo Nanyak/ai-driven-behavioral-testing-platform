@@ -588,12 +588,14 @@ function negativeInputBody(method: string, endpoint: string): BodyPlan | null {
     };
   }
   // Invalid variant -> 400 "Variants ... do not exist or belong to a product that
-  // is not published" (mirrors edge.ts `variant_invalid`).
+  // is not published". Keep the value deliberately NON Medusa-id-shaped so the
+  // generated hardcoded-id gate does not mistake this negative input for a seeded
+  // fixture id.
   if (endpoint === "/store/carts/{id}/line-items") {
     return {
       kind: "synthesized",
       fields: {
-        variant_id: { kind: "literal", value: "variant_invalid" },
+        variant_id: { kind: "literal", value: "invalid-variant-do-not-seed" },
         quantity: { kind: "literal", value: 1 },
       },
     };

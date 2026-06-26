@@ -219,6 +219,12 @@ regression demo, and troubleshooting are in `docs/pipeline.md`. Quick references
 - **Admin API:** `http://localhost:9000/admin/products` (needs `Authorization: Bearer <token>` from `POST /auth/user/emailpass`)
 - **Structured logs:** `logs/medusa-json.log` (JSON lines, bodies-off by default)
 
+For a synthetic golden-capture run with request payloads and response bodies, set
+`LOG_CAPTURE_BODIES=true` before starting or recreating Medusa. To keep PII-bearing
+fields unmasked for local fixture simulation, also set
+`LOG_CAPTURE_RAW_BODIES=true`; keep that raw option off for shared or production
+logs.
+
 ### Known limitations
 
 Synthetic traffic is not real production data (mitigated by mixed sources +

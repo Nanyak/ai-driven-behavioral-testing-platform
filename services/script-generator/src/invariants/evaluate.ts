@@ -6,6 +6,8 @@
  * a known-good response (verified === true).
  */
 import type { Invariant } from "./types.js";
+import { isTemplateInvariant } from "./types.js";
+import { evaluateTemplate } from "./templates.js";
 
 /** Non-throwing path reader — the in-process twin of the vendored getPath
  * (run.ts util.ts). Kept in sync deliberately so verify and runtime agree. */
@@ -32,6 +34,10 @@ export interface EvalResult {
 }
 
 export function evaluateInvariant(body: unknown, inv: Invariant): EvalResult {
+  if (isTemplateInvariant(inv)) {
+    const actual = getPath(body, inv.path);
+    return { pass: evaluateTemplate(inv.template, actual), actual };
+  }
   const actual = getPath(body, inv.path);
   const expected = inv.expected;
   switch (inv.matcher) {
@@ -50,6 +56,8 @@ export function evaluateInvariant(body: unknown, inv: Invariant): EvalResult {
       return { pass: Boolean(actual), actual };
     case "toBeDefined":
       return { pass: actual !== undefined, actual };
+    case "toBeUndefined":
+      return { pass: actual === undefined, actual };
     case "toContain":
       if (typeof actual === "string") return { pass: actual.includes(String(expected)), actual };
       if (Array.isArray(actual)) return { pass: actual.includes(expected), actual };

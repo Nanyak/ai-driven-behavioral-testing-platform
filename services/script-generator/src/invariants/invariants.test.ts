@@ -16,9 +16,23 @@ import { evaluateInvariant, getPath, verifyInvariants } from "./evaluate.js";
 import { renderInvariants } from "./render.js";
 import { digestSlug, parseDigestFile } from "./digest.js";
 import { stepTitle, workflowFileFor, workflowSourceHash } from "./codebase.js";
-import { isValidInvariant, verifiedInvariantsByStep, type Invariant, type InvariantsArtifact } from "./types.js";
+import {
+  isFieldInvariant,
+  isTemplateInvariant,
+  isValidInvariant,
+  verifiedInvariantsByStep,
+  type FieldInvariant,
+  type Invariant,
+  type InvariantsArtifact,
+} from "./types.js";
+import {
+  deterministicInvariantsByStep,
+  deterministicInvariantsForCandidate,
+  mergeInvariantMaps,
+} from "./deterministic.js";
+import { emitSpec } from "../emit.js";
 import type { Candidate } from "../load.js";
-import type { OasSpecs } from "../resolve.js";
+import type { FlowPlan, OasSpecs, StepPlan } from "../resolve.js";
 
 let passed = 0;
 function check(name: string, fn: () => void): void {
@@ -27,7 +41,7 @@ function check(name: string, fn: () => void): void {
   console.log(`  ok  ${name}`);
 }
 
-const inv = (over: Partial<Invariant> = {}): Invariant => ({
+const inv = (over: Partial<FieldInvariant> = {}): FieldInvariant => ({
   stepTitle: "POST /store/carts/{id}/complete",
   path: "type",
   matcher: "toBe",
@@ -46,6 +60,18 @@ check("parses a well-formed array and stamps provenance", () => {
   assert.equal(out.length, 1);
   assert.equal(out[0].source, "ai-proposed");
   assert.equal(out[0].verified, false);
+});
+check("parses approved template invariants and drops unknown templates", () => {
+  const good = parseInvariantResponse(
+    JSON.stringify([{ kind: "template", template: "cart_totals_balance", stepTitle: "POST /x", path: "cart", rationale: "r" }])
+  );
+  assert.equal(good.length, 1);
+  assert.equal(isTemplateInvariant(good[0]) && good[0].template, "cart_totals_balance");
+
+  const bad = parseInvariantResponse(
+    JSON.stringify([{ kind: "template", template: "made_up_formula", stepTitle: "POST /x", path: "cart", rationale: "r" }])
+  );
+  assert.equal(bad.length, 0);
 });
 check("strips a ```json fence", () => {
   const out = parseInvariantResponse('```json\n[{"stepTitle":"P","path":"a","matcher":"toBeDefined","rationale":"r"}]\n```');
@@ -89,6 +115,42 @@ check("evaluate toBe / toBeGreaterThan / toBeDefined", () => {
     evaluateInvariant({ order: {} }, inv({ path: "order.payment_status", matcher: "toBeDefined", expected: undefined })).pass,
     false
   );
+  assert.equal(
+    evaluateInvariant({ message: "bad login" }, inv({ path: "token", matcher: "toBeUndefined", expected: undefined })).pass,
+    true
+  );
+});
+check("evaluate approved templates over known-good bodies", () => {
+  assert.equal(
+    evaluateInvariant(
+      { cart: { total: 1200, item_total: 1000, shipping_total: 300, tax_total: 100, discount_total: 200 } },
+      {
+        kind: "template",
+        template: "cart_totals_balance",
+        stepTitle: "POST /store/carts",
+        path: "cart",
+        rationale: "cart totals balance",
+        source: "ai-proposed",
+        verified: false,
+      }
+    ).pass,
+    true
+  );
+  assert.equal(
+    evaluateInvariant(
+      { type: "cart", cart: {} },
+      {
+        kind: "template",
+        template: "checkout_returns_order",
+        stepTitle: "POST /store/carts/{id}/complete",
+        path: "",
+        rationale: "checkout returned an order",
+        source: "ai-proposed",
+        verified: false,
+      }
+    ).pass,
+    false
+  );
 });
 
 console.log("invariants: verify bake gate");
@@ -116,6 +178,24 @@ check("renders a deterministic expect with getPath + label", () => {
 check("nullary matcher renders no argument", () => {
   const code = renderInvariants("b", [inv({ matcher: "toBeDefined", expected: undefined })]);
   assert.match(code, /\.toBeDefined\(\);/);
+});
+check("absence matcher renders no argument", () => {
+  const code = renderInvariants("b", [inv({ path: "token", matcher: "toBeUndefined", expected: undefined })]);
+  assert.match(code, /getPath\(b, "token"\);/);
+  assert.match(code, /\.toBeUndefined\(\);/);
+});
+check("template invariants render approved helper calls", () => {
+  const code = renderInvariants("b", [{
+    kind: "template",
+    template: "cart_totals_balance",
+    stepTitle: "POST /store/carts",
+    path: "cart",
+    rationale: "cart totals balance",
+    source: "deterministic",
+    verified: true,
+  }]);
+  assert.match(code, /const bTemplate0 = getPath\(b, "cart"\);/);
+  assert.match(code, /assertCartTotalsBalance\(bTemplate0,/);
 });
 
 console.log("invariants: artifact lookup");
@@ -154,6 +234,171 @@ const emptySpecs = {
   store: { paths: {}, components: { schemas: {} } },
   admin: { paths: {}, components: { schemas: {} } },
 } as unknown as OasSpecs;
+
+console.log("invariants: deterministic business assertions");
+check("deterministic source covers successful customer/admin login tokens", () => {
+  const customer = deterministicInvariantsForCandidate(cand({
+    steps: [{ method: "POST", endpoint: "/auth/customer/emailpass", expected_status: 200 }],
+  }));
+  const admin = deterministicInvariantsForCandidate(cand({
+    persona: "admin_operator",
+    attributes: { requires_auth: false, is_admin: true, has_errors: false },
+    steps: [{ method: "POST", endpoint: "/auth/user/emailpass", expected_status: 200 }],
+  }));
+  assert.equal(customer[0].source, "deterministic");
+  assert.equal(customer[0].verified, true);
+  assert.equal(isTemplateInvariant(customer[0]) && customer[0].template, "auth_success_token");
+  assert.equal(customer.filter(isFieldInvariant)[0].path, "token.length");
+  assert.equal(isTemplateInvariant(admin[0]) && admin[0].template, "auth_success_token");
+  assert.equal(admin.filter(isFieldInvariant)[0].path, "token.length");
+});
+check("deterministic source covers failed customer login without a token", () => {
+  const out = deterministicInvariantsForCandidate(cand({
+    attributes: { requires_auth: false, is_admin: false, has_errors: true },
+    steps: [{ method: "POST", endpoint: "/auth/customer/emailpass", expected_status: 401 }],
+  }));
+  assert.equal(isTemplateInvariant(out[0]) && out[0].template, "auth_failure_error");
+  assert.deepEqual(out.filter(isFieldInvariant).map((i) => `${i.path}:${i.matcher}`), [
+    "token:toBeUndefined",
+    "message:toBeDefined",
+    "type:toBeDefined",
+  ]);
+  assert.equal(out.every((i) => i.source === "deterministic" && i.verified && i.polarity === "error"), true);
+});
+check("deterministic checkout success asserts order discriminator only on happy flows", () => {
+  const success = deterministicInvariantsForCandidate(cand({
+    steps: [{ method: "POST", endpoint: "/store/carts/{id}/complete", expected_status: 200 }],
+  }));
+  assert.deepEqual(success.filter(isTemplateInvariant).map((i) => `${i.path}:${i.template}`), [
+    ":checkout_returns_order",
+    "order:order_totals_balance",
+  ]);
+  assert.deepEqual(success.filter(isFieldInvariant).map((i) => `${i.path}:${i.matcher}:${i.expected ?? ""}`), [
+    "type:toBe:order",
+    "order.id:toBeDefined:",
+    "order.status:toBe:pending",
+  ]);
+
+  const errorFlow = deterministicInvariantsForCandidate(cand({
+    attributes: { requires_auth: true, is_admin: false, has_errors: true },
+    steps: [{ method: "POST", endpoint: "/store/carts/{id}/complete", expected_status: 200 }],
+  }));
+  assert.equal(errorFlow.length, 0);
+});
+check("deterministic invalid promo soft-failure is selected only for clearly invalid promo payloads", () => {
+  const invalidPromo = deterministicInvariantsForCandidate(cand({
+    steps: [{
+      method: "POST",
+      endpoint: "/store/carts/{id}",
+      expected_status: 200,
+      request_payload: { promo_codes: ["INVALID_PROMO_DO_NOT_SEED"] },
+    }],
+  }));
+  assert.deepEqual(invalidPromo.filter(isTemplateInvariant).map((i) => `${i.path}:${i.template}`), [
+    "cart:cart_totals_balance",
+    "cart:invalid_promotion_not_applied",
+  ]);
+  assert.deepEqual(invalidPromo.filter(isFieldInvariant).map((i) => `${i.path}:${i.matcher}:${i.expected}`), [
+    "cart.promotions.length:toBe:0",
+    "cart.discount_total:toBe:0",
+  ]);
+
+  const unknownIntent = deterministicInvariantsForCandidate(cand({
+    steps: [{
+      method: "POST",
+      endpoint: "/store/carts/{id}",
+      expected_status: 200,
+      request_payload: { promo_codes: ["SUMMER10"] },
+    }],
+  }));
+  assert.deepEqual(unknownIntent.filter(isTemplateInvariant).map((i) => i.template), ["cart_totals_balance"]);
+  assert.equal(unknownIntent.some((i) => isTemplateInvariant(i) && i.template === "invalid_promotion_not_applied"), false);
+});
+check("deterministic source covers cart totals and admin cancellation templates", () => {
+  const cart = deterministicInvariantsForCandidate(cand({
+    steps: [{ method: "POST", endpoint: "/store/carts", expected_status: 200 }],
+  }));
+  assert.deepEqual(cart.filter(isTemplateInvariant).map((i) => `${i.path}:${i.template}`), ["cart:cart_totals_balance"]);
+
+  const admin = deterministicInvariantsForCandidate(cand({
+    persona: "admin_operator",
+    attributes: { requires_auth: true, is_admin: true, has_errors: false },
+    steps: [{ method: "POST", endpoint: "/admin/orders/{id}/cancel", expected_status: 200 }],
+  }));
+  assert.equal(isTemplateInvariant(admin[0]) && admin[0].template, "admin_order_canceled");
+});
+check("mergeInvariantMaps combines baked and deterministic invariants, preferring deterministic duplicates", () => {
+  const ai = inv({ source: "ai-proposed", path: "type", matcher: "toBe", expected: "order" });
+  const det = inv({ source: "deterministic", path: "type", matcher: "toBe", expected: "order" });
+  const other = inv({ source: "ai-proposed", path: "order.id", matcher: "toBeDefined", expected: undefined });
+  const merged = mergeInvariantMaps(
+    new Map([[ai.stepTitle, [ai, other]]]),
+    new Map([[det.stepTitle, [det]]])
+  );
+  const list = merged.get(ai.stepTitle) ?? [];
+  assert.equal(list.length, 2);
+  assert.equal(list.find((i) => i.path === "type")?.source, "deterministic");
+});
+
+const stepPlan = (step: Candidate["steps"][number]): StepPlan => ({
+  step,
+  resolveCalls: [],
+  path: { template: step.endpoint, params: [] },
+  query: {},
+  body: { kind: "empty" },
+  auth: "none",
+  captures: {},
+});
+
+check("emit renders deterministic customer login invariant in setup when success login step is setup-owned", () => {
+  const candidate = cand({
+    steps: [{ method: "POST", endpoint: "/auth/customer/emailpass", expected_status: 200 }],
+  });
+  const plan: FlowPlan = { steps: [stepPlan(candidate.steps[0])], errors: [] };
+  const source = emitSpec({
+    candidate,
+    plan,
+    golden: false,
+    invariantsByStep: deterministicInvariantsByStep(candidate),
+  }).source;
+  assert.match(source, /const loginRespBody = await safeJson\(loginResp\);/);
+  assert.match(source, /import \{ assertAuthSuccessToken \} from "..\/..\/_golden\/business-invariants\.js";/);
+  assert.match(source, /invariant \(deterministic\): successful email\/password login returns a non-empty session token/);
+  assert.match(source, /getPath\(loginRespBody, "token.length"\)/);
+  assert.doesNotMatch(source, /await test\.step\("POST \/auth\/customer\/emailpass"/);
+});
+check("emit imports and calls business templates for cart flows", () => {
+  const candidate = cand({
+    steps: [{ method: "POST", endpoint: "/store/carts", expected_status: 200 }],
+  });
+  const plan: FlowPlan = { steps: [stepPlan(candidate.steps[0])], errors: [] };
+  const source = emitSpec({
+    candidate,
+    plan,
+    golden: false,
+    invariantsByStep: deterministicInvariantsByStep(candidate),
+  }).source;
+  assert.match(source, /import \{ assertCartTotalsBalance \} from "..\/..\/_golden\/business-invariants\.js";/);
+  assert.match(source, /assertCartTotalsBalance\(resp0BodyTemplate0,/);
+});
+check("emit keeps failed customer login as a real step and renders no-token assertions", () => {
+  const candidate = cand({
+    attributes: { requires_auth: true, is_admin: false, has_errors: true },
+    steps: [{ method: "POST", endpoint: "/auth/customer/emailpass", expected_status: 401 }],
+  });
+  const plan: FlowPlan = { steps: [stepPlan(candidate.steps[0])], errors: [] };
+  const source = emitSpec({
+    candidate,
+    plan,
+    golden: false,
+    invariantsByStep: deterministicInvariantsByStep(candidate),
+  }).source;
+  assert.match(source, /await test\.step\("POST \/auth\/customer\/emailpass"/);
+  assert.match(source, /getPath\(resp0Body, "token"\)/);
+  assert.match(source, /\.toBeUndefined\(\);/);
+  assert.match(source, /getPath\(resp0Body, "message"\)/);
+  assert.match(source, /getPath\(resp0Body, "type"\)/);
+});
 
 console.log("invariants: polarity + negative mode");
 check("parseInvariantResponse stamps polarity (defaulting to success)", () => {

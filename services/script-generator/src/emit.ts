@@ -4,6 +4,8 @@ import type { Candidate } from "./load.js";
 import type { AuthRequirement, BodyPlan, FlowPlan, ResolveCall, StepPlan, SynthesizedBody } from "./resolve.js";
 import { renderInvariants } from "./invariants/render.js";
 import type { Invariant } from "./invariants/types.js";
+import { isTemplateInvariant } from "./invariants/types.js";
+import { templateImportNames } from "./invariants/templates.js";
 
 export interface EmitResult {
   source: string;
@@ -254,6 +256,12 @@ function indentStepLine(snippet: string): string {
     .join("\n");
 }
 
+function renderSetupInvariants(bodyVar: string, invariants: Invariant[]): string[] {
+  const rendered = renderInvariants(bodyVar, invariants);
+  if (!rendered) return [];
+  return rendered.split("\n").map((line) => line.replace(/^    /, "  "));
+}
+
 function needsCustomerAuth(plan: FlowPlan): boolean {
   return plan.steps.some((s) => s.auth === "customer-token");
 }
@@ -277,11 +285,15 @@ export function emitSpec({ candidate, plan, golden, invariantsByStep }: EmitOpti
   const needsAdminViaFixture = needsAdminFixture(plan);
   const invariants = invariantsByStep ?? new Map<string, Invariant[]>();
   const hasInvariants = [...invariants.values()].some((list) => list.length > 0);
+  const templateImports = templateImportNames([...invariants.values()].flat().filter(isTemplateInvariant));
 
   const importLines = [
     `import { test, expect } from "@playwright/test";`,
     golden ? `import { assertGolden } from "../../_golden/assert-golden.js";` : null,
     needsAdminViaFixture ? `import { adminToken } from "../../fixtures/auth.js";` : null,
+    templateImports.length > 0
+      ? `import { ${templateImports.join(", ")} } from "../../_golden/business-invariants.js";`
+      : null,
   ].filter((l): l is string => l !== null);
 
   // Any flow that touches a customer-gated endpoint OR carries its own
@@ -302,6 +314,9 @@ export function emitSpec({ candidate, plan, golden, invariantsByStep }: EmitOpti
   const needsCustomer2 = needsCustomer || hasRegisterStep || hasLoginStep;
   const needsCustomerCreds = needsCustomer2;
   const autoRegister = needsCustomer2;
+  const setupCustomerLoginInvariants = (invariants.get("POST /auth/customer/emailpass") ?? []).filter(
+    (inv) => inv.polarity !== "error"
+  );
 
   const setupLines: string[] = [
     `  const publishableKey = process.env.MEDUSA_PUBLISHABLE_API_KEY!;`,
@@ -336,9 +351,17 @@ export function emitSpec({ candidate, plan, golden, invariantsByStep }: EmitOpti
       `    headers: { "x-publishable-api-key": publishableKey },`,
       `    data: { email, password },`,
       `  });`,
-      `  expect(loginResp.status(), "customer login").toBe(200);`,
-      `  scope.customerToken = (await loginResp.json()).token;`
+      `  expect(loginResp.status(), "customer login").toBe(200);`
     );
+    if (setupCustomerLoginInvariants.length > 0) {
+      setupLines.push(
+        `  const loginRespBody = await safeJson(loginResp);`,
+        ...renderSetupInvariants("loginRespBody", setupCustomerLoginInvariants),
+        `  scope.customerToken = getPath(loginRespBody, "token") as string;`
+      );
+    } else {
+      setupLines.push(`  scope.customerToken = (await loginResp.json()).token;`);
+    }
   }
   if (needsAdminViaFixture) {
     setupLines.push(`  scope.adminToken = await adminToken(request);`);
@@ -360,10 +383,12 @@ export function emitSpec({ candidate, plan, golden, invariantsByStep }: EmitOpti
   const stepBlocks: string[] = [];
   for (let index = 0; index < plan.steps.length; index++) {
     const step = plan.steps[index];
-    if (autoRegister && HANDSHAKE_STEPS.has(`${step.step.method} ${step.step.endpoint}`)) {
+    const stepTitle = `${step.step.method} ${step.step.endpoint}`;
+    const failedCustomerLogin = stepTitle === "POST /auth/customer/emailpass" && step.step.expected_status >= 400;
+    if (autoRegister && HANDSHAKE_STEPS.has(stepTitle) && !failedCustomerLogin) {
       continue; // owned by setup
     }
-    const stepInvariants = invariants.get(`${step.step.method} ${step.step.endpoint}`) ?? [];
+    const stepInvariants = invariants.get(stepTitle) ?? [];
     const { code, fixme } = renderStep(step, index, golden, stepInvariants);
     stepBlocks.push(code);
     if (fixme) {

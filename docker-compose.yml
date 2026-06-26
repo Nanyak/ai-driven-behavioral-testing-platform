@@ -53,6 +53,7 @@ services:
       MEDUSA_TELEMETRY_DISABLED: "true"
       LOG_OUTPUT_PATH: /workspace/logs/medusa-json.log
       LOG_CAPTURE_BODIES: ${LOG_CAPTURE_BODIES:-false}
+      LOG_CAPTURE_RAW_BODIES: ${LOG_CAPTURE_RAW_BODIES:-false}
       # Phase 12 regression demo toggle: OFF unless set (reversible by env var).
       REGRESSION_DEMO: ${REGRESSION_DEMO:-}
     ports:

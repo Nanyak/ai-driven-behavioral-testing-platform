@@ -80,9 +80,11 @@ if (existsSync(middlewarePath)) {
   requireSnippet(middleware, "getEnvironment", "environment tag");
 
   // Security: bodies-off by default means nothing sensitive is logged; when
-  // bodies are enabled, masking + reduction still apply.
+  // bodies are enabled, masking + reduction still apply unless a synthetic
+  // fixture capture explicitly opts into raw bodies.
   requireSnippet(middleware, "SENSITIVE_KEY_PATTERN", "sensitive value masking");
   requireSnippet(middleware, "LOG_CAPTURE_BODIES", "body capture feature flag");
+  requireSnippet(middleware, "LOG_CAPTURE_RAW_BODIES", "raw body capture feature flag");
   requireSnippet(middleware, "reduceValue", "payload reduction for bodies-on capture");
 
   // Emission + durability.

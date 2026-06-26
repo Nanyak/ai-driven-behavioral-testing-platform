@@ -1,6 +1,7 @@
 /**
- * Repair task assembly (plan §New module #3). Bundles everything the agent needs
- * to fix ONE failing spec's arrange/setup so it reproduces the mined outcome:
+ * Setup/arrange repair task assembly (plan §New module #3). Bundles everything
+ * the agent needs to fix ONE failing spec's prerequisites so it reproduces the
+ * mined outcome:
  *   - the current (deterministic) spec source,
  *   - the immutable expected `status_signature`,
  *   - per-step expected-vs-actual + the captured response body (the live evidence
@@ -9,9 +10,10 @@
  *   - OAS request/response slices for the flow's endpoints (so the agent knows
  *     what a valid arrange request looks like without guessing).
  *
- * The prompt's rules are the contract the oracle-guard enforces mechanically: only
- * arrange/setup may change; assertions, expected statuses, step set, and signatures
- * are frozen; ids are runtime-resolved, never hardcoded (CLAUDE.md §5).
+ * The prompt's rules are the contract the oracle-guard enforces mechanically:
+ * only setup/arrange may change; assertions, golden checks, verified invariants,
+ * expected statuses, step set, and signatures are frozen; ids are
+ * runtime-resolved, never hardcoded (CLAUDE.md §5).
  */
 import type { OasDocument, OasMethod } from "../../../golden/src/oas-types.js";
 import type { OasSpecs } from "../resolve.js";
@@ -99,12 +101,13 @@ export function buildRepairTask(
   };
 }
 
-const RULES = `You are repairing a generated Playwright API test so it reproduces a mined behavior.
+const RULES = `You are a setup/arrange repair agent for generated Playwright API tests.
 
 The test SELECTS pre-existing entities (e.g. \`orders[0]\`) that may be in the wrong
 state, so a step that the behavior-engine observed returning 200 now returns a 4xx.
-Your job: rewrite ONLY the ARRANGE / SETUP so the entity is in the state that makes
-the asserted statuses hold.
+Your job: rewrite ONLY setup/arrange code so prerequisites, path/id resolution,
+auth sequencing, and request body construction make the already-asserted behavior
+reproducible.
 
 PREFER selecting an existing entity that is ALREADY in the required state over
 creating one from scratch (creation via the admin API is often multi-step and
@@ -117,8 +120,9 @@ qualifies — fall back to the next page / a broader query if none do. Examples:
 
 HARD RULES (a violation makes your output rejected unread):
 1. DO NOT change any assertion. Every \`expect(resp.status(), "<METHOD> /endpoint>").toBe(N)\`
-   line, its expected status N, the \`test.step("<METHOD> /endpoint>", ...)\` titles, the
-   test title, and the \`// flow_signature\` / \`// status_signature\` headers are FROZEN.
+   line, \`assertGolden(...)\` call, verified business invariant \`expect(...)\` block,
+   expected status N, the \`test.step("<METHOD> /endpoint>", ...)\` titles, the test title,
+   and the \`// flow_signature\` / \`// status_signature\` headers are FROZEN.
 2. DO NOT add \`test.skip\`, \`test.fixme\`, or wrap a behavioral assertion in try/catch to
    swallow it. The test must genuinely pass by arranging real state.
 3. Never hardcode a seeded id. Resolve every id at runtime from a prior response.
@@ -129,7 +133,7 @@ HARD RULES (a violation makes your output rejected unread):
 You MAY explore the live API read-only with \`curl\` to discover the right arrange
 (e.g. which orders are actually cancelable) BEFORE writing the spec. Use GET
 requests only — do not mutate state during exploration. When done exploring,
-output ONLY the full rewritten spec file as your final message, no markdown fences,
+output ONLY the full setup/arrange-repaired spec file as your final message, no markdown fences,
 no commentary.`;
 
 /** A curl-exploration crib so the agent can authenticate + probe the live SUT. */
@@ -141,8 +145,9 @@ Get an admin token:
     -d '{"email":"${sut.adminEmail}","password":"${sut.adminPassword}"}'
   # -> { "token": "<JWT>" }; then pass  -H "Authorization: Bearer <JWT>"  to /admin/* GETs.
 Store publishable key (for /store/* if needed): ${sut.publishableKey || "(unset)"}
-Probe entity state to find one in the REQUIRED condition, then encode that selection
-in the spec's arrange (resolve the id at runtime exactly as you discovered it).`;
+Probe entity state to find one in the REQUIRED condition, then encode that setup
+selection in the spec's arrange code (resolve the id at runtime exactly as you
+discovered it).`;
 }
 
 /** Render the task into the prompt fed to the agent. */
@@ -175,6 +180,6 @@ export function renderRepairPrompt(task: RepairTask): string {
     `\n## Playwright output (tail)\n${task.stdoutTail.slice(-2500)}`,
     task.sut ? `\n${explorationSection(task.sut)}` : "",
     `\n## OAS slices for the flow's endpoints\n${oasLines}`,
-    `\n## Current spec (rewrite its arrange/setup only)\n${task.specSource}`,
+    `\n## Current spec (rewrite setup/arrange only; leave oracle assertions frozen)\n${task.specSource}`,
   ].join("\n");
 }

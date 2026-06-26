@@ -10,15 +10,16 @@
  * (`undefined` did not satisfy the matcher) rather than a thrown TypeError that
  * would mask the regression.
  */
-import type { Invariant } from "./types.js";
-import { NULLARY_MATCHERS } from "./types.js";
+import type { FieldInvariant, Invariant } from "./types.js";
+import { isFieldInvariant, isTemplateInvariant, NULLARY_MATCHERS } from "./types.js";
+import { renderTemplateInvariant } from "./templates.js";
 
 function literal(value: string | number | boolean): string {
   return typeof value === "string" ? JSON.stringify(value) : String(value);
 }
 
 /** A short, debuggable label: the step + path + the human rationale. */
-function label(inv: Invariant): string {
+function label(inv: FieldInvariant): string {
   return `${inv.stepTitle} — ${inv.path}: ${inv.rationale}`;
 }
 
@@ -31,6 +32,11 @@ export function renderInvariants(bodyVar: string, invariants: Invariant[]): stri
   if (invariants.length === 0) return "";
   const lines: string[] = [];
   invariants.forEach((inv, i) => {
+    if (isTemplateInvariant(inv)) {
+      lines.push(...renderTemplateInvariant(bodyVar, inv, i));
+      return;
+    }
+    if (!isFieldInvariant(inv)) return;
     const valueVar = `${bodyVar}Inv${i}`;
     lines.push(`    // invariant (${inv.source}): ${inv.rationale}`);
     lines.push(`    const ${valueVar} = getPath(${bodyVar}, ${JSON.stringify(inv.path)});`);

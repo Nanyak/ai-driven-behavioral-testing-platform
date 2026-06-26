@@ -20,6 +20,49 @@ export interface RawLogDoc {
 
 export type ObservedRole = "guest" | "customer" | "admin";
 
+export type BodyPrimitiveType = "string" | "number" | "boolean" | "null";
+export type BodyRootKind = BodyPrimitiveType | "array" | "object" | "absent";
+export type BodyArrayLengthBucket =
+  | "0"
+  | "1"
+  | "2-5"
+  | "6-20"
+  | "21-100"
+  | "101+";
+
+export interface BodyPrimitivePath {
+  path: string;
+  type: BodyPrimitiveType;
+}
+
+export interface BodyArrayFeature {
+  path: string;
+  length: number;
+  bucket: BodyArrayLengthBucket;
+}
+
+export interface BodyScalarHint {
+  path: string;
+  type: BodyPrimitiveType;
+  /**
+   * Low-risk value signal only. Strings are limited to explicit enum-like field
+   * names; numbers are bucketed instead of stored exactly.
+   */
+  hint: string | boolean | null;
+}
+
+export interface BodyFeatures {
+  present: boolean;
+  kind: BodyRootKind;
+  field_paths: string[];
+  masked_field_paths: string[];
+  primitive_type_paths: BodyPrimitivePath[];
+  array_lengths: BodyArrayFeature[];
+  safe_scalar_hints: BodyScalarHint[];
+  shape_hash: string | null;
+  truncated: boolean;
+}
+
 export interface FlowStep {
   method: string;
   endpoint: string;
@@ -28,6 +71,8 @@ export interface FlowStep {
   trace_id: string | null;
   timestamp: string;
   request_payload: unknown;
+  request_body_features: BodyFeatures;
+  response_body_features: BodyFeatures;
   has_error: boolean;
 }
 
