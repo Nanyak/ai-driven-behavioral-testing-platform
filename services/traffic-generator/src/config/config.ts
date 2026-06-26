@@ -65,7 +65,7 @@ export interface Weights {
   comparisonBrowse: number;
   categoryBrowse: number;
   multiItemCheckout: number;
-  cartWallConversion: number; // guest hits auth wall, signs in, converts (401→login→200)
+  cartWallConversion: number; // guest clicks cart, redirects to sign-in, then converts
   stockOutCheckout: number; // returning customer hits insufficient-inventory 400 (Theme 3)
   cartReviseAbandon: number; // returning curates cart (update + remove line-item), abandons
   orderStatus: number;

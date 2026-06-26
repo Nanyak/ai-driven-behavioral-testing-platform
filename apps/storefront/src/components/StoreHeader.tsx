@@ -6,6 +6,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "./ui
 type StoreHeaderProps = {
   itemCount: number;
   customerEmail?: string;
+  isCustomerAuthenticated: boolean;
   onNavigate: (path: string) => void;
   onSearchChange: (value: string) => void;
   searchQuery: string;
@@ -14,7 +15,9 @@ type StoreHeaderProps = {
   wishlistCount: number;
 };
 
-export function StoreHeader({ itemCount, customerEmail, onNavigate, onSearchChange, searchQuery, unreadNotificationCount, wishlistCount }: StoreHeaderProps) {
+export function StoreHeader({ itemCount, customerEmail, isCustomerAuthenticated, onNavigate, onSearchChange, searchQuery, unreadNotificationCount, wishlistCount }: StoreHeaderProps) {
+  const cartPath = isCustomerAuthenticated ? "/cart" : "/signin";
+
   return (
     <header className="sticky top-3 z-20 mx-auto w-[calc(100%-1.5rem)] max-w-7xl rounded-2xl border border-slate-200/80 bg-white/95 shadow-xl shadow-slate-900/8 backdrop-blur">
       <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-2.5 md:grid-cols-[auto_auto_1fr_auto]">
@@ -192,7 +195,7 @@ export function StoreHeader({ itemCount, customerEmail, onNavigate, onSearchChan
 
           <AppLink
             className="flex h-9 cursor-pointer items-center gap-2 rounded-xl bg-emerald-600 px-3 text-sm font-black text-white transition-colors hover:bg-emerald-700"
-            to="/cart"
+            to={cartPath}
             onNavigate={onNavigate}
             aria-label={`Cart, ${itemCount} items`}
           >

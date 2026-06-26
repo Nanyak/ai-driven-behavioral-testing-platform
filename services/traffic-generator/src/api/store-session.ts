@@ -40,6 +40,10 @@ export class StoreSession {
     return recordStep(this.steps, action, method, path, res);
   }
 
+  private hasCustomerAuth(): boolean {
+    return Boolean(this.token);
+  }
+
   async ensureRegion(): Promise<void> {
     if (!this.regionId) {
       await this.loadRegions();
@@ -133,11 +137,19 @@ export class StoreSession {
   }
 
   async viewProfile(): Promise<ApiResponse> {
+    if (!this.hasCustomerAuth()) {
+      return MISSING;
+    }
+
     const res = await this.client.request("GET", "/store/customers/me", { token: this.token });
     return this.record("view_profile", "GET", "/store/customers/me", res);
   }
 
   async createCart(): Promise<ApiResponse> {
+    if (!this.hasCustomerAuth()) {
+      return MISSING;
+    }
+
     await this.ensureRegion();
     const res = await this.client.request("POST", "/store/carts", {
       body: this.regionId ? { region_id: this.regionId } : {},
@@ -156,6 +168,10 @@ export class StoreSession {
    * recovering quantity of 1.
    */
   async addItem(variantId?: string, quantity = 1): Promise<ApiResponse> {
+    if (!this.hasCustomerAuth()) {
+      return MISSING;
+    }
+
     await this.ensureCart();
     let variant = variantId;
     if (!variant) {
@@ -177,6 +193,10 @@ export class StoreSession {
   }
 
   async updateItem(): Promise<ApiResponse> {
+    if (!this.hasCustomerAuth()) {
+      return MISSING;
+    }
+
     const item = pick(this.items);
     if (!this.cartId || !item) {
       return this.record("update_item", "POST", "/store/carts/{id}/line-items/{lineId}", MISSING);
@@ -190,6 +210,10 @@ export class StoreSession {
   }
 
   async removeItem(): Promise<ApiResponse> {
+    if (!this.hasCustomerAuth()) {
+      return MISSING;
+    }
+
     const item = pick(this.items);
     if (!this.cartId || !item) {
       return this.record("remove_item", "DELETE", "/store/carts/{id}/line-items/{lineId}", MISSING);
@@ -206,6 +230,10 @@ export class StoreSession {
   }
 
   async setAddress(): Promise<ApiResponse> {
+    if (!this.hasCustomerAuth()) {
+      return MISSING;
+    }
+
     await this.ensureCart();
     const address = {
       first_name: "Behavior",
@@ -231,6 +259,10 @@ export class StoreSession {
   }
 
   async listShipping(): Promise<ApiResponse> {
+    if (!this.hasCustomerAuth()) {
+      return MISSING;
+    }
+
     await this.ensureCart();
     const path = `/store/shipping-options?cart_id=${encodeURIComponent(this.cartId ?? "")}`;
     const res = await this.client.request("GET", path, { token: this.token });
@@ -238,6 +270,10 @@ export class StoreSession {
   }
 
   async addShipping(): Promise<ApiResponse> {
+    if (!this.hasCustomerAuth()) {
+      return MISSING;
+    }
+
     const options = await this.listShipping();
     const optionId = options.ok ? options.body?.shipping_options?.[0]?.id : undefined;
     if (!this.cartId || !optionId) {
@@ -252,6 +288,10 @@ export class StoreSession {
   }
 
   async createPaymentCollection(): Promise<ApiResponse> {
+    if (!this.hasCustomerAuth()) {
+      return MISSING;
+    }
+
     await this.ensureCart();
     const res = await this.client.request("POST", "/store/payment-collections", {
       body: { cart_id: this.cartId },
@@ -264,6 +304,10 @@ export class StoreSession {
   }
 
   async createPaymentSession(): Promise<ApiResponse> {
+    if (!this.hasCustomerAuth()) {
+      return MISSING;
+    }
+
     if (!this.paymentCollectionId) {
       await this.createPaymentCollection();
     }
@@ -308,6 +352,10 @@ export class StoreSession {
   }
 
   async complete(): Promise<ApiResponse> {
+    if (!this.hasCustomerAuth()) {
+      return MISSING;
+    }
+
     await this.ensureCart();
     const res = await this.client.request("POST", `/store/carts/${this.cartId}/complete`, {
       token: this.token,
@@ -319,6 +367,10 @@ export class StoreSession {
   }
 
   async viewOrders(): Promise<ApiResponse> {
+    if (!this.hasCustomerAuth()) {
+      return MISSING;
+    }
+
     const res = await this.client.request("GET", "/store/orders?limit=20&offset=0", {
       token: this.token,
     });
@@ -326,6 +378,10 @@ export class StoreSession {
   }
 
   async viewOrder(): Promise<ApiResponse> {
+    if (!this.hasCustomerAuth()) {
+      return MISSING;
+    }
+
     if (!this.lastOrderId) {
       return this.record("view_order", "GET", "/store/orders/{id}", MISSING);
     }
@@ -378,6 +434,10 @@ export class StoreSession {
   }
 
   async viewCart(): Promise<ApiResponse> {
+    if (!this.hasCustomerAuth()) {
+      return MISSING;
+    }
+
     if (!this.cartId) {
       return this.record("view_cart", "GET", "/store/carts/{id}", MISSING);
     }
@@ -468,6 +528,10 @@ export class StoreSession {
    * separate endpoint (Theme 4a).
    */
   async applyPromoCode(code: string): Promise<ApiResponse> {
+    if (!this.hasCustomerAuth()) {
+      return MISSING;
+    }
+
     await this.ensureCart();
     const res = await this.client.request("POST", `/store/carts/${this.cartId}`, {
       body: { promo_codes: [code] },
@@ -479,6 +543,10 @@ export class StoreSession {
   // --- Stage-2 additions ---
 
   async reorder(variantId: string): Promise<ApiResponse> {
+    if (!this.hasCustomerAuth()) {
+      return MISSING;
+    }
+
     await this.createCart();
     if (!this.cartId) {
       return this.record("reorder", "POST", "/store/carts/{id}/line-items", MISSING);

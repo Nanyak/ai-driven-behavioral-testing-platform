@@ -19,6 +19,9 @@ export async function runReturnInquiryFlow(
   if (session.token) {
     account.token = session.token;
   }
+  if (!session.token) {
+    return session;
+  }
 
   await session.viewOrders();
   session.lastOrderId = order.orderId;

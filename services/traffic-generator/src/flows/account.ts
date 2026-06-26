@@ -16,6 +16,9 @@ export async function runOrderStatusFlow(
   if (session.token) {
     account.token = session.token;
   }
+  if (!session.token) {
+    return session;
+  }
 
   await session.viewOrders();
   session.lastOrderId = order.orderId;
@@ -46,6 +49,9 @@ export async function runRepeatOrderStatusFlow(
     await session.loginExisting(account.email, account.password);
     if (session.token) account.token = session.token;
   }
+  if (!session.token) {
+    return session;
+  }
 
   session.lastOrderId = order.orderId;
 
@@ -71,6 +77,9 @@ export async function runProfileMgmtFlow(
   await session.loginExisting(account.email, account.password);
   if (session.token) {
     account.token = session.token;
+  }
+  if (!session.token) {
+    return session;
   }
 
   await session.viewProfile();

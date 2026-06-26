@@ -344,8 +344,8 @@ export interface ValidationReport {
    * /auth/* endpoint and may be tagged guest in role_observed even though the
    * cart-signal rule correctly recovers them. Some guest->customer
    * reclassifications under the cart-signal variant are therefore GROUND-TRUTH
-   * GAPS, not classifier errors. Confirm a guest `POST /store/carts` returns 401
-   * against the live cartWall (401->200) before reading the gate as leaking.
+   * GAPS, not classifier errors. The storefront should redirect a guest cart
+   * click to sign-in before any Store API cart mutation is attempted.
    */
   ground_truth_footnote: string;
   classification: {
@@ -378,8 +378,8 @@ const FOOTNOTE =
   "returning customer reusing a live JWT emits no /auth endpoint). Some " +
   "guest->customer reclassifications under the cart-signal variant are " +
   "ground-truth gaps, not classifier errors. The cart-signal rule is sound only " +
-  "while the requireCustomerAuth gate enforces: confirm a guest POST /store/carts " +
-  "returns 401 (cartWall 401->200) before concluding the gate leaks.";
+  "while the storefront redirects guest cart clicks to sign-in before Store API " +
+  "cart mutations and the backend still rejects unauthenticated cart mutations.";
 
 export function buildValidationReport(
   runId: string,

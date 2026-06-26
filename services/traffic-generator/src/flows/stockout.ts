@@ -25,6 +25,9 @@ export async function runStockOutCheckout(
   await session.loadRegions();
   await session.loginExisting(account.email, account.password);
   if (session.token) account.token = session.token;
+  if (!session.token) {
+    return session;
+  }
 
   if (target.productId) {
     await session.viewProductById(target.productId);

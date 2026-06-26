@@ -5,8 +5,10 @@ import type { PoolAccount } from "../orchestration/state.js";
 export type ConversionIntent = "convertBuy" | "convertAbandon" | "wallBounce";
 
 /**
- * Produces the `role_observed:[guest, customer]` 401→auth→200 pivot that the behavior engine's
- * "highest-privilege attribute reached" rule is built to classify.
+ * Models the storefront auth gate: a logged-out shopper clicks cart, the app
+ * sends them straight to sign-in, and only after login do we create the cart.
+ * The redirect is frontend-only, so the generated API traffic starts at login;
+ * no unauthenticated cart request or synthetic `/cart` route is emitted.
  *
  * Holdout rule (CLAUDE.md §5 / §8 #5): this scripted flow authenticates with
  * `loginExisting` on a PRE-EXISTING pooled account — it NEVER calls `register`.
@@ -24,14 +26,15 @@ export async function runCartWallConversion(
   await session.viewProduct();
 
   // No register here — the holdout is LLM-only.
-  await session.createCart();
-
   if (intent === "wallBounce") {
     return session;
   }
 
   await session.loginExisting(account.email, account.password);
   if (session.token) account.token = session.token;
+  if (!session.token) {
+    return session;
+  }
   await session.createCart();
   await session.addItem();
 

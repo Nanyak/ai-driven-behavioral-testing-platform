@@ -101,12 +101,14 @@ export function printAcceptance(all: SessionResult[], state: RunState, floors: F
     (n, r) => n + (r.steps.some((s) => s.action === "apply_promo" && s.ok) ? 1 : 0),
     0
   );
-  // Guest→sign-in conversion pivot: a 401 on `POST /store/carts` (the auth wall)
-  // followed by a later 200 on `POST /store/carts` (after login) in the same
-  // session — the exact role_observed:[guest, customer] signal (Theme 1).
+  // Guest→sign-in conversion pivot: the storefront cart click redirects to
+  // sign-in without emitting any API request. The API-visible portion is a
+  // successful login followed by an authenticated `POST /store/carts`.
   const conversionPivots = all.filter((r) => {
-    const wall = r.steps.findIndex((s) => s.action === "create_cart" && s.status === 401);
-    return wall !== -1 && r.steps.slice(wall + 1).some((s) => s.action === "create_cart" && s.ok);
+    if (r.type !== "cartWallConversion") return false;
+    if (r.steps.some((s) => s.action === "create_cart" && !s.ok)) return false;
+    const login = r.steps.findIndex((s) => s.action === "login" && s.ok);
+    return login !== -1 && r.steps.slice(login + 1).some((s) => s.action === "create_cart" && s.ok);
   }).length;
 
   // Inventory arc (Theme 3): the customer over-adds a low-stock variant and gets
@@ -152,7 +154,7 @@ export function printAcceptance(all: SessionResult[], state: RunState, floors: F
   console.log(`  ${flag(linkedRefunds, floors.linkedRefunds)} cross-role linked refunds:     ${linkedRefunds} / ≥${floors.linkedRefunds}`);
   console.log(`  ${flag(canceledOrders, floors.canceledOrders)} orders canceled (admin):       ${canceledOrders} / ≥${floors.canceledOrders}`);
   console.log(`  ${flag(promoSuccess, floors.promoSuccess)} promo applications (ok):       ${promoSuccess} / ≥${floors.promoSuccess}`);
-  console.log(`  ${flag(conversionPivots, 1)} cart-wall conversions (401→login→200): ${conversionPivots} / ≥1`);
+  console.log(`  ${flag(conversionPivots, 1)} cart-login conversions (login→cart 200, no pre-cart API): ${conversionPivots} / ≥1`);
   console.log(`  ${flag(stockOuts, 1)} stock-out 400s (insufficient inventory): ${stockOuts} / ≥1`);
   console.log(`  ${flag(productsCreated, 1)} admin create-product (2xx):    ${productsCreated} / ≥1`);
   console.log(`  ${flag(inventoryRestocks, 1)} admin set-inventory-level (2xx): ${inventoryRestocks} / ≥1`);

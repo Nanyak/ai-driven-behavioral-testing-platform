@@ -29,20 +29,6 @@ export async function runEdgeFlow(client: MedusaClient): Promise<StepResult[]> {
       record("admin_no_token", "GET", "/admin/products", res.status, res.ok);
     },
     async () => {
-      const res = await client.request("POST", "/store/carts/cart_invalid123/line-items", {
-        body: { variant_id: "variant_invalid", quantity: 1 },
-      });
-      record("invalid_cart_line_item", "POST", "/store/carts/{id}/line-items", res.status, res.ok);
-    },
-    async () => {
-      const created = await client.request("POST", "/store/carts", { body: {} });
-      const cartId = created.ok ? created.body?.cart?.id : undefined;
-      if (cartId) {
-        const res = await client.request("POST", `/store/carts/${cartId}/complete`);
-        record("complete_empty_cart", "POST", "/store/carts/{id}/complete", res.status, res.ok);
-      }
-    },
-    async () => {
       const res = await client.request("GET", "/store/products/prod_does_not_exist");
       record("invalid_product", "GET", "/store/products/{id}", res.status, res.ok);
     },

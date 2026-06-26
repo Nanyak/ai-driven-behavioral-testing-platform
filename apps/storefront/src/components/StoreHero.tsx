@@ -1,4 +1,5 @@
 import { ArrowRight, CheckCircle2, ChevronDown, PackageCheck, Sparkles, Truck } from "lucide-react";
+import { useStorefront } from "../context/StorefrontContext";
 import { AppLink } from "./AppLink";
 import { Badge } from "./ui/badge";
 
@@ -7,6 +8,9 @@ type StoreHeroProps = {
 };
 
 export function StoreHero({ onNavigate }: StoreHeroProps) {
+  const { isCustomerAuthenticated } = useStorefront();
+  const cartPath = isCustomerAuthenticated ? "/cart" : "/signin";
+
   return (
     <section
       className="-mt-24 relative overflow-hidden min-h-[640px] grid grid-cols-1 gap-9 px-4 pb-16 pt-44 text-white md:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(300px,440px)] lg:px-[max(24px,calc((100vw-1240px)/2))] lg:pt-48"
@@ -67,7 +71,7 @@ export function StoreHero({ onNavigate }: StoreHeroProps) {
           </AppLink>
           <AppLink
             className="inline-flex h-12 cursor-pointer items-center gap-2 rounded-lg border border-white/30 bg-white/10 px-6 text-base font-black text-white backdrop-blur transition-all duration-200 hover:bg-white/20 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/30"
-            to="/cart"
+            to={cartPath}
             onNavigate={onNavigate}
           >
             View cart

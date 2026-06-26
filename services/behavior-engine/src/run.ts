@@ -129,10 +129,9 @@ function hasBrokenInterpolationSegment(flow: MinedFlow): boolean {
  * Option B (auth-context-coherent modal): the per-token modal is taken over only
  * the supporting sessions whose OWN emergent persona matches the flow's, so a
  * gated endpoint's expected status reflects THIS flow's auth context. Without it,
- * a customer checkout's `POST /store/carts` inherits the guest 401 that dominates
- * the unpartitioned modal (the supporting set mixes guest attempts with customer
- * successes), and the generated test then expects 401 while the authenticated run
- * returns 200. Partitioning by the session's own context keeps each journey
+ * a customer checkout's `POST /store/carts` can inherit a guest rejection from
+ * stale/imported captures whose supporting set mixes rejected guest attempts with
+ * customer successes. Partitioning by the session's own context keeps each journey
  * internally consistent: expected status and the persona the test runs under no
  * longer disagree.
  */
@@ -323,12 +322,10 @@ async function main(): Promise<void> {
 
   // Expected status per token is computed from the flow's OWN supporting
   // sessions, NOT globally, and further restricted to the supporting sessions
-  // whose auth context matches the flow's (Option B, see toMinedFlow): a token
-  // like `POST /store/carts` is 401 globally (guests attempt it far more than
-  // customers succeed) AND 401 across a supporting set that mixes guest attempts
-  // with customer successes, but inside a customer checkout it is 200. Stamping
-  // the contaminated 401 on a clean customer journey mis-flags it has_errors and
-  // makes the generated test expect 401 where the authenticated run returns 200.
+  // whose auth context matches the flow's (Option B, see toMinedFlow): if stale
+  // or imported captures mix rejected guest cart attempts with authenticated cart
+  // successes, the flow-local modal still stays 200 inside a clean customer
+  // checkout instead of inheriting the rejected guest status.
   const sessionById = new Map(sessions.map((s) => [s.session_id, s]));
   // Each session's OWN emergent auth context (endpoint+status only, no
   // role_observed), memoized once. This is a per-session classification used to

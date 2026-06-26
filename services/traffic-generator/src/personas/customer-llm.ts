@@ -43,7 +43,10 @@ export async function runCustomerCheckout(
 
   // Guaranteed registered-customer checkout backbone.
   await session.register();
-  await session.login();
+  const login = await session.login();
+  if (!login.ok || !session.token) {
+    return { session, completed: false };
+  }
   await session.viewProfile();
   await session.createCart();
   await session.addItem();

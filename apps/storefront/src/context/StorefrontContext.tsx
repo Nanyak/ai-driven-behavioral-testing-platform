@@ -9,6 +9,7 @@ type StorefrontContextValue = {
   cart: Cart | null;
   checkoutResult: string;
   customer: Customer | null;
+  isCustomerAuthenticated: boolean;
   isBusy: boolean;
   itemCount: number;
   notifications: StoreNotification[];
@@ -91,6 +92,7 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
   const [checkoutResult, setCheckoutResult] = useState("");
   const [status, setStatus] = useState("Loading products");
   const [isBusy, setIsBusy] = useState(false);
+  const isCustomerAuthenticated = Boolean(customer || getCustomerToken());
 
   const itemCount = useMemo(
     () => cart?.items?.reduce((total, item) => total + item.quantity, 0) ?? 0,
@@ -617,6 +619,7 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
       cart,
       checkoutResult,
       customer,
+      isCustomerAuthenticated,
       isBusy,
       itemCount,
       notifications,
@@ -669,6 +672,7 @@ export function StorefrontProvider({ children }: StorefrontProviderProps) {
       cart,
       checkoutResult,
       customer,
+      isCustomerAuthenticated,
       isBusy,
       itemCount,
       notifications,

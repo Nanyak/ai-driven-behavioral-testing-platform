@@ -94,7 +94,7 @@ export async function dispatch(
       // Returning identity authenticates into a REAL pooled account; if the pool
       // is empty (or this is a guest) it degrades to a guest bounce. Never a
       // synthesized account — its email was never registered, so loginExisting
-      // would 401 and the session would mis-mine as a guest (see cartWallConversion).
+      // would 401 and the session would mis-mine as a guest.
       const acct = returning ? state.drawAccount() : undefined;
       return acct
         ? (await runReturningFlow(client, acct, "bounce", promo)).steps
@@ -172,10 +172,11 @@ export async function dispatch(
     }
 
     case "cartWallConversion": {
-      // Guest hits the cart auth wall (401), signs into a REAL pooled account,
-      // and continues. loginExisting must succeed, so draw a registered pooled
-      // account — never a synthesized one. If the pool is empty, degrade to a
-      // guest browse (Stage 0 always seeds the pool, so this is a safety net).
+      // Guest clicks cart, the storefront redirects to sign-in, then a REAL
+      // pooled account signs in and continues to cart. loginExisting must
+      // succeed, so draw a registered pooled account — never a synthesized one.
+      // If the pool is empty, degrade to a guest browse (Stage 0 always seeds the
+      // pool, so this is a safety net).
       const acct = state.drawAccount();
       if (!acct) return guestDegrade(client);
       const r = Math.random();

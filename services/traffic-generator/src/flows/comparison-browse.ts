@@ -52,7 +52,7 @@ export async function runComparisonBrowseFlow(
     await session.viewMultipleProducts(secondPass);
   }
 
-  if (chance(0.2)) {
+  if (session.token && chance(0.2)) {
     await session.createCart();
     await session.addItem();
   }

@@ -32,6 +32,9 @@ export async function runMultiItemFlow(
       if (session.token) account.token = session.token;
     }
   }
+  if (!session.token) {
+    return session;
+  }
 
   await session.searchProducts(pickQuery());
   await session.viewProduct();

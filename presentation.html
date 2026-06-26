@@ -479,7 +479,7 @@ neither                          -> guest_shopper</code></pre>
           <tr><td><code>cart_read_signal</code></td><td>+ auth-gated cart read</td><td><strong>0.980</strong></td><td><strong>97.3%</strong></td></tr>
         </tbody>
       </table>
-      <div class="warn"><span class="tag">HONESTY</span> &nbsp;The cart signal is sound <em>only while</em> the SUT's <code>requireCustomerAuth</code> gate actually enforces (a guest <code>POST /store/carts</code> must 401). Some guest→customer reclassifications are <strong>ground-truth gaps</strong>, not classifier errors: a returning customer reusing a live JWT emits no <code>/auth</code> endpoint, so the JWT label under-counts them. We footnote this rather than hide it.</div>
+      <div class="warn"><span class="tag">HONESTY</span> &nbsp;The cart signal is sound <em>only while</em> the storefront sends guest cart clicks to sign-in before cart mutations, and the SUT's <code>requireCustomerAuth</code> gate still rejects unauthenticated cart writes. Some guest→customer reclassifications are <strong>ground-truth gaps</strong>, not classifier errors: a returning customer reusing a live JWT emits no <code>/auth</code> endpoint, so the JWT label under-counts them. We footnote this rather than hide it.</div>
     </section>
 
     <!-- 6 -->

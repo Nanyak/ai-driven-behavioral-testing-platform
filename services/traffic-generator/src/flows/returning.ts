@@ -56,6 +56,9 @@ export async function runReturningFlow(
   if (intent === "bounce" || intent === "browse") {
     return session;
   }
+  if (!session.token) {
+    return session;
+  }
 
   await session.createCart();
   await session.addItem();

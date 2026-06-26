@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { StoreHeader } from "./components/StoreHeader";
 import { StorefrontProvider, useStorefront } from "./context/StorefrontContext";
 import { useRoute } from "./hooks/useRoute";
@@ -17,13 +18,20 @@ import { WishlistPage } from "./pages/WishlistPage";
 
 function StorefrontRoutes() {
   const { route, navigate } = useRoute();
-  const { customer, itemCount, searchQuery, setSearchQuery, status, unreadNotificationCount, wishlistProductIds } = useStorefront();
+  const { customer, isCustomerAuthenticated, itemCount, searchQuery, setSearchQuery, status, unreadNotificationCount, wishlistProductIds } = useStorefront();
+
+  useEffect(() => {
+    if (route.name === "cart" && !isCustomerAuthenticated) {
+      navigate("/signin");
+    }
+  }, [isCustomerAuthenticated, route.name]);
 
   return (
     <div className="min-h-screen bg-slate-50 pb-14 text-slate-900">
       <StoreHeader
         itemCount={itemCount}
         customerEmail={customer?.email}
+        isCustomerAuthenticated={isCustomerAuthenticated}
         searchQuery={searchQuery}
         status={status}
         unreadNotificationCount={unreadNotificationCount}
@@ -42,7 +50,7 @@ function StorefrontRoutes() {
       {route.name === "wishlist" ? <WishlistPage onNavigate={navigate} /> : null}
       {route.name === "orders" ? <OrdersPage onNavigate={navigate} /> : null}
       {route.name === "notifications" ? <NotificationsPage /> : null}
-      {route.name === "cart" ? <CartPage onNavigate={navigate} /> : null}
+      {route.name === "cart" && isCustomerAuthenticated ? <CartPage onNavigate={navigate} /> : null}
       {route.name === "order" ? <OrderPage orderId={route.orderId} onNavigate={navigate} /> : null}
     </div>
   );

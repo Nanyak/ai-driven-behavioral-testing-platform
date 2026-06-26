@@ -44,6 +44,9 @@ export async function runDirectLandingFlow(
     if (chance(0.35)) await session.viewProduct();
     return session;
   }
+  if (!session.token) {
+    return session;
+  }
 
   await session.createCart();
   await session.addItem();
