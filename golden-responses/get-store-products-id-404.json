@@ -1,0 +1,28 @@
+{
+  "endpoint": "GET /store/products/{id}",
+  "expected_status": 404,
+  "expected_schema": {
+    "message": "string",
+    "type": "string"
+  },
+  "ignore_fields": [
+    "id",
+    "created_at",
+    "updated_at",
+    "deleted_at",
+    "metadata",
+    "token",
+    "cart_id",
+    "order_id",
+    "trace_id",
+    "session_id"
+  ],
+  "schema_source": "observed",
+  "captured_at": "2026-06-26T21:42:43.710Z",
+  "source_sessions": [
+    "sess-edge-417d03c9-6749-45a2-9eb7-c461af60a3dc",
+    "sess-edge-8dbe7071-b55a-4314-8889-9f7370cc904a",
+    "sess-edge-c5e4af11-2100-435e-a083-7939727a8ca2",
+    "sess-edge-f95ce135-3cd1-4d9b-a304-f999fb854f1a"
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "endpoint": "GET /store/customers/me",
+  "expected_status": 401,
+  "expected_schema": {
+    "message": "string"
+  },
+  "ignore_fields": [
+    "id",
+    "created_at",
+    "updated_at",
+    "deleted_at",
+    "metadata",
+    "token",
+    "cart_id",
+    "order_id",
+    "trace_id",
+    "session_id"
+  ],
+  "schema_source": "observed",
+  "captured_at": "2026-06-26T21:42:43.710Z",
+  "source_sessions": [
+    "sess-edge-417d03c9-6749-45a2-9eb7-c461af60a3dc",
+    "sess-edge-8fa2ba08-4b73-4a32-8730-8c6778d3d181",
+    "sess-edge-f95ce135-3cd1-4d9b-a304-f999fb854f1a",
+    "sess-signup-0bd2babb-276a-4969-a0a3-de1ac03d6aef",
+    "sess-signup-1b6977d2-9e0d-4678-836a-cf6daf5dd7be",
+    "sess-signup-6d5d9900-384f-430a-87f4-335ef5bd957d",
+    "sess-signup-c6d02fb5-4c35-4144-97d3-79265dbd0bb3",
+    "sess-signup-d868020f-d3d1-4ecc-8dd1-bbac8006ab42",
+    "sess-signup-d9862392-8149-4fec-a709-eaaab9c35f38",
+    "sess-signup-e110a385-9947-4158-90c8-af39d3eddbd3",
+    "sess-signup-f04a10d0-47ce-410a-951a-0d86c24c2d5c",
+    "sess-signup-f0de4984-e7a0-40c9-a835-f906c38c95ba",
+    "sess-signup-f35778bb-4442-4213-a2f2-a833d32d86a5"
+  ]
+}

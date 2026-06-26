@@ -1,12 +1,16 @@
 filebeat.inputs:
-  - type: container
+  # Read Medusa's structured log file directly (complete, masked JSON lines).
+  # NOT container stdout: Docker's json-file driver splits lines >16KB, which
+  # corrupts bodies-on payloads, and tailing all containers re-ingests
+  # Logstash's own parse-error logs into a feedback loop. The file holds whole
+  # lines and only Medusa's output, so neither problem can occur.
+  - type: filestream
+    id: medusa-json
     paths:
-      - /var/lib/docker/containers/*/*.log
+      - /workspace/logs/medusa-json.log
 
-# Keep Filebeat minimal: it only ships the raw stdout line in `message`.
+# Keep Filebeat minimal: it only ships the raw line in `message`.
 # Logstash decodes the JSON (separation of concerns). We do NOT decode JSON here.
-# Disabling event-original injection avoids any collision with our semantic
-# top-level `event` string field once the line reaches Logstash.
 output.logstash:
   hosts: ["logstash:5044"]
 

@@ -1,0 +1,191 @@
+{
+  "endpoint": "POST /admin/returns",
+  "expected_status": 200,
+  "expected_schema": {
+    "order": {
+      "billing_address": {
+        "address_1": "string",
+        "address_2": "string",
+        "city": "string",
+        "company": "string",
+        "country_code": "string",
+        "created_at": "ignored",
+        "customer_id": "string",
+        "first_name": "string",
+        "id": "ignored",
+        "last_name": "string",
+        "metadata": "ignored",
+        "phone": "string",
+        "postal_code": "string",
+        "province": "string",
+        "updated_at": "ignored"
+      },
+      "canceled_at": "string",
+      "created_at": "ignored",
+      "credit_line_total": "number",
+      "credit_lines": "array",
+      "currency_code": "string",
+      "custom_display_id": "string",
+      "customer_id": "string",
+      "deleted_at": "ignored",
+      "discount_subtotal": "number",
+      "discount_tax_total": "number",
+      "discount_total": "number",
+      "display_id": "number",
+      "email": "string",
+      "gift_card_tax_total": "number",
+      "gift_card_total": "number",
+      "id": "ignored",
+      "is_draft_order": "boolean",
+      "item_discount_total": "number",
+      "item_subtotal": "number",
+      "item_tax_total": "number",
+      "item_total": "number",
+      "items": "array",
+      "locale": "string",
+      "metadata": "ignored",
+      "order_change": "object",
+      "original_item_subtotal": "number",
+      "original_item_tax_total": "number",
+      "original_item_total": "number",
+      "original_shipping_subtotal": "number",
+      "original_shipping_tax_total": "number",
+      "original_shipping_total": "number",
+      "original_subtotal": "number",
+      "original_tax_total": "number",
+      "original_total": "number",
+      "region_id": "string",
+      "sales_channel_id": "string",
+      "shipping_address": {
+        "address_1": "string",
+        "address_2": "string",
+        "city": "string",
+        "company": "string",
+        "country_code": "string",
+        "created_at": "ignored",
+        "customer_id": "string",
+        "first_name": "string",
+        "id": "ignored",
+        "last_name": "string",
+        "metadata": "ignored",
+        "phone": "string",
+        "postal_code": "string",
+        "province": "string",
+        "updated_at": "ignored"
+      },
+      "shipping_discount_total": "number",
+      "shipping_methods": "array",
+      "shipping_subtotal": "number",
+      "shipping_tax_total": "number",
+      "shipping_total": "number",
+      "status": "string",
+      "subtotal": "number",
+      "summary": {
+        "accounting_total": "number",
+        "credit_line_total": "number",
+        "current_order_total": "number",
+        "original_order_total": "number",
+        "paid_total": "number",
+        "pending_difference": "number",
+        "raw_accounting_total": "object",
+        "raw_credit_line_total": "object",
+        "raw_current_order_total": "object",
+        "raw_original_order_total": "object",
+        "raw_paid_total": "object",
+        "raw_pending_difference": "object",
+        "raw_refunded_total": "object",
+        "raw_transaction_total": "object",
+        "refunded_total": "number",
+        "transaction_total": "number"
+      },
+      "tax_total": "number",
+      "total": "number",
+      "transactions": "array",
+      "updated_at": "ignored",
+      "version": "number"
+    },
+    "return": {
+      "canceled_at": "string",
+      "claim_id": "string",
+      "created_at": "ignored",
+      "created_by": "string",
+      "display_id": "number",
+      "exchange_id": "string",
+      "id": "ignored",
+      "items": "array",
+      "location_id": "string",
+      "no_notification": "boolean",
+      "order_id": "ignored",
+      "order_version": "number",
+      "received_at": "string",
+      "refund_amount": "number",
+      "requested_at": "string",
+      "status": "string"
+    }
+  },
+  "ignore_fields": [
+    "id",
+    "created_at",
+    "updated_at",
+    "deleted_at",
+    "metadata",
+    "token",
+    "cart_id",
+    "order_id",
+    "trace_id",
+    "session_id"
+  ],
+  "schema_source": "openapi",
+  "oas_operation_id": "PostReturns",
+  "oas_ref": "#/components/schemas/AdminOrderReturnResponse",
+  "oas_version": "2.0.0",
+  "value_rules": [
+    {
+      "path": "order.canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order.email",
+      "kind": "format",
+      "format": "email"
+    },
+    {
+      "path": "order.status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "requires_action",
+        "pending",
+        "completed",
+        "draft",
+        "archived"
+      ]
+    },
+    {
+      "path": "order.transactions[].reference",
+      "kind": "enum",
+      "values": [
+        "capture",
+        "refund"
+      ]
+    },
+    {
+      "path": "return.canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "return.status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "requested",
+        "received",
+        "partially_received"
+      ]
+    }
+  ],
+  "captured_at": "2026-06-26T21:58:49.213Z",
+  "source_sessions": []
+}

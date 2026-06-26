@@ -1,0 +1,23 @@
+{
+  "endpoint": "POST /admin/returns/{id}/cancel",
+  "expected_status": 200,
+  "expected_schema": {},
+  "ignore_fields": [
+    "id",
+    "created_at",
+    "updated_at",
+    "deleted_at",
+    "metadata",
+    "token",
+    "cart_id",
+    "order_id",
+    "trace_id",
+    "session_id"
+  ],
+  "schema_source": "observed",
+  "captured_at": "2026-06-26T21:42:43.710Z",
+  "source_sessions": [
+    "sess-adminReturnReject-13820868-b3ce-45d8-adc9-dd976bc70e20",
+    "sess-adminReturnReject-48d10f1c-5aa0-489a-87ed-e2bf3a808633"
+  ]
+}

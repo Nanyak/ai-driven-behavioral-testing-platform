@@ -1,0 +1,28 @@
+{
+  "endpoint": "GET /admin/inventory-items",
+  "expected_status": 200,
+  "expected_schema": {
+    "offset": "number",
+    "count": "number",
+    "inventory_items": "array",
+    "limit": "number"
+  },
+  "ignore_fields": [
+    "id",
+    "created_at",
+    "updated_at",
+    "deleted_at",
+    "metadata",
+    "token",
+    "cart_id",
+    "order_id",
+    "trace_id",
+    "session_id"
+  ],
+  "schema_source": "observed",
+  "captured_at": "2026-06-26T21:42:43.710Z",
+  "source_sessions": [
+    "sess-adminCatalog-af145671-9659-4591-a2d8-88fbeccf018f",
+    "sess-seed-admin-b2938610-5bbb-414f-8f37-9a81a47f97b7"
+  ]
+}

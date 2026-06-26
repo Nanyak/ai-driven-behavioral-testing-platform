@@ -1,0 +1,32 @@
+{
+  "endpoint": "POST /store/carts/{id}/line-items",
+  "expected_status": 400,
+  "expected_schema": {
+    "type": "string",
+    "message": "string",
+    "code": "string"
+  },
+  "ignore_fields": [
+    "id",
+    "created_at",
+    "updated_at",
+    "deleted_at",
+    "metadata",
+    "token",
+    "cart_id",
+    "order_id",
+    "trace_id",
+    "session_id"
+  ],
+  "schema_source": "observed",
+  "captured_at": "2026-06-26T21:42:43.710Z",
+  "source_sessions": [
+    "sess-stockOutCheckout-08e639c5-6e20-489d-b7ab-77db63a1abb1",
+    "sess-stockOutCheckout-0bd4425b-7a22-472e-8a50-f952eeab2935",
+    "sess-stockOutCheckout-4546890d-614f-49b2-b323-52d28352d0b6",
+    "sess-stockOutCheckout-9fe6ef54-ae78-4920-9603-b3e772b08fdf",
+    "sess-stockOutCheckout-c17ff6f6-8312-4830-a07f-8f549963eae8",
+    "sess-stockOutCheckout-da82e682-676a-4c17-8090-c6310ab76597",
+    "sess-stockOutCheckout-f80e3437-cf99-42bf-9363-7489fa29a52b"
+  ]
+}

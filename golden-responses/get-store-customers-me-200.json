@@ -1,0 +1,49 @@
+{
+  "endpoint": "GET /store/customers/me",
+  "expected_status": 200,
+  "expected_schema": {
+    "customer": {
+      "first_name": "string",
+      "email": "string",
+      "last_name": "string",
+      "addresses": "string",
+      "phone": "null",
+      "has_account": "string",
+      "company_name": "null",
+      "created_at": "ignored",
+      "id": "ignored",
+      "metadata": "ignored",
+      "deleted_at": "ignored",
+      "updated_at": "ignored"
+    }
+  },
+  "ignore_fields": [
+    "id",
+    "created_at",
+    "updated_at",
+    "deleted_at",
+    "metadata",
+    "token",
+    "cart_id",
+    "order_id",
+    "trace_id",
+    "session_id"
+  ],
+  "schema_source": "observed",
+  "captured_at": "2026-06-26T21:42:43.710Z",
+  "source_sessions": [
+    "sess-newCheckout-11b28a0e-0df7-499a-90db-8133ae86182f",
+    "sess-newCheckout-1e061ec9-a2c6-4861-853f-93636df50307",
+    "sess-newCheckout-22a13685-1763-487b-bd4f-715cec2ba68e",
+    "sess-newCheckout-affd3f95-555b-4dca-90de-40795ecd8295",
+    "sess-newCheckout-c69afbe0-2fae-46af-a3bf-9dd0d1a42739",
+    "sess-newCheckout-ddcb156d-5d30-4489-9439-fb49389bba18",
+    "sess-profileMgmt-2c405445-9c41-4d77-822d-eb93673c5dee",
+    "sess-profileMgmt-35804f83-cb77-4f8f-9d7b-e01a4cc3592c",
+    "sess-profileMgmt-3b8e2787-f044-4ade-b493-ec4c0ca409ed",
+    "sess-profileMgmt-b6e40548-23ed-43fc-8d74-5f6032a1b14e",
+    "sess-profileMgmt-cf7414ef-a19f-4630-be2f-f2a5dedafc48",
+    "sess-profileMgmt-f4af5a46-c762-44bd-84b9-080abb9c48ce",
+    "sess-profileMgmt-fd6b33f0-96a1-4403-a10e-e8e61a12b806"
+  ]
+}

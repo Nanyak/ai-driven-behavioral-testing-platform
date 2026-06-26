@@ -11,7 +11,11 @@
  * union. Type conflicts on the same key are recorded, not silently dropped.
  */
 import { isObjectNode } from "./schema-extract.js";
-import { ignoreFieldsFor } from "../ignore-fields.js";
+import {
+  GLOBAL_IGNORE_FIELDS,
+  PER_ENDPOINT_IGNORE_FIELDS,
+  ignoreFieldsFor,
+} from "../ignore-fields.js";
 import { filterIgnoredValueRules } from "../value/value-rules.js";
 import type { OasResolution } from "../oas/oas-source.js";
 import type { GoldenResponse, SchemaNode, SchemaSource } from "../types.js";
@@ -112,6 +116,31 @@ export function unionSchema(a: SchemaNode, b: SchemaNode, path = ""): MergeResul
  * `expected_status`: spec-sourced when an OAS resolution exists (happy-path
  * or overlay-documented error, ADR 0004); otherwise the observed status.
  */
+const GLOBAL_IGNORE_SET = new Set<string>(GLOBAL_IGNORE_FIELDS);
+
+/**
+ * Stamp the ignore-field policy onto an OAS-derived expected schema so it is
+ * SYMMETRIC with the observed half (`schema-extract.ts` `describeAt`): any field
+ * whose name is globally ignored (at ANY depth) or whose dotted path is a
+ * per-endpoint ignore becomes `"ignored"`. Without this, a pure-`openapi`
+ * golden over-asserts on dynamic fields (`id`, `*.created_at`, …) that the
+ * observed side strips, producing false `missing_field` diffs. Idempotent on an
+ * already-marked (observed/merged) schema. Mirrors `extractObservedSchema`.
+ */
+function applyIgnorePolicy(node: SchemaNode, endpoint: string, path = ""): SchemaNode {
+  if (!isObjectNode(node)) return node;
+  const perEndpoint = new Set(PER_ENDPOINT_IGNORE_FIELDS[endpoint] ?? []);
+  const out: { [key: string]: SchemaNode } = {};
+  for (const [key, child] of Object.entries(node)) {
+    const childPath = path ? `${path}.${key}` : key;
+    out[key] =
+      GLOBAL_IGNORE_SET.has(key) || perEndpoint.has(childPath)
+        ? "ignored"
+        : applyIgnorePolicy(child, endpoint, childPath);
+  }
+  return out;
+}
+
 export function buildGolden(params: {
   endpoint: string;
   observedStatus: number;
@@ -145,7 +174,7 @@ export function buildGolden(params: {
   return {
     endpoint,
     expected_status: expectedStatus,
-    expected_schema: schema,
+    expected_schema: applyIgnorePolicy(schema, endpoint),
     ignore_fields: ignoreFieldsFor(endpoint),
     schema_source: schemaSource,
     oas_operation_id: oas?.operationId ?? null,

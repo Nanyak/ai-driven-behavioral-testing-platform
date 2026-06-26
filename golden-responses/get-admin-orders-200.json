@@ -1,0 +1,151 @@
+{
+  "endpoint": "GET /admin/orders",
+  "expected_status": 200,
+  "expected_schema": {
+    "count": "number",
+    "limit": "number",
+    "offset": "number",
+    "orders": "array"
+  },
+  "ignore_fields": [
+    "id",
+    "created_at",
+    "updated_at",
+    "deleted_at",
+    "metadata",
+    "token",
+    "cart_id",
+    "order_id",
+    "trace_id",
+    "session_id"
+  ],
+  "schema_source": "openapi",
+  "oas_operation_id": "GetOrders",
+  "oas_ref": null,
+  "oas_version": "2.0.0",
+  "value_rules": [
+    {
+      "path": "orders[].customer.email",
+      "kind": "format",
+      "format": "email"
+    },
+    {
+      "path": "orders[].email",
+      "kind": "format",
+      "format": "email"
+    },
+    {
+      "path": "orders[].fulfillment_status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "not_fulfilled",
+        "partially_fulfilled",
+        "fulfilled",
+        "partially_shipped",
+        "shipped",
+        "partially_delivered",
+        "delivered"
+      ]
+    },
+    {
+      "path": "orders[].fulfillments[].canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "orders[].fulfillments[].delivered_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "orders[].fulfillments[].packed_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "orders[].fulfillments[].shipped_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "orders[].items[].product.status",
+      "kind": "enum",
+      "values": [
+        "draft",
+        "proposed",
+        "published",
+        "rejected"
+      ]
+    },
+    {
+      "path": "orders[].payment_collections[].completed_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "orders[].payment_collections[].payment_sessions[].authorized_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "orders[].payment_collections[].payment_sessions[].status",
+      "kind": "enum",
+      "values": [
+        "authorized",
+        "captured",
+        "canceled",
+        "pending",
+        "requires_more",
+        "error"
+      ]
+    },
+    {
+      "path": "orders[].payment_collections[].payments[].canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "orders[].payment_collections[].payments[].captured_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "orders[].payment_collections[].status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "not_paid",
+        "awaiting",
+        "authorized",
+        "partially_authorized"
+      ]
+    },
+    {
+      "path": "orders[].payment_status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "not_paid",
+        "awaiting",
+        "authorized",
+        "partially_authorized",
+        "captured",
+        "partially_captured",
+        "partially_refunded",
+        "refunded",
+        "requires_action"
+      ]
+    },
+    {
+      "path": "orders[].transactions[].reference",
+      "kind": "enum",
+      "values": [
+        "capture",
+        "refund"
+      ]
+    }
+  ],
+  "captured_at": "2026-06-26T21:58:49.213Z",
+  "source_sessions": []
+}

@@ -1,0 +1,98 @@
+{
+  "endpoint": "GET /admin/products/{id}",
+  "expected_status": 200,
+  "expected_schema": {
+    "product": {
+      "categories": "ignored",
+      "collection": "ignored",
+      "collection_id": "ignored",
+      "created_at": "ignored",
+      "deleted_at": "ignored",
+      "description": "string",
+      "discountable": "boolean",
+      "external_id": "ignored",
+      "handle": "string",
+      "height": "ignored",
+      "hs_code": "ignored",
+      "id": "ignored",
+      "images": "array",
+      "is_giftcard": "boolean",
+      "length": "ignored",
+      "material": "ignored",
+      "metadata": "ignored",
+      "mid_code": "ignored",
+      "options": "array",
+      "origin_country": "ignored",
+      "sales_channels": "array",
+      "shipping_profile": "ignored",
+      "status": "string",
+      "subtitle": "ignored",
+      "tags": "array",
+      "thumbnail": "string",
+      "title": "string",
+      "translations": "ignored",
+      "type": "ignored",
+      "type_id": "ignored",
+      "updated_at": "ignored",
+      "variants": "array",
+      "weight": "number",
+      "width": "ignored"
+    }
+  },
+  "ignore_fields": [
+    "id",
+    "created_at",
+    "updated_at",
+    "deleted_at",
+    "metadata",
+    "token",
+    "cart_id",
+    "order_id",
+    "trace_id",
+    "session_id",
+    "product.categories",
+    "product.collection",
+    "product.collection_id",
+    "product.external_id",
+    "product.height",
+    "product.hs_code",
+    "product.length",
+    "product.material",
+    "product.mid_code",
+    "product.origin_country",
+    "product.shipping_profile",
+    "product.subtitle",
+    "product.translations",
+    "product.type",
+    "product.type_id",
+    "product.width"
+  ],
+  "schema_source": "openapi",
+  "oas_operation_id": "GetProductsId",
+  "oas_ref": "#/components/schemas/AdminProductResponse",
+  "oas_version": "2.0.0",
+  "value_rules": [
+    {
+      "path": "product.collection.products[].status",
+      "kind": "enum",
+      "values": [
+        "draft",
+        "proposed",
+        "published",
+        "rejected"
+      ]
+    },
+    {
+      "path": "product.status",
+      "kind": "enum",
+      "values": [
+        "draft",
+        "proposed",
+        "published",
+        "rejected"
+      ]
+    }
+  ],
+  "captured_at": "2026-06-26T21:58:49.213Z",
+  "source_sessions": []
+}

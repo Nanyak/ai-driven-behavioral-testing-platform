@@ -1,0 +1,29 @@
+{
+  "endpoint": "GET /admin/products",
+  "expected_status": 200,
+  "expected_schema": {
+    "count": "number",
+    "limit": "number",
+    "offset": "number",
+    "products": "array"
+  },
+  "ignore_fields": [
+    "id",
+    "created_at",
+    "updated_at",
+    "deleted_at",
+    "metadata",
+    "token",
+    "cart_id",
+    "order_id",
+    "trace_id",
+    "session_id"
+  ],
+  "schema_source": "openapi",
+  "oas_operation_id": "GetProducts",
+  "oas_ref": null,
+  "oas_version": "2.0.0",
+  "value_rules": [],
+  "captured_at": "2026-06-26T21:58:49.213Z",
+  "source_sessions": []
+}

@@ -1,0 +1,49 @@
+{
+  "endpoint": "POST /store/carts",
+  "expected_status": 401,
+  "expected_schema": {
+    "message": "string",
+    "type": "string"
+  },
+  "ignore_fields": [
+    "id",
+    "created_at",
+    "updated_at",
+    "deleted_at",
+    "metadata",
+    "token",
+    "cart_id",
+    "order_id",
+    "trace_id",
+    "session_id"
+  ],
+  "schema_source": "observed",
+  "captured_at": "2026-06-26T21:42:43.710Z",
+  "source_sessions": [
+    "sess-cartAbandon-1f084c37-c81e-47db-a081-8f6279c5fd3e",
+    "sess-cartAbandon-219fb24d-0646-4d35-9dbb-c02d7d8db19e",
+    "sess-cartAbandon-405df989-7d78-442a-9140-ba49b4e89581",
+    "sess-cartAbandon-46b5d4a7-1fdb-4058-a892-2412fd1aa2e3",
+    "sess-cartAbandon-6fb26659-faf4-42f8-8d26-e5832883a390",
+    "sess-cartAbandon-7ec2f0dd-9b7d-4f30-9d60-792a4fa7801e",
+    "sess-cartAbandon-82837df4-8f21-43d7-8d1b-964c59949e01",
+    "sess-cartAbandon-cbdc56a4-efac-479d-b666-6a7d37806bdf",
+    "sess-checkoutAbandon-51e689bb-477b-407e-9848-eee968af7e6d",
+    "sess-checkoutAbandon-76b1d62b-9883-4a16-aab0-45b8db44ff08",
+    "sess-checkoutAbandon-9892b344-8f36-4d91-a2b1-b02399bcd4dc",
+    "sess-checkoutAbandon-9d11d7c2-8b82-468f-ade0-252a94f759e5",
+    "sess-checkoutAbandon-a2350117-cc09-4ce4-9cb9-189670ef54a2",
+    "sess-checkoutAbandon-a75fd1c6-895f-4313-98fd-9a70598e04e9",
+    "sess-checkoutAbandon-a8b5f83b-4a82-42da-8f10-7d8a9da5396f",
+    "sess-checkoutAbandon-baee6352-2875-41d7-bd8b-0ecc750e0f1e",
+    "sess-checkoutAbandon-f79a16c9-b133-4536-9e29-fc08f4b82b77",
+    "sess-multiItemCheckout-88a0714b-6326-450c-8c19-4cf02eae70f2",
+    "sess-returningCheckout-17156eb0-466b-439d-ab70-9433a658c307",
+    "sess-returningCheckout-36ff0ba3-b0db-4ea5-90f5-3d5864abe0f5",
+    "sess-returningCheckout-3943e45a-2075-4dd5-9141-555acb4a47d0",
+    "sess-returningCheckout-3cf2c887-ee44-4344-bee8-6003103bb82e",
+    "sess-returningCheckout-45694277-78cf-407a-aea1-6e4f563766ea",
+    "sess-returningCheckout-5171c899-d1fc-4827-ba62-03d0ad7b727a",
+    "sess-returningCheckout-6d42b92d-995c-40a3-8084-aac1f25fa542"
+  ]
+}

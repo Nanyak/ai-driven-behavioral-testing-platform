@@ -1,0 +1,52 @@
+{
+  "endpoint": "POST /auth/user/emailpass",
+  "expected_status": 200,
+  "expected_schema": {
+    "token": "ignored"
+  },
+  "ignore_fields": [
+    "id",
+    "created_at",
+    "updated_at",
+    "deleted_at",
+    "metadata",
+    "token",
+    "cart_id",
+    "order_id",
+    "trace_id",
+    "session_id"
+  ],
+  "schema_source": "observed",
+  "captured_at": "2026-06-26T21:42:43.710Z",
+  "source_sessions": [
+    "sess-adminCancel-343a6e4e-e973-4c7f-ac6f-e88f31c489aa",
+    "sess-adminCancel-6e0116a6-5d57-49f6-b4e5-db653642f3f3",
+    "sess-adminCancel-791a249f-bab9-437f-afcc-2650d12d114a",
+    "sess-adminCancel-8defbffd-3ca8-44b8-80d1-0f9867c809bd",
+    "sess-adminCancel-ebd16c67-b994-41bd-99f7-622ef5281ae6",
+    "sess-adminCatalog-158b3124-7069-4b67-9b0d-311f8561a543",
+    "sess-adminCatalog-251618b2-ecf2-4760-98b2-8467672384f3",
+    "sess-adminCatalog-2f24f41b-af3a-45e0-969e-d55410cdae00",
+    "sess-adminCatalog-4d86f4cd-3b58-402c-bab8-1152594cb89a",
+    "sess-adminCatalog-af145671-9659-4591-a2d8-88fbeccf018f",
+    "sess-adminFulfill-015c1e84-0008-452a-bae6-2cf1a8f9c1cb",
+    "sess-adminFulfill-1b10c553-1761-4c59-8fc3-f3efd8ada56c",
+    "sess-adminFulfill-327a9100-f2ef-4665-a199-5309975d24c6",
+    "sess-adminFulfill-5eaaeaef-4533-4af1-923a-a3ecf7e8b97e",
+    "sess-adminFulfill-9cf20b00-8b08-4367-bc4b-6754ebf6561a",
+    "sess-adminFulfill-af14f1d6-60d8-4060-99e4-f3499d6dfd42",
+    "sess-adminFulfill-c6e350b9-5437-45a6-ab43-516aa4b55100",
+    "sess-adminFulfill-e7b70d21-1d3e-4502-87fe-cb3d0169bb98",
+    "sess-adminFulfill-f1b9065a-c6d3-40f1-b250-d4b9a049c5b4",
+    "sess-adminFulfill-f1cca1c6-da9c-4c19-b235-38ee4eb76ed1",
+    "sess-adminRefund-209c1c5f-5e22-4ba5-8082-c4539a4002e5",
+    "sess-adminRefund-2a00bea4-df40-49e2-ae4d-fc06f42afdf5",
+    "sess-adminRefund-b60ed3b2-f296-4b07-a094-e1d0a75141af",
+    "sess-adminRefund-ca6ca631-7786-497f-8928-cb9cf7bde9e7",
+    "sess-adminRefund-f5f98d79-2159-4bb0-99fd-90d14d0db74d",
+    "sess-adminReturnReject-13820868-b3ce-45d8-adc9-dd976bc70e20",
+    "sess-adminReturnReject-48d10f1c-5aa0-489a-87ed-e2bf3a808633",
+    "sess-adminSupport-6748c0d4-2e57-457d-8c12-b065786da350",
+    "sess-seed-admin-b2938610-5bbb-414f-8f37-9a81a47f97b7"
+  ]
+}

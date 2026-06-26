@@ -1,0 +1,110 @@
+{
+  "endpoint": "POST /admin/products/{id}",
+  "expected_status": 200,
+  "expected_schema": {
+    "product": {
+      "categories": "array",
+      "collection": {
+        "created_at": "ignored",
+        "deleted_at": "ignored",
+        "external_id": "string",
+        "handle": "string",
+        "id": "ignored",
+        "metadata": "ignored",
+        "products": "array",
+        "title": "string",
+        "translations": "array",
+        "updated_at": "ignored"
+      },
+      "collection_id": "string",
+      "created_at": "ignored",
+      "deleted_at": "ignored",
+      "description": "string",
+      "discountable": "boolean",
+      "external_id": "string",
+      "handle": "string",
+      "height": "number",
+      "hs_code": "string",
+      "id": "ignored",
+      "images": "array",
+      "is_giftcard": "boolean",
+      "length": "number",
+      "material": "string",
+      "metadata": "ignored",
+      "mid_code": "string",
+      "options": "array",
+      "origin_country": "string",
+      "sales_channels": "array",
+      "shipping_profile": {
+        "created_at": "ignored",
+        "deleted_at": "ignored",
+        "id": "ignored",
+        "metadata": "ignored",
+        "name": "string",
+        "type": "string",
+        "updated_at": "ignored"
+      },
+      "status": "string",
+      "subtitle": "string",
+      "tags": "array",
+      "thumbnail": "string",
+      "title": "string",
+      "translations": "array",
+      "type": {
+        "created_at": "ignored",
+        "deleted_at": "ignored",
+        "external_id": "string",
+        "id": "ignored",
+        "metadata": "ignored",
+        "translations": "array",
+        "updated_at": "ignored",
+        "value": "string"
+      },
+      "type_id": "string",
+      "updated_at": "ignored",
+      "variants": "array",
+      "weight": "number",
+      "width": "number"
+    }
+  },
+  "ignore_fields": [
+    "id",
+    "created_at",
+    "updated_at",
+    "deleted_at",
+    "metadata",
+    "token",
+    "cart_id",
+    "order_id",
+    "trace_id",
+    "session_id"
+  ],
+  "schema_source": "openapi",
+  "oas_operation_id": "PostProductsId",
+  "oas_ref": "#/components/schemas/AdminProductResponse",
+  "oas_version": "2.0.0",
+  "value_rules": [
+    {
+      "path": "product.collection.products[].status",
+      "kind": "enum",
+      "values": [
+        "draft",
+        "proposed",
+        "published",
+        "rejected"
+      ]
+    },
+    {
+      "path": "product.status",
+      "kind": "enum",
+      "values": [
+        "draft",
+        "proposed",
+        "published",
+        "rejected"
+      ]
+    }
+  ],
+  "captured_at": "2026-06-26T21:58:49.213Z",
+  "source_sessions": []
+}
