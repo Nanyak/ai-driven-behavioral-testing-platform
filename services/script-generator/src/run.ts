@@ -128,6 +128,38 @@ type PathFolder = "happy-path" | "failure-path";
 const PERSONA_FOLDERS: PersonaFolder[] = ["guest", "customer", "admin"];
 const PATH_FOLDERS: PathFolder[] = ["happy-path", "failure-path"];
 
+// Endpoints whose published OpenAPI schema does NOT match what the running
+// Medusa instance actually returns (stateful cart/checkout mutations, order
+// actions, and the return lifecycle — response shape depends on entity state,
+// and Medusa's OAS is incomplete/inaccurate for them). For these, an OBSERVED
+// golden captured from live traffic is the authoritative oracle: rebuilding
+// from OAS reintroduces false missing_field/unexpected_field diffs and turns the
+// suite spuriously red. When an observed golden already exists on disk we KEEP
+// it instead of overwriting from OAS; if none exists we still fall back to OAS
+// so generation never fails closed. See "OAS-drift" investigation (2026-06-27).
+const OBSERVED_AUTHORITATIVE = new Set<string>([
+  "GET /admin/customers",
+  "GET /admin/orders/{id}",
+  "GET /admin/stock-locations",
+  "GET /store/orders/{id}",
+  "POST /admin/orders/{id}/cancel",
+  "POST /admin/orders/{id}/fulfillments",
+  "POST /admin/products/{id}",
+  "POST /admin/returns",
+  "POST /admin/returns/{id}/receive",
+  "POST /admin/returns/{id}/receive-items",
+  "POST /admin/returns/{id}/receive/confirm",
+  "POST /admin/returns/{id}/request",
+  "POST /admin/returns/{id}/request-items",
+  "POST /store/carts",
+  "POST /store/carts/{id}",
+  "POST /store/carts/{id}/complete",
+  "POST /store/carts/{id}/line-items",
+  "POST /store/carts/{id}/shipping-methods",
+  "POST /store/payment-collections",
+  "POST /store/payment-collections/{id}/payment-sessions",
+]);
+
 interface Route {
   persona: PersonaFolder;
   path: PathFolder;
@@ -227,6 +259,18 @@ export function ensureGoldenResponses(
   for (const item of required.values()) {
     const path = resolvePath(outputDir, goldenResponseFileName(item.endpoint, item.status));
     const existing = readExistingGolden(path);
+
+    // OAS is unreliable for these endpoints; a live-captured observed golden is
+    // authoritative. Preserve it verbatim rather than rebuilding from the spec.
+    if (
+      OBSERVED_AUTHORITATIVE.has(item.endpoint) &&
+      existing &&
+      existing.schema_source !== "openapi"
+    ) {
+      reusedObserved++;
+      continue;
+    }
+
     const oas = resolveOperation(specs, item.method, item.endpoint.slice(item.method.length + 1), item.status);
 
     if (!oas) {

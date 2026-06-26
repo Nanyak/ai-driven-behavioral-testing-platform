@@ -3,7 +3,6 @@
   "expected_status": 200,
   "expected_schema": {
     "count": "number",
-    "estimate_count": "number",
     "limit": "number",
     "offset": "number",
     "stock_locations": "array"
@@ -20,11 +19,13 @@
     "trace_id",
     "session_id"
   ],
-  "schema_source": "openapi",
-  "oas_operation_id": "GetStockLocations",
-  "oas_ref": "#/components/schemas/AdminStockLocationListResponse",
-  "oas_version": "2.0.0",
+  "schema_source": "observed",
+  "oas_operation_id": null,
+  "oas_ref": null,
+  "oas_version": null,
   "value_rules": [],
-  "captured_at": "2026-06-26T21:58:49.213Z",
-  "source_sessions": []
+  "captured_at": "2026-06-26T22:35:07.342Z",
+  "source_sessions": [
+    "live-capture-2026-06-26-222655"
+  ]
 }

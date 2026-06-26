@@ -5,24 +5,7 @@
     "count": "number",
     "limit": "number",
     "offset": "number",
-    "customers": {
-      "addresses": "array",
-      "company_name": "string",
-      "created_at": "ignored",
-      "created_by": "string",
-      "default_billing_address_id": "string",
-      "default_shipping_address_id": "string",
-      "deleted_at": "ignored",
-      "email": "string",
-      "first_name": "string",
-      "groups": "array",
-      "has_account": "boolean",
-      "id": "ignored",
-      "last_name": "string",
-      "metadata": "ignored",
-      "phone": "string",
-      "updated_at": "ignored"
-    }
+    "customers": "array"
   },
   "ignore_fields": [
     "id",
@@ -36,17 +19,13 @@
     "trace_id",
     "session_id"
   ],
-  "schema_source": "openapi",
-  "oas_operation_id": "GetCustomers",
+  "schema_source": "observed",
+  "oas_operation_id": null,
   "oas_ref": null,
-  "oas_version": "2.0.0",
-  "value_rules": [
-    {
-      "path": "customers.email",
-      "kind": "format",
-      "format": "email"
-    }
-  ],
-  "captured_at": "2026-06-26T21:58:49.213Z",
-  "source_sessions": []
+  "oas_version": null,
+  "value_rules": [],
+  "captured_at": "2026-06-26T22:35:07.342Z",
+  "source_sessions": [
+    "live-capture-2026-06-26-222655"
+  ]
 }

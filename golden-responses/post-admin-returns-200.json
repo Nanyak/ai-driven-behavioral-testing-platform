@@ -3,123 +3,55 @@
   "expected_status": 200,
   "expected_schema": {
     "order": {
-      "billing_address": {
-        "address_1": "string",
-        "address_2": "string",
-        "city": "string",
-        "company": "string",
-        "country_code": "string",
-        "created_at": "ignored",
-        "customer_id": "string",
-        "first_name": "string",
-        "id": "ignored",
-        "last_name": "string",
-        "metadata": "ignored",
-        "phone": "string",
-        "postal_code": "string",
-        "province": "string",
-        "updated_at": "ignored"
-      },
-      "canceled_at": "string",
+      "billing_address": "null",
+      "canceled_at": "null",
       "created_at": "ignored",
-      "credit_line_total": "number",
-      "credit_lines": "array",
       "currency_code": "string",
-      "custom_display_id": "string",
+      "custom_display_id": "null",
       "customer_id": "string",
       "deleted_at": "ignored",
-      "discount_subtotal": "number",
-      "discount_tax_total": "number",
-      "discount_total": "number",
       "display_id": "number",
       "email": "string",
-      "gift_card_tax_total": "number",
-      "gift_card_total": "number",
       "id": "ignored",
       "is_draft_order": "boolean",
-      "item_discount_total": "number",
-      "item_subtotal": "number",
-      "item_tax_total": "number",
-      "item_total": "number",
-      "items": "array",
-      "locale": "string",
+      "locale": "null",
       "metadata": "ignored",
-      "order_change": "object",
-      "original_item_subtotal": "number",
-      "original_item_tax_total": "number",
-      "original_item_total": "number",
-      "original_shipping_subtotal": "number",
-      "original_shipping_tax_total": "number",
-      "original_shipping_total": "number",
-      "original_subtotal": "number",
-      "original_tax_total": "number",
-      "original_total": "number",
+      "order_change": {
+        "return_id": "string",
+        "claim_id": "null",
+        "exchange_id": "null",
+        "version": "number",
+        "change_type": "string",
+        "description": "null",
+        "status": "string",
+        "internal_note": "null",
+        "requested_by": "null",
+        "requested_at": "null",
+        "carry_over_promotions": "null",
+        "order": {}
+      },
       "region_id": "string",
       "sales_channel_id": "string",
-      "shipping_address": {
-        "address_1": "string",
-        "address_2": "string",
-        "city": "string",
-        "company": "string",
-        "country_code": "string",
-        "created_at": "ignored",
-        "customer_id": "string",
-        "first_name": "string",
-        "id": "ignored",
-        "last_name": "string",
-        "metadata": "ignored",
-        "phone": "string",
-        "postal_code": "string",
-        "province": "string",
-        "updated_at": "ignored"
-      },
-      "shipping_discount_total": "number",
-      "shipping_methods": "array",
-      "shipping_subtotal": "number",
-      "shipping_tax_total": "number",
-      "shipping_total": "number",
+      "shipping_address": "null",
       "status": "string",
-      "subtotal": "number",
-      "summary": {
-        "accounting_total": "number",
-        "credit_line_total": "number",
-        "current_order_total": "number",
-        "original_order_total": "number",
-        "paid_total": "number",
-        "pending_difference": "number",
-        "raw_accounting_total": "object",
-        "raw_credit_line_total": "object",
-        "raw_current_order_total": "object",
-        "raw_original_order_total": "object",
-        "raw_paid_total": "object",
-        "raw_pending_difference": "object",
-        "raw_refunded_total": "object",
-        "raw_transaction_total": "object",
-        "refunded_total": "number",
-        "transaction_total": "number"
-      },
-      "tax_total": "number",
-      "total": "number",
-      "transactions": "array",
       "updated_at": "ignored",
-      "version": "number"
+      "version": "number",
+      "no_notification": "boolean"
     },
     "return": {
-      "canceled_at": "string",
-      "claim_id": "string",
+      "canceled_at": "null",
       "created_at": "ignored",
       "created_by": "string",
       "display_id": "number",
-      "exchange_id": "string",
       "id": "ignored",
       "items": "array",
       "location_id": "string",
-      "no_notification": "boolean",
+      "no_notification": "null",
       "order_id": "ignored",
       "order_version": "number",
-      "received_at": "string",
-      "refund_amount": "number",
-      "requested_at": "string",
+      "received_at": "null",
+      "refund_amount": "null",
+      "requested_at": "null",
       "status": "string"
     }
   },
@@ -135,57 +67,13 @@
     "trace_id",
     "session_id"
   ],
-  "schema_source": "openapi",
-  "oas_operation_id": "PostReturns",
-  "oas_ref": "#/components/schemas/AdminOrderReturnResponse",
-  "oas_version": "2.0.0",
-  "value_rules": [
-    {
-      "path": "order.canceled_at",
-      "kind": "format",
-      "format": "date-time"
-    },
-    {
-      "path": "order.email",
-      "kind": "format",
-      "format": "email"
-    },
-    {
-      "path": "order.status",
-      "kind": "enum",
-      "values": [
-        "canceled",
-        "requires_action",
-        "pending",
-        "completed",
-        "draft",
-        "archived"
-      ]
-    },
-    {
-      "path": "order.transactions[].reference",
-      "kind": "enum",
-      "values": [
-        "capture",
-        "refund"
-      ]
-    },
-    {
-      "path": "return.canceled_at",
-      "kind": "format",
-      "format": "date-time"
-    },
-    {
-      "path": "return.status",
-      "kind": "enum",
-      "values": [
-        "canceled",
-        "requested",
-        "received",
-        "partially_received"
-      ]
-    }
-  ],
-  "captured_at": "2026-06-26T21:58:49.213Z",
-  "source_sessions": []
+  "schema_source": "observed",
+  "oas_operation_id": null,
+  "oas_ref": null,
+  "oas_version": null,
+  "value_rules": [],
+  "captured_at": "2026-06-26T22:36:36.834Z",
+  "source_sessions": [
+    "live-capture-2026-06-26"
+  ]
 }

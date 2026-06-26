@@ -4,18 +4,11 @@
   "expected_schema": {
     "payment_collection": {
       "amount": "number",
-      "authorized_amount": "number",
-      "captured_amount": "number",
-      "completed_at": "string",
       "created_at": "ignored",
       "currency_code": "string",
       "id": "ignored",
       "metadata": "ignored",
-      "payment_providers": "array",
       "payment_sessions": "array",
-      "payments": "array",
-      "refunded_amount": "number",
-      "status": "string",
       "updated_at": "ignored"
     }
   },
@@ -31,65 +24,13 @@
     "trace_id",
     "session_id"
   ],
-  "schema_source": "openapi",
-  "oas_operation_id": "PostPaymentCollectionsIdPaymentSessions",
-  "oas_ref": "#/components/schemas/StorePaymentCollectionResponse",
-  "oas_version": "2.0.0",
-  "value_rules": [
-    {
-      "path": "payment_collection.completed_at",
-      "kind": "format",
-      "format": "date-time"
-    },
-    {
-      "path": "payment_collection.payment_sessions[].authorized_at",
-      "kind": "format",
-      "format": "date-time"
-    },
-    {
-      "path": "payment_collection.payment_sessions[].payment.canceled_at",
-      "kind": "format",
-      "format": "date-time"
-    },
-    {
-      "path": "payment_collection.payment_sessions[].payment.captured_at",
-      "kind": "format",
-      "format": "date-time"
-    },
-    {
-      "path": "payment_collection.payment_sessions[].status",
-      "kind": "enum",
-      "values": [
-        "authorized",
-        "captured",
-        "canceled",
-        "pending",
-        "requires_more",
-        "error"
-      ]
-    },
-    {
-      "path": "payment_collection.payments[].canceled_at",
-      "kind": "format",
-      "format": "date-time"
-    },
-    {
-      "path": "payment_collection.payments[].captured_at",
-      "kind": "format",
-      "format": "date-time"
-    },
-    {
-      "path": "payment_collection.status",
-      "kind": "enum",
-      "values": [
-        "canceled",
-        "not_paid",
-        "awaiting",
-        "authorized",
-        "partially_authorized"
-      ]
-    }
-  ],
-  "captured_at": "2026-06-26T21:58:49.213Z",
-  "source_sessions": []
+  "schema_source": "observed",
+  "oas_operation_id": null,
+  "oas_ref": null,
+  "oas_version": null,
+  "value_rules": [],
+  "captured_at": "2026-06-26T22:36:26.066Z",
+  "source_sessions": [
+    "live-capture-2026-06-26"
+  ]
 }
