@@ -26,6 +26,10 @@ export interface OasInlineSchema {
   required?: string[];
   oneOf?: OasSchema[];
   allOf?: OasSchema[];
+  // OpenAPI 3.0 nullability. A field with `nullable: true` (or a `"null"`
+  // member of a `type` union) may legitimately be `null` in a conforming
+  // response, so `flatten()` must not assert a concrete type for it.
+  nullable?: boolean;
   description?: string;
   // Spec-authored VALUE constraints (Tier A value-level golden). Lifted into
   // a golden's `value_rules` by `value/value-rules.ts`; the spec is the author,

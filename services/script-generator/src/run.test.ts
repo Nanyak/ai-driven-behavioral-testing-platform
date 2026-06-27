@@ -88,8 +88,10 @@ check("clean retires a stale oracle whose blessed outcome changed", () => {
   assert.equal(existsSync(staleOracle), false, "old-outcome spec is retired");
 });
 
-// 4. Bodies-off runs still get a real OpenAPI-backed golden before emission.
-check("ensureGoldenResponses writes a spec-only OpenAPI golden for a happy path", () => {
+// 4. Bodies-off runs still get a real spec-sourced golden before emission. The
+// primary source is now the code's own @medusajs/types declarations (mapped in
+// types-source/endpoint-types), not Medusa's drifted published OpenAPI.
+check("ensureGoldenResponses writes a code-derived (types) golden for a mapped happy path", () => {
   const dir = mkdtempSync(join(tmpdir(), "goldens-"));
   const specs = loadAugmentedSpecs();
   const summary = ensureGoldenResponses(
@@ -104,11 +106,12 @@ check("ensureGoldenResponses writes a spec-only OpenAPI golden for a happy path"
     "2026-06-27T00:00:00.000Z"
   );
   assert.equal(summary.written, 1);
-  const files = ["get-store-products-200.json"];
-  const golden = JSON.parse(readFileSync(join(dir, files[0]), "utf8"));
+  assert.equal(summary.typesSourced, 1);
+  const golden = JSON.parse(readFileSync(join(dir, "get-store-products-200.json"), "utf8"));
   assert.equal(golden.endpoint, "GET /store/products");
   assert.equal(golden.expected_status, 200);
-  assert.equal(golden.schema_source, "openapi");
+  assert.equal(golden.schema_source, "types");
+  assert.equal(golden.oas_ref, "@medusajs/types#StoreProductListResponse");
   assert.ok(golden.expected_schema.products, "golden contains a real response schema");
   rmSync(dir, { recursive: true, force: true });
 });

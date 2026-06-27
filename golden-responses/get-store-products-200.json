@@ -2,10 +2,10 @@
   "endpoint": "GET /store/products",
   "expected_status": 200,
   "expected_schema": {
-    "count": "number",
-    "estimate_count": "ignored",
     "limit": "number",
     "offset": "number",
+    "count": "number",
+    "estimate_count": "ignored",
     "products": "array"
   },
   "ignore_fields": [
@@ -18,25 +18,13 @@
     "cart_id",
     "order_id",
     "trace_id",
-    "session_id",
-    "estimate_count"
+    "session_id"
   ],
-  "schema_source": "openapi",
-  "oas_operation_id": "GetProducts",
-  "oas_ref": "#/components/schemas/StoreProductListResponse",
-  "oas_version": "2.0.0",
-  "value_rules": [
-    {
-      "path": "products[].status",
-      "kind": "enum",
-      "values": [
-        "draft",
-        "proposed",
-        "published",
-        "rejected"
-      ]
-    }
-  ],
-  "captured_at": "2026-06-26T21:58:49.213Z",
+  "schema_source": "types",
+  "oas_operation_id": "StoreProductListResponse",
+  "oas_ref": "@medusajs/types#StoreProductListResponse",
+  "oas_version": "2.15.5",
+  "value_rules": [],
+  "captured_at": "2026-06-27T03:14:51.849Z",
   "source_sessions": []
 }

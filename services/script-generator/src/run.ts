@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { loadAugmentedSpecs, resolveOperation } from "../../golden/src/oas-source.js";
 import type { OasDocument } from "../../golden/src/oas-types.js";
 import { buildGolden } from "../../golden/src/schema/schema-merge.js";
+import { createTypesGoldenResolver, type TypesGoldenResolver } from "../../golden/src/types-source/resolve.js";
 import type { GoldenResponse } from "../../golden/src/types.js";
 import { dedup } from "./dedup.js";
 import { emitSpec } from "./emit.js";
@@ -30,6 +31,9 @@ const GOLDEN_VENDOR_DIR = resolvePath(GENERATED_TESTS_DIR, "_golden");
 const GOLDEN_SOURCE_DIR = resolvePath(REPO_ROOT, "services", "golden", "src");
 const GOLDEN_RESPONSES_DIR = resolvePath(REPO_ROOT, "golden-responses");
 const HITL_STORE = resolvePath(REPO_ROOT, "data", "hitl", "approvals.json");
+// The installed Medusa backend — source of the version-matched @medusajs/types
+// the code-derived oracle reads (services/golden/src/types-source).
+const BACKEND_DIR = resolvePath(REPO_ROOT, "apps", "medusa", "apps", "backend");
 
 // Each generated spec stamps its flow_signature (ADR 0002). Same permissive
 // matcher coverage.ts uses, so a cosmetic stamp change does not silently break
@@ -222,6 +226,8 @@ function readExistingGolden(path: string): GoldenResponse | null {
 export interface GoldenSyncSummary {
   written: number;
   reusedObserved: number;
+  /** Goldens sourced from the code's @medusajs/types declarations (subset of written). */
+  typesSourced: number;
 }
 
 /**
@@ -255,6 +261,21 @@ export function ensureGoldenResponses(
   const pending: Array<{ path: string; golden: GoldenResponse }> = [];
   const missing: string[] = [];
   let reusedObserved = 0;
+  let typesSourced = 0;
+
+  // Code-derived oracle: prefer the version-matched @medusajs/types .d.ts over
+  // Medusa's drifted published OpenAPI for any endpoint we have a type mapping
+  // for. Resilient: if the backend package isn't installed, fall back to OAS.
+  const typesResolver: TypesGoldenResolver | null = (() => {
+    try {
+      return createTypesGoldenResolver(BACKEND_DIR);
+    } catch (err) {
+      console.warn(
+        `  types-source disabled (could not load @medusajs/types): ${err instanceof Error ? err.message : String(err)}`
+      );
+      return null;
+    }
+  })();
 
   for (const item of required.values()) {
     const path = resolvePath(outputDir, goldenResponseFileName(item.endpoint, item.status));
@@ -268,6 +289,23 @@ export function ensureGoldenResponses(
       existing.schema_source !== "openapi"
     ) {
       reusedObserved++;
+      continue;
+    }
+
+    // Primary oracle source: the code's own @medusajs/types declarations
+    // (version-matched to the runtime; accurate optionality/nullability). Carries
+    // forward any curated ignore_fields. Returns null for non-2xx / unmapped ops,
+    // which then fall through to the OpenAPI/observed path below.
+    const typesGolden =
+      typesResolver?.build(
+        item.method,
+        item.endpoint.slice(item.method.length + 1),
+        item.status,
+        existing?.ignore_fields
+      ) ?? null;
+    if (typesGolden) {
+      pending.push({ path, golden: typesGolden });
+      typesSourced++;
       continue;
     }
 
@@ -307,7 +345,7 @@ export function ensureGoldenResponses(
   for (const { path, golden } of pending) {
     writeFileSync(path, `${JSON.stringify(golden, null, 2)}\n`, "utf8");
   }
-  return { written: pending.length, reusedObserved };
+  return { written: pending.length, reusedObserved, typesSourced };
 }
 
 // Vendor services/golden/src/ into generated-tests/_golden/ so generated-tests/
@@ -667,7 +705,7 @@ function main(): void {
   }
   console.log(`  Behavioral invariants:    ${invariantStepCount} verified, rendered into specs`);
   console.log(
-    `  Golden schemas:           ${goldenSync.written} OpenAPI-backed, ${goldenSync.reusedObserved} observed-only reused`
+    `  Golden schemas:           ${goldenSync.written} written (${goldenSync.typesSourced} @medusajs/types-sourced), ${goldenSync.reusedObserved} observed-only reused`
   );
   console.log(`  Vendored _golden/ from:   services/golden/src/`);
   console.log(`  Output dir:               ${GENERATED_TESTS_DIR}`);

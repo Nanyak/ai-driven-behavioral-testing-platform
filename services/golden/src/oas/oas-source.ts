@@ -113,36 +113,27 @@ function resolveResponseRef(
   return resolved;
 }
 
-function flatten(doc: OasDocument, schema: OasSchema): SchemaNode {
-  if (isRefSchema(schema)) {
-    return flatten(doc, resolveRef(doc, schema.$ref));
-  }
-  if (schema.oneOf) {
-    // schema-merge handles the actual oneOf union during build-oas; here we
-    // just need a comparable flat shape for compare.ts.
-    return schema.oneOf
-      .map((branch) => flatten(doc, branch))
-      .reduce((acc, node) => unionFlat(acc, node));
-  }
-  if (schema.allOf) {
-    // Same flattening strategy as oneOf — the typed skeleton only needs a
-    // comparable merged shape, not the distinction between "any of" and "all
-    // of" (compare.ts diffs the flat result either way).
-    return schema.allOf
-      .map((branch) => flatten(doc, branch))
-      .reduce((acc, node) => unionFlat(acc, node));
-  }
-  if (schema.type === "array") {
-    return "array";
-  }
-  if (schema.properties) {
-    const node: { [key: string]: SchemaNode } = {};
-    for (const [key, child] of Object.entries(schema.properties)) {
-      node[key] = flatten(doc, child);
-    }
-    return node;
-  }
-  switch (schema.type) {
+/**
+ * A property is OPTIONAL when its parent's `required` array omits it, and
+ * NULLABLE when it declares `nullable: true` or a `"null"` member in its `type`
+ * union. The flat SchemaNode model can express neither "may be absent" nor "may
+ * be null", so for an optional-OR-nullable field we emit `"ignored"` — compare.ts
+ * skips an `"ignored"` field in BOTH directions, so a spec-conformant response
+ * that legitimately omits the field (optional) or sends `null` (nullable) no
+ * longer reads as `missing_field`/`type_changed` drift. Only REQUIRED +
+ * NON-NULLABLE fields are asserted, making the derived oracle exactly as strict
+ * as the spec declares — never stricter. (The old flatten promoted every
+ * property to required and dropped nullability, a top cause of false OAS drift;
+ * see the 2026-06-27 OAS-drift investigation.)
+ */
+function isNullable(schema: OasSchema): boolean {
+  if (isRefSchema(schema)) return false; // OAS 3.0: a bare $ref cannot carry `nullable`
+  if (Array.isArray(schema.type) && schema.type.includes("null")) return true;
+  return schema.nullable === true;
+}
+
+function primitiveLeaf(type: string | undefined): SchemaNode {
+  switch (type) {
     case "string":
       return "string";
     case "number":
@@ -150,29 +141,89 @@ function flatten(doc: OasDocument, schema: OasSchema): SchemaNode {
       return "number";
     case "boolean":
       return "boolean";
-    case "object":
-      return "object";
     default:
       return "object";
   }
 }
 
-/**
- * Union two flattened branches (oneOf/allOf) into one comparable shape.
- * Two objects merge their keys. An object vs a leaf (e.g. the gate's
- * `GateUnauthorized` object unioned against the real base's `text/plain`
- * string envelope) keeps the OBJECT shape — it carries more structural
- * information than a bare leaf, matching `schema-merge.ts`'s `unionSchema`
- * shape-mismatch rule. Two leaves of different types keep the first
- * (deterministic; mirrors `unionSchema`'s conflict resolution).
- */
-function unionFlat(a: SchemaNode, b: SchemaNode): SchemaNode {
-  if (typeof a === "object" && typeof b === "object") {
-    return { ...a, ...b };
+function flatten(doc: OasDocument, schema: OasSchema): SchemaNode {
+  if (isRefSchema(schema)) {
+    return flatten(doc, resolveRef(doc, schema.$ref));
   }
+  if (schema.oneOf) {
+    // Exactly-one-of: only fields common to EVERY branch are guaranteed present;
+    // a field unique to some branches is conditionally present, so it becomes
+    // "ignored" rather than demanding the union of all mutually-exclusive shapes.
+    return unionOneOf(schema.oneOf.map((branch) => flatten(doc, branch)));
+  }
+  if (schema.allOf) {
+    // Composition (AND): the value satisfies every fragment. Merge fragment
+    // shapes, preferring a concrete type over "ignored" — a field required by
+    // any fragment is required overall.
+    return schema.allOf
+      .map((branch) => flatten(doc, branch))
+      .reduce((acc, node) => mergeAllOf(acc, node));
+  }
+  const typeList = Array.isArray(schema.type) ? schema.type : schema.type ? [schema.type] : [];
+  if (typeList.includes("array")) {
+    return "array";
+  }
+  if (schema.properties) {
+    const required = new Set(schema.required ?? []);
+    const node: { [key: string]: SchemaNode } = {};
+    for (const [key, child] of Object.entries(schema.properties)) {
+      node[key] = required.has(key) && !isNullable(child) ? flatten(doc, child) : "ignored";
+    }
+    return node;
+  }
+  return primitiveLeaf(typeList.find((t) => t !== "null"));
+}
+
+/**
+ * Merge two flattened `oneOf` branches: keep only keys present in EVERY object
+ * branch (recursively merged); keys unique to some branches are optional across
+ * variants and become "ignored". Mixed object/leaf branches keep the object
+ * shape (more structural information), matching the prior union rule.
+ */
+function unionOneOf(branches: SchemaNode[]): SchemaNode {
+  const objs = branches.filter(
+    (b): b is { [k: string]: SchemaNode } => typeof b === "object"
+  );
+  if (objs.length === 0) return branches[0];
+  const allKeys = new Set(objs.flatMap((o) => Object.keys(o)));
+  const out: { [k: string]: SchemaNode } = {};
+  for (const key of allKeys) {
+    out[key] = objs.every((o) => key in o)
+      ? objs.map((o) => o[key]).reduce((a, b) => mergeSame(a, b))
+      : "ignored";
+  }
+  return out;
+}
+
+/**
+ * Merge two flattened `allOf` fragments. Two objects merge their keys; a
+ * concrete type wins over "ignored"; an object wins over a bare leaf (more
+ * structural information); conflicting leaves collapse to "ignored".
+ */
+function mergeAllOf(a: SchemaNode, b: SchemaNode): SchemaNode {
+  if (typeof a === "object" && typeof b === "object") {
+    const out: { [k: string]: SchemaNode } = { ...a };
+    for (const [k, v] of Object.entries(b)) {
+      out[k] = k in out ? mergeSame(out[k], v) : v;
+    }
+    return out;
+  }
+  return mergeSame(a, b);
+}
+
+/** Merge two nodes for the SAME key/path (helper for union/allOf). */
+function mergeSame(a: SchemaNode, b: SchemaNode): SchemaNode {
+  if (a === "ignored") return b;
+  if (b === "ignored") return a;
+  if (typeof a === "object" && typeof b === "object") return mergeAllOf(a, b);
   if (typeof a === "object") return a;
   if (typeof b === "object") return b;
-  return a;
+  return a === b ? a : "ignored";
 }
 
 /**

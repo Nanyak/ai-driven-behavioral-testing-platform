@@ -2,9 +2,10 @@
   "endpoint": "GET /admin/returns",
   "expected_status": 200,
   "expected_schema": {
-    "count": "number",
     "limit": "number",
     "offset": "number",
+    "count": "number",
+    "estimate_count": "ignored",
     "returns": "array"
   },
   "ignore_fields": [
@@ -20,17 +21,11 @@
     "session_id",
     "returns.status"
   ],
-  "schema_source": "openapi",
-  "oas_operation_id": "GetReturns",
-  "oas_ref": null,
-  "oas_version": "2.0.0",
-  "value_rules": [
-    {
-      "path": "returns[].canceled_at",
-      "kind": "format",
-      "format": "date-time"
-    }
-  ],
-  "captured_at": "2026-06-26T21:58:49.213Z",
+  "schema_source": "types",
+  "oas_operation_id": "AdminReturnsResponse",
+  "oas_ref": "@medusajs/types#AdminReturnsResponse",
+  "oas_version": "2.15.5",
+  "value_rules": [],
+  "captured_at": "2026-06-27T03:14:51.847Z",
   "source_sessions": []
 }

@@ -16,31 +16,11 @@
     "trace_id",
     "session_id"
   ],
-  "schema_source": "openapi",
-  "oas_operation_id": "GetShippingOptions",
-  "oas_ref": "#/components/schemas/StoreShippingOptionListResponse",
-  "oas_version": "2.0.0",
-  "value_rules": [
-    {
-      "path": "shipping_options[].price_type",
-      "kind": "enum",
-      "values": [
-        "flat",
-        "calculated"
-      ]
-    },
-    {
-      "path": "shipping_options[].prices[].price_rules[].operator",
-      "kind": "enum",
-      "values": [
-        "gt",
-        "lt",
-        "eq",
-        "lte",
-        "gte"
-      ]
-    }
-  ],
-  "captured_at": "2026-06-26T21:58:49.213Z",
+  "schema_source": "types",
+  "oas_operation_id": "StoreShippingOptionListResponse",
+  "oas_ref": "@medusajs/types#StoreShippingOptionListResponse",
+  "oas_version": "2.15.5",
+  "value_rules": [],
+  "captured_at": "2026-06-27T03:14:51.852Z",
   "source_sessions": []
 }

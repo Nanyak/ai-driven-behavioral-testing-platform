@@ -42,20 +42,20 @@ check("bodies-off: a golden is produced with schema_source 'openapi' (oracle wor
 });
 
 check(
-  "bodies-on: the real StoreCart schema has no under-specified field to tighten (honest finding) — " +
-    "metadata is the only generic-object leaf and it's globally ignore-listed",
+  "faithful flatten: REQUIRED fields are asserted with their declared type while OPTIONAL " +
+    "fields (StoreCart.shipping_address / billing_address) become 'ignored' so a spec-conformant " +
+    "response that omits or nulls them is not flagged as drift",
   () => {
     const oas = resolveOperation(specs, "POST", "/store/carts", 200);
     assert.ok(oas);
-    const oasSchema = oas!.schema as { cart: Record<string, unknown> };
-    assert.notEqual(typeof oasSchema.cart.shipping_address, "string");
-    assert.ok(
-      "city" in (oasSchema.cart.shipping_address as Record<string, unknown>),
-      "real spec already types shipping_address's fields"
-    );
-    // Tightening metadata would be pointless: it's globally ignore-listed,
-    // so the tightened value would be immediately re-ignored anyway.
-    assert.equal(oasSchema.cart.metadata, "object");
+    const cart = (oas!.schema as { cart: Record<string, unknown> }).cart;
+    // Required scalar keeps its declared type; required array stays an opaque leaf.
+    assert.equal(cart.currency_code, "string");
+    assert.equal(cart.promotions, "array");
+    // Optional nested objects are NOT demanded — the old flatten promoted these
+    // to required, the top cause of false OAS drift (2026-06-27 investigation).
+    assert.equal(cart.shipping_address, "ignored");
+    assert.equal(cart.billing_address, "ignored");
   }
 );
 
@@ -66,10 +66,11 @@ check(
   () => {
     const oas = resolveOperation(specs, "POST", "/store/carts", 200);
     assert.ok(oas);
-    const addressSchema = (oas!.schema as { cart: { shipping_address: Record<string, unknown> } }).cart
-      .shipping_address;
-    assert.equal(addressSchema.phone, "string");
-    assert.equal(addressSchema.company, "string");
+    // StoreCart.shipping_address is OPTIONAL, so the spec oracle does not assert
+    // it (faithful flatten -> "ignored"). The OBSERVED half below is what types
+    // its fields, and optional-field reconciliation happens there.
+    const cart = (oas!.schema as { cart: Record<string, unknown> }).cart;
+    assert.equal(cart.shipping_address, "ignored");
 
     // Session A's observed cart includes a phone number; session B's doesn't
     // (both are valid — StoreCartAddress.required has neither field).

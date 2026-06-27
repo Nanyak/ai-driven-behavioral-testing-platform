@@ -29,8 +29,10 @@ check("resolves POST /store/carts 200 into a typed schema with operationId + ref
   // The response envelope wraps StoreCart under a "cart" key (StoreCartResponse
   // = { cart: $ref StoreCart }) — nested-ref resolution must follow through it.
   const schema = resolution!.schema as { cart: Record<string, unknown> };
+  // currency_code is REQUIRED -> asserted; items is OPTIONAL in StoreCart
+  // (required:false) -> faithful flatten marks it "ignored" (not demanded).
   assert.equal(schema.cart.currency_code, "string");
-  assert.equal(schema.cart.items, "array");
+  assert.equal(schema.cart.items, "ignored");
 });
 
 check("resolves GET /store/products 200 into a typed list-envelope schema (allOf composition)", () => {
