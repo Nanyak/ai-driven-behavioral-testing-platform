@@ -2,10 +2,9 @@
   "endpoint": "GET /store/regions",
   "expected_status": 200,
   "expected_schema": {
+    "count": "number",
     "limit": "number",
     "offset": "number",
-    "count": "number",
-    "estimate_count": "ignored",
     "regions": "array"
   },
   "ignore_fields": [
@@ -20,9 +19,9 @@
     "trace_id",
     "session_id"
   ],
-  "schema_source": "types",
-  "oas_operation_id": "StoreRegionListResponse",
-  "oas_ref": "@medusajs/types#StoreRegionListResponse",
+  "schema_source": "openapi",
+  "oas_operation_id": "GetRegions",
+  "oas_ref": null,
   "oas_version": "2.15.5",
   "value_rules": [],
   "captured_at": "2026-06-27T03:14:51.851Z",

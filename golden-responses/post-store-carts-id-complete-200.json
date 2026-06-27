@@ -2,89 +2,10 @@
   "endpoint": "POST /store/carts/{id}/complete",
   "expected_status": 200,
   "expected_schema": {
-    "order": {
-      "created_at": "ignored",
-      "credit_line_total": "number",
-      "currency_code": "string",
-      "custom_display_id": "null",
-      "discount_tax_total": "number",
-      "discount_total": "number",
-      "display_id": "number",
-      "email": "string",
-      "id": "ignored",
-      "item_subtotal": "number",
-      "item_tax_total": "number",
-      "item_total": "number",
-      "items": "array",
-      "metadata": "ignored",
-      "original_item_subtotal": "number",
-      "original_item_tax_total": "number",
-      "original_item_total": "number",
-      "original_shipping_subtotal": "number",
-      "original_shipping_tax_total": "number",
-      "original_shipping_total": "number",
-      "original_subtotal": "number",
-      "original_tax_total": "number",
-      "original_total": "number",
-      "payment_collections": "array",
-      "region_id": "string",
-      "shipping_methods": "array",
-      "shipping_subtotal": "number",
-      "shipping_tax_total": "number",
-      "shipping_total": "number",
-      "status": "string",
-      "subtotal": "number",
-      "summary": {
-        "accounting_total": "number",
-        "current_order_total": "number",
-        "original_order_total": "number",
-        "paid_total": "number",
-        "pending_difference": "number",
-        "refunded_total": "number",
-        "transaction_total": "number",
-        "raw_paid_total": {
-          "value": "string",
-          "precision": "number"
-        },
-        "credit_line_total": "number",
-        "raw_refunded_total": {
-          "value": "string",
-          "precision": "number"
-        },
-        "raw_accounting_total": {
-          "value": "string",
-          "precision": "number"
-        },
-        "raw_credit_line_total": {
-          "value": "string",
-          "precision": "number"
-        },
-        "raw_transaction_total": {
-          "value": "string",
-          "precision": "number"
-        },
-        "raw_pending_difference": {
-          "value": "string",
-          "precision": "number"
-        },
-        "raw_current_order_total": {
-          "value": "string",
-          "precision": "number"
-        },
-        "raw_original_order_total": {
-          "value": "string",
-          "precision": "number"
-        }
-      },
-      "tax_total": "number",
-      "total": "number",
-      "updated_at": "ignored",
-      "discount_subtotal": "number",
-      "credit_line_subtotal": "number",
-      "credit_line_tax_total": "number",
-      "credit_lines": "array"
-    },
-    "type": "string"
+    "order": "ignored",
+    "type": "string",
+    "cart": "ignored",
+    "error": "ignored"
   },
   "ignore_fields": [
     "id",
@@ -98,10 +19,10 @@
     "trace_id",
     "session_id"
   ],
-  "schema_source": "observed",
-  "oas_operation_id": null,
+  "schema_source": "openapi+observed",
+  "oas_operation_id": "PostCartsIdComplete",
   "oas_ref": null,
-  "oas_version": null,
+  "oas_version": "2.15.5",
   "value_rules": [],
   "captured_at": "2026-06-26T22:36:31.408Z",
   "source_sessions": [

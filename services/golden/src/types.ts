@@ -18,10 +18,7 @@ export type SchemaLeaf =
 
 export type SchemaNode = SchemaLeaf | { [key: string]: SchemaNode };
 
-// "types" = derived from the installed, version-matched @medusajs/types .d.ts
-// declarations (services/golden/src/types-source) rather than Medusa's drifted
-// published OpenAPI. oas_ref is then "@medusajs/types#<TypeName>".
-export type SchemaSource = "openapi" | "openapi+observed" | "observed" | "types";
+export type SchemaSource = "openapi" | "openapi+observed" | "observed";
 
 export type ValueFormat = "uuid" | "email" | "date-time";
 

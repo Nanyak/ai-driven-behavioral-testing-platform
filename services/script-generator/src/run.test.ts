@@ -88,12 +88,28 @@ check("clean retires a stale oracle whose blessed outcome changed", () => {
   assert.equal(existsSync(staleOracle), false, "old-outcome spec is retired");
 });
 
-// 4. Bodies-off runs still get a real spec-sourced golden before emission. The
-// primary source is now the code's own @medusajs/types declarations (mapped in
-// types-source/endpoint-types), not Medusa's drifted published OpenAPI.
-check("ensureGoldenResponses writes a code-derived (types) golden for a mapped happy path", () => {
+// 4. Bodies-off runs still get a real spec-sourced golden before emission.
+check("ensureGoldenResponses writes an OAS golden for a documented happy path", () => {
   const dir = mkdtempSync(join(tmpdir(), "goldens-"));
   const specs = loadAugmentedSpecs();
+  mkdirSync(dir, { recursive: true });
+  // A pre-migration types-sourced file is stale input, not observed evidence.
+  writeFileSync(
+    join(dir, "get-store-products-200.json"),
+    JSON.stringify({
+      endpoint: "GET /store/products",
+      expected_status: 200,
+      expected_schema: { unexpected_legacy_field: "string" },
+      ignore_fields: ["legacy"],
+      schema_source: "types",
+      oas_operation_id: "StoreProductListResponse",
+      oas_ref: "@medusajs/types#StoreProductListResponse",
+      oas_version: "2.15.5",
+      value_rules: [],
+      captured_at: "2026-06-26T00:00:00.000Z",
+      source_sessions: [],
+    })
+  );
   const summary = ensureGoldenResponses(
     [
       {
@@ -106,17 +122,99 @@ check("ensureGoldenResponses writes a code-derived (types) golden for a mapped h
     "2026-06-27T00:00:00.000Z"
   );
   assert.equal(summary.written, 1);
-  assert.equal(summary.typesSourced, 1);
   const golden = JSON.parse(readFileSync(join(dir, "get-store-products-200.json"), "utf8"));
   assert.equal(golden.endpoint, "GET /store/products");
   assert.equal(golden.expected_status, 200);
-  assert.equal(golden.schema_source, "types");
-  assert.equal(golden.oas_ref, "@medusajs/types#StoreProductListResponse");
+  assert.equal(golden.schema_source, "openapi");
+  assert.notEqual(golden.oas_ref, null);
+  assert.equal(golden.oas_version, "2.15.5");
   assert.ok(golden.expected_schema.products, "golden contains a real response schema");
+  assert.equal(golden.expected_schema.unexpected_legacy_field, undefined);
+  assert.equal(golden.oas_ref.startsWith("@medusajs/types"), false);
   rmSync(dir, { recursive: true, force: true });
 });
 
-// 5. An undocumented/unobserved happy response cannot degrade to status-only.
+// 5. An observed schema enriches the corrected OAS instead of bypassing it.
+check("ensureGoldenResponses merges existing observed evidence into OAS", () => {
+  const dir = mkdtempSync(join(tmpdir(), "goldens-"));
+  const path = join(dir, "get-store-products-200.json");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    path,
+    JSON.stringify({
+      endpoint: "GET /store/products",
+      expected_status: 200,
+      expected_schema: { products: "array", count: "number", offset: "number", limit: "number" },
+      ignore_fields: [],
+      schema_source: "observed",
+      oas_operation_id: null,
+      oas_ref: null,
+      oas_version: null,
+      value_rules: [],
+      captured_at: "2026-06-26T00:00:00.000Z",
+      source_sessions: ["session-1"],
+    })
+  );
+
+  const summary = ensureGoldenResponses(
+    [
+      {
+        attributes: { requires_auth: false, is_admin: false, has_errors: false },
+        steps: [{ method: "GET", endpoint: "/store/products", expected_status: 200 }],
+      },
+    ],
+    loadAugmentedSpecs(),
+    dir,
+    "2026-06-27T00:00:00.000Z"
+  );
+  assert.equal(summary.written, 1);
+  const golden = JSON.parse(readFileSync(path, "utf8"));
+  assert.equal(golden.schema_source, "openapi+observed");
+  assert.equal(golden.oas_version, "2.15.5");
+  assert.deepEqual(golden.source_sessions, ["session-1"]);
+  assert.equal(golden.captured_at, "2026-06-26T00:00:00.000Z");
+  rmSync(dir, { recursive: true, force: true });
+});
+
+// 6. Observed evidence is the fallback when no OAS operation/status exists.
+check("ensureGoldenResponses reuses observed-only fallback for an undocumented response", () => {
+  const dir = mkdtempSync(join(tmpdir(), "goldens-"));
+  const path = join(dir, "get-store-not-in-oas-200.json");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    path,
+    JSON.stringify({
+      endpoint: "GET /store/not-in-oas",
+      expected_status: 200,
+      expected_schema: { ok: "boolean" },
+      ignore_fields: [],
+      schema_source: "observed",
+      oas_operation_id: null,
+      oas_ref: null,
+      oas_version: null,
+      value_rules: [],
+      captured_at: "2026-06-26T00:00:00.000Z",
+      source_sessions: ["session-1"],
+    })
+  );
+
+  const summary = ensureGoldenResponses(
+    [
+      {
+        attributes: { requires_auth: false, is_admin: false, has_errors: false },
+        steps: [{ method: "GET", endpoint: "/store/not-in-oas", expected_status: 200 }],
+      },
+    ],
+    loadAugmentedSpecs(),
+    dir
+  );
+  assert.deepEqual(summary, { written: 0, reusedObserved: 1 });
+  const golden = JSON.parse(readFileSync(path, "utf8"));
+  assert.equal(golden.schema_source, "observed");
+  rmSync(dir, { recursive: true, force: true });
+});
+
+// 7. An undocumented/unobserved happy response cannot degrade to status-only.
 check("ensureGoldenResponses fails closed when no schema source exists", () => {
   const dir = mkdtempSync(join(tmpdir(), "goldens-"));
   const specs = loadAugmentedSpecs();

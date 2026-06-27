@@ -3,9 +3,9 @@
   "expected_status": 200,
   "expected_schema": {
     "count": "number",
+    "customers": "array",
     "limit": "number",
-    "offset": "number",
-    "customers": "array"
+    "offset": "number"
   },
   "ignore_fields": [
     "id",
@@ -19,11 +19,17 @@
     "trace_id",
     "session_id"
   ],
-  "schema_source": "observed",
-  "oas_operation_id": null,
+  "schema_source": "openapi+observed",
+  "oas_operation_id": "GetCustomers",
   "oas_ref": null,
-  "oas_version": null,
-  "value_rules": [],
+  "oas_version": "2.15.5",
+  "value_rules": [
+    {
+      "path": "customers[].email",
+      "kind": "format",
+      "format": "email"
+    }
+  ],
   "captured_at": "2026-06-26T22:35:07.342Z",
   "source_sessions": [
     "live-capture-2026-06-26-222655"

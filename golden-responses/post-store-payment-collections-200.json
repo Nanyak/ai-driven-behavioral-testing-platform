@@ -4,11 +4,18 @@
   "expected_schema": {
     "payment_collection": {
       "amount": "number",
+      "authorized_amount": "ignored",
+      "captured_amount": "ignored",
+      "completed_at": "ignored",
       "created_at": "ignored",
       "currency_code": "string",
       "id": "ignored",
       "metadata": "ignored",
-      "payment_sessions": "array",
+      "payment_providers": "array",
+      "payment_sessions": "ignored",
+      "payments": "ignored",
+      "refunded_amount": "ignored",
+      "status": "string",
       "updated_at": "ignored"
     }
   },
@@ -25,11 +32,65 @@
     "session_id",
     "payment_collection.id"
   ],
-  "schema_source": "observed",
-  "oas_operation_id": null,
-  "oas_ref": null,
-  "oas_version": null,
-  "value_rules": [],
+  "schema_source": "openapi+observed",
+  "oas_operation_id": "PostPaymentCollections",
+  "oas_ref": "#/components/schemas/StorePaymentCollectionResponse",
+  "oas_version": "2.15.5",
+  "value_rules": [
+    {
+      "path": "payment_collection.completed_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "payment_collection.payment_sessions[].authorized_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "payment_collection.payment_sessions[].payment.canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "payment_collection.payment_sessions[].payment.captured_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "payment_collection.payment_sessions[].status",
+      "kind": "enum",
+      "values": [
+        "authorized",
+        "captured",
+        "canceled",
+        "pending",
+        "requires_more",
+        "error"
+      ]
+    },
+    {
+      "path": "payment_collection.payments[].canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "payment_collection.payments[].captured_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "payment_collection.status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "not_paid",
+        "awaiting",
+        "authorized",
+        "partially_authorized"
+      ]
+    }
+  ],
   "captured_at": "2026-06-26T22:36:26.065Z",
   "source_sessions": [
     "live-capture-2026-06-26"

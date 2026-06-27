@@ -3,12 +3,26 @@
   "expected_status": 200,
   "expected_schema": {
     "order_preview": {
+      "billing_address": "ignored",
       "created_at": "ignored",
+      "credit_line_subtotal": "ignored",
+      "credit_line_tax_total": "ignored",
       "credit_line_total": "number",
-      "credit_lines": "array",
+      "credit_lines": "ignored",
+      "currency_code": "string",
+      "custom_display_id": "ignored",
+      "customer": "ignored",
+      "customer_id": "string",
+      "discount_subtotal": "ignored",
       "discount_tax_total": "number",
       "discount_total": "number",
+      "display_id": "ignored",
       "email": "string",
+      "fulfilled_total": "ignored",
+      "fulfillment_status": "string",
+      "fulfillments": "ignored",
+      "gift_card_tax_total": "number",
+      "gift_card_total": "number",
       "id": "ignored",
       "item_discount_total": "number",
       "item_subtotal": "number",
@@ -17,35 +31,90 @@
       "items": "array",
       "metadata": "ignored",
       "order_change": {
-        "carry_over_promotions": "null",
-        "change_type": "string",
-        "claim_id": "null",
+        "actions": "ignored",
+        "canceled_at": "ignored",
+        "canceled_by": "ignored",
+        "carry_over_promotions": "ignored",
+        "change_type": "ignored",
+        "claim": "ignored",
+        "claim_id": "ignored",
+        "confirmed_at": "ignored",
+        "confirmed_by": "ignored",
         "created_at": "ignored",
-        "exchange_id": "null",
+        "created_by": "ignored",
+        "declined_at": "ignored",
+        "declined_by": "ignored",
+        "declined_reason": "ignored",
+        "description": "ignored",
+        "exchange": "ignored",
+        "exchange_id": "ignored",
         "id": "ignored",
-        "internal_note": "null",
+        "internal_note": "ignored",
         "metadata": "ignored",
         "order": {
+          "billing_address": "ignored",
+          "canceled_at": "ignored",
           "created_at": "ignored",
-          "credit_lines": "array",
-          "email": "string",
+          "credit_line_total": "ignored",
+          "credit_lines": "ignored",
+          "currency_code": "ignored",
+          "custom_display_id": "ignored",
+          "customer": "ignored",
+          "customer_id": "ignored",
+          "discount_tax_total": "ignored",
+          "discount_total": "ignored",
+          "display_id": "ignored",
+          "email": "ignored",
+          "fulfillment_status": "ignored",
+          "fulfillments": "ignored",
+          "gift_card_tax_total": "ignored",
+          "gift_card_total": "ignored",
           "id": "ignored",
+          "item_discount_total": "ignored",
+          "item_subtotal": "ignored",
+          "item_tax_total": "ignored",
+          "item_total": "ignored",
           "items": "array",
+          "locale": "ignored",
           "metadata": "ignored",
-          "shipping_methods": "array",
-          "summary": "array",
-          "transactions": "array",
+          "original_item_subtotal": "ignored",
+          "original_item_tax_total": "ignored",
+          "original_item_total": "ignored",
+          "original_shipping_subtotal": "ignored",
+          "original_shipping_tax_total": "ignored",
+          "original_shipping_total": "ignored",
+          "original_subtotal": "ignored",
+          "original_tax_total": "ignored",
+          "original_total": "ignored",
+          "payment_collections": "ignored",
+          "payment_status": "ignored",
+          "region": "ignored",
+          "region_id": "ignored",
+          "sales_channel": "ignored",
+          "sales_channel_id": "ignored",
+          "shipping_address": "ignored",
+          "shipping_discount_total": "ignored",
+          "shipping_methods": "ignored",
+          "shipping_subtotal": "ignored",
+          "shipping_tax_total": "ignored",
+          "shipping_total": "ignored",
+          "status": "ignored",
+          "subtotal": "ignored",
+          "summary": "ignored",
+          "tax_total": "ignored",
+          "total": "ignored",
+          "transactions": "ignored",
           "updated_at": "ignored",
           "version": "number"
         },
         "order_id": "ignored",
-        "requested_at": "null",
-        "requested_by": "null",
+        "requested_at": "ignored",
+        "requested_by": "ignored",
         "return_id": "string",
+        "return_order": "ignored",
         "status": "string",
         "updated_at": "ignored",
-        "version": "number",
-        "description": "null"
+        "version": "number"
       },
       "original_item_subtotal": "number",
       "original_item_tax_total": "number",
@@ -56,212 +125,65 @@
       "original_subtotal": "number",
       "original_tax_total": "number",
       "original_total": "number",
+      "payment_collections": "array",
+      "payment_status": "string",
+      "region": "ignored",
+      "region_id": "string",
       "return_requested_total": "number",
+      "sales_channel": "ignored",
+      "sales_channel_id": "string",
+      "shipped_total": "ignored",
+      "shipping_address": "ignored",
       "shipping_discount_total": "number",
-      "shipping_methods": "array",
+      "shipping_methods": "ignored",
       "shipping_subtotal": "number",
       "shipping_tax_total": "number",
       "shipping_total": "number",
+      "status": "string",
       "subtotal": "number",
       "summary": {
         "accounting_total": "number",
+        "credit_line_total": "ignored",
         "current_order_total": "number",
         "original_order_total": "number",
         "paid_total": "number",
         "pending_difference": "number",
+        "raw_accounting_total": "ignored",
+        "raw_credit_line_total": "ignored",
+        "raw_current_order_total": "ignored",
+        "raw_original_order_total": "ignored",
+        "raw_paid_total": "ignored",
+        "raw_pending_difference": "ignored",
+        "raw_refunded_total": "ignored",
+        "raw_transaction_total": "ignored",
         "refunded_total": "number",
-        "transaction_total": "number",
-        "credit_line_total": "number",
-        "raw_transaction_total": {
-          "value": "string",
-          "precision": "number"
-        },
-        "raw_original_order_total": {
-          "value": "string",
-          "precision": "number"
-        },
-        "raw_current_order_total": {
-          "value": "string",
-          "precision": "number"
-        },
-        "raw_pending_difference": {
-          "value": "string",
-          "precision": "number"
-        },
-        "raw_paid_total": {
-          "value": "string",
-          "precision": "number"
-        },
-        "raw_refunded_total": {
-          "value": "string",
-          "precision": "number"
-        },
-        "raw_credit_line_total": {
-          "value": "string",
-          "precision": "number"
-        },
-        "raw_accounting_total": {
-          "value": "string",
-          "precision": "number"
-        }
+        "transaction_total": "number"
       },
       "tax_total": "number",
       "total": "number",
-      "transactions": "array",
+      "transactions": "ignored",
       "updated_at": "ignored",
-      "version": "number",
-      "discount_subtotal": "number",
-      "credit_line_subtotal": "number",
-      "credit_line_tax_total": "number",
-      "fulfilled_total": "number",
-      "shipped_total": "number",
-      "return_received_total": "number",
-      "return_dismissed_total": "number",
-      "write_off_total": "number",
-      "raw_total": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_subtotal": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_tax_total": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_discount_total": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_discount_subtotal": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_discount_tax_total": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_credit_line_total": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_credit_line_subtotal": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_credit_line_tax_total": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_original_total": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_original_subtotal": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_original_tax_total": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_item_total": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_item_subtotal": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_item_tax_total": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_item_discount_total": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_original_item_total": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_original_item_subtotal": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_original_item_tax_total": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_fulfilled_total": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_shipped_total": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_return_requested_total": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_return_received_total": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_return_dismissed_total": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_write_off_total": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_shipping_total": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_shipping_subtotal": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_shipping_tax_total": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_shipping_discount_total": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_original_shipping_tax_total": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_original_shipping_subtotal": {
-        "value": "string",
-        "precision": "number"
-      },
-      "raw_original_shipping_total": {
-        "value": "string",
-        "precision": "number"
-      }
+      "version": "number"
     },
     "return": {
-      "canceled_at": "null",
+      "canceled_at": "ignored",
+      "claim_id": "ignored",
       "created_at": "ignored",
       "created_by": "string",
       "display_id": "number",
+      "exchange_id": "ignored",
       "id": "ignored",
-      "items": "array",
-      "location_id": "string",
-      "no_notification": "null",
+      "items": "ignored",
+      "location_id": "ignored",
+      "metadata": "ignored",
+      "no_notification": "ignored",
       "order_id": "ignored",
       "order_version": "number",
-      "received_at": "null",
-      "refund_amount": "null",
-      "requested_at": "string",
-      "status": "string"
+      "received_at": "ignored",
+      "refund_amount": "ignored",
+      "requested_at": "ignored",
+      "status": "ignored",
+      "updated_at": "ignored"
     }
   },
   "ignore_fields": [
@@ -276,11 +198,853 @@
     "trace_id",
     "session_id"
   ],
-  "schema_source": "observed",
-  "oas_operation_id": null,
-  "oas_ref": null,
-  "oas_version": null,
-  "value_rules": [],
+  "schema_source": "openapi+observed",
+  "oas_operation_id": "PostReturnsIdRequest",
+  "oas_ref": "#/components/schemas/AdminReturnPreviewResponse",
+  "oas_version": "2.15.5",
+  "value_rules": [
+    {
+      "path": "order_preview.customer.email",
+      "kind": "format",
+      "format": "email"
+    },
+    {
+      "path": "order_preview.email",
+      "kind": "format",
+      "format": "email"
+    },
+    {
+      "path": "order_preview.fulfillment_status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "not_fulfilled",
+        "partially_fulfilled",
+        "fulfilled",
+        "partially_shipped",
+        "shipped",
+        "partially_delivered",
+        "delivered"
+      ]
+    },
+    {
+      "path": "order_preview.fulfillments[].canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.fulfillments[].delivered_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.fulfillments[].packed_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.fulfillments[].shipped_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.items[].actions[].action",
+      "kind": "enum",
+      "values": [
+        "CANCEL_RETURN_ITEM",
+        "FULFILL_ITEM",
+        "DELIVER_ITEM",
+        "CANCEL_ITEM_FULFILLMENT",
+        "ITEM_ADD",
+        "ITEM_REMOVE",
+        "ITEM_UPDATE",
+        "RECEIVE_DAMAGED_RETURN_ITEM",
+        "RECEIVE_RETURN_ITEM",
+        "RETURN_ITEM",
+        "SHIPPING_ADD",
+        "SHIPPING_REMOVE",
+        "SHIP_ITEM",
+        "WRITE_OFF_ITEM",
+        "REINSTATE_ITEM"
+      ]
+    },
+    {
+      "path": "order_preview.items[].actions[].order.customer.email",
+      "kind": "format",
+      "format": "email"
+    },
+    {
+      "path": "order_preview.items[].actions[].order.email",
+      "kind": "format",
+      "format": "email"
+    },
+    {
+      "path": "order_preview.items[].actions[].order.fulfillment_status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "not_fulfilled",
+        "partially_fulfilled",
+        "fulfilled",
+        "partially_shipped",
+        "shipped",
+        "partially_delivered",
+        "delivered"
+      ]
+    },
+    {
+      "path": "order_preview.items[].actions[].order.payment_status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "not_paid",
+        "awaiting",
+        "authorized",
+        "partially_authorized",
+        "captured",
+        "partially_captured",
+        "partially_refunded",
+        "refunded",
+        "requires_action"
+      ]
+    },
+    {
+      "path": "order_preview.items[].actions[].reference",
+      "kind": "enum",
+      "values": [
+        "claim",
+        "exchange",
+        "return",
+        "order_shipping_method"
+      ]
+    },
+    {
+      "path": "order_preview.items[].product.status",
+      "kind": "enum",
+      "values": [
+        "draft",
+        "proposed",
+        "published",
+        "rejected"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.actions[].action",
+      "kind": "enum",
+      "values": [
+        "CANCEL_RETURN_ITEM",
+        "FULFILL_ITEM",
+        "DELIVER_ITEM",
+        "CANCEL_ITEM_FULFILLMENT",
+        "ITEM_ADD",
+        "ITEM_REMOVE",
+        "ITEM_UPDATE",
+        "RECEIVE_DAMAGED_RETURN_ITEM",
+        "RECEIVE_RETURN_ITEM",
+        "RETURN_ITEM",
+        "SHIPPING_ADD",
+        "SHIPPING_REMOVE",
+        "SHIP_ITEM",
+        "WRITE_OFF_ITEM",
+        "REINSTATE_ITEM"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.actions[].order.customer.email",
+      "kind": "format",
+      "format": "email"
+    },
+    {
+      "path": "order_preview.order_change.actions[].order.email",
+      "kind": "format",
+      "format": "email"
+    },
+    {
+      "path": "order_preview.order_change.actions[].order.fulfillment_status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "not_fulfilled",
+        "partially_fulfilled",
+        "fulfilled",
+        "partially_shipped",
+        "shipped",
+        "partially_delivered",
+        "delivered"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.actions[].order.fulfillments[].canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.actions[].order.fulfillments[].delivered_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.actions[].order.fulfillments[].packed_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.actions[].order.fulfillments[].shipped_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.actions[].order.payment_collections[].completed_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.actions[].order.payment_collections[].status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "not_paid",
+        "awaiting",
+        "authorized",
+        "partially_authorized"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.actions[].order.payment_status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "not_paid",
+        "awaiting",
+        "authorized",
+        "partially_authorized",
+        "captured",
+        "partially_captured",
+        "partially_refunded",
+        "refunded",
+        "requires_action"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.actions[].order.transactions[].reference",
+      "kind": "enum",
+      "values": [
+        "capture",
+        "refund"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.actions[].reference",
+      "kind": "enum",
+      "values": [
+        "claim",
+        "exchange",
+        "return",
+        "order_shipping_method"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.change_type",
+      "kind": "enum",
+      "values": [
+        "return",
+        "exchange",
+        "claim",
+        "edit",
+        "return_request",
+        "return_receive"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.claim.additional_items[].item.product.status",
+      "kind": "enum",
+      "values": [
+        "draft",
+        "proposed",
+        "published",
+        "rejected"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.claim.additional_items[].reason",
+      "kind": "enum",
+      "values": [
+        "missing_item",
+        "wrong_item",
+        "production_failure",
+        "other"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.claim.canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.claim.claim_items[].item.product.status",
+      "kind": "enum",
+      "values": [
+        "draft",
+        "proposed",
+        "published",
+        "rejected"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.claim.claim_items[].reason",
+      "kind": "enum",
+      "values": [
+        "missing_item",
+        "wrong_item",
+        "production_failure",
+        "other"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.claim.order.customer.email",
+      "kind": "format",
+      "format": "email"
+    },
+    {
+      "path": "order_preview.order_change.claim.order.email",
+      "kind": "format",
+      "format": "email"
+    },
+    {
+      "path": "order_preview.order_change.claim.order.fulfillment_status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "not_fulfilled",
+        "partially_fulfilled",
+        "fulfilled",
+        "partially_shipped",
+        "shipped",
+        "partially_delivered",
+        "delivered"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.claim.order.fulfillments[].canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.claim.order.fulfillments[].delivered_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.claim.order.fulfillments[].packed_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.claim.order.fulfillments[].shipped_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.claim.order.items[].product.status",
+      "kind": "enum",
+      "values": [
+        "draft",
+        "proposed",
+        "published",
+        "rejected"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.claim.order.payment_collections[].completed_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.claim.order.payment_collections[].status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "not_paid",
+        "awaiting",
+        "authorized",
+        "partially_authorized"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.claim.order.payment_status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "not_paid",
+        "awaiting",
+        "authorized",
+        "partially_authorized",
+        "captured",
+        "partially_captured",
+        "partially_refunded",
+        "refunded",
+        "requires_action"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.claim.order.transactions[].reference",
+      "kind": "enum",
+      "values": [
+        "capture",
+        "refund"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.claim.return.canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.claim.return.status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "requested",
+        "received",
+        "partially_received",
+        "open"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.claim.transactions[].reference",
+      "kind": "enum",
+      "values": [
+        "capture",
+        "refund"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.claim.type",
+      "kind": "enum",
+      "values": [
+        "replace",
+        "refund"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.confirmed_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.declined_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.exchange.additional_items[].item.product.status",
+      "kind": "enum",
+      "values": [
+        "draft",
+        "proposed",
+        "published",
+        "rejected"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.exchange.canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.exchange.order.email",
+      "kind": "format",
+      "format": "email"
+    },
+    {
+      "path": "order_preview.order_change.exchange.order.fulfillment_status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "not_fulfilled",
+        "partially_fulfilled",
+        "fulfilled",
+        "partially_shipped",
+        "shipped",
+        "partially_delivered",
+        "delivered"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.exchange.order.fulfillments[].canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.exchange.order.fulfillments[].delivered_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.exchange.order.fulfillments[].packed_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.exchange.order.fulfillments[].shipped_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.exchange.order.items[].product.status",
+      "kind": "enum",
+      "values": [
+        "draft",
+        "proposed",
+        "published",
+        "rejected"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.exchange.order.payment_collections[].completed_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.exchange.order.payment_collections[].status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "not_paid",
+        "awaiting",
+        "authorized",
+        "partially_authorized",
+        "completed",
+        "failed"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.exchange.order.payment_status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "not_paid",
+        "awaiting",
+        "authorized",
+        "partially_authorized",
+        "captured",
+        "partially_captured",
+        "partially_refunded",
+        "refunded",
+        "requires_action"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.exchange.order.transactions[].reference",
+      "kind": "enum",
+      "values": [
+        "capture",
+        "refund"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.exchange.return.canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.exchange.return.status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "requested",
+        "received",
+        "partially_received",
+        "open"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.exchange.transactions[].reference",
+      "kind": "enum",
+      "values": [
+        "capture",
+        "refund"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.order.customer.email",
+      "kind": "format",
+      "format": "email"
+    },
+    {
+      "path": "order_preview.order_change.order.email",
+      "kind": "format",
+      "format": "email"
+    },
+    {
+      "path": "order_preview.order_change.order.fulfillment_status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "not_fulfilled",
+        "partially_fulfilled",
+        "fulfilled",
+        "partially_shipped",
+        "shipped",
+        "partially_delivered",
+        "delivered"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.order.fulfillments[].canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.order.fulfillments[].delivered_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.order.fulfillments[].packed_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.order.fulfillments[].shipped_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.order.items[].product.status",
+      "kind": "enum",
+      "values": [
+        "draft",
+        "proposed",
+        "published",
+        "rejected"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.order.payment_collections[].completed_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.order.payment_collections[].payment_sessions[].authorized_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.order.payment_collections[].payment_sessions[].status",
+      "kind": "enum",
+      "values": [
+        "authorized",
+        "captured",
+        "canceled",
+        "pending",
+        "requires_more",
+        "error"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.order.payment_collections[].payments[].canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.order.payment_collections[].payments[].captured_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.order.payment_collections[].status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "not_paid",
+        "awaiting",
+        "authorized",
+        "partially_authorized"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.order.payment_status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "not_paid",
+        "awaiting",
+        "authorized",
+        "partially_authorized",
+        "captured",
+        "partially_captured",
+        "partially_refunded",
+        "refunded",
+        "requires_action"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.order.transactions[].reference",
+      "kind": "enum",
+      "values": [
+        "capture",
+        "refund"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.requested_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.return_order.canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.order_change.return_order.status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "requested",
+        "received",
+        "partially_received",
+        "open"
+      ]
+    },
+    {
+      "path": "order_preview.order_change.status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "requested",
+        "pending",
+        "confirmed",
+        "declined"
+      ]
+    },
+    {
+      "path": "order_preview.payment_collections[].completed_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.payment_collections[].payment_sessions[].authorized_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.payment_collections[].payment_sessions[].payment.canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.payment_collections[].payment_sessions[].payment.captured_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.payment_collections[].payment_sessions[].status",
+      "kind": "enum",
+      "values": [
+        "authorized",
+        "captured",
+        "canceled",
+        "pending",
+        "requires_more",
+        "error"
+      ]
+    },
+    {
+      "path": "order_preview.payment_collections[].payments[].canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.payment_collections[].payments[].captured_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.payment_collections[].payments[].payment_session.authorized_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.payment_collections[].payments[].payment_session.payment.canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.payment_collections[].payments[].payment_session.payment.captured_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order_preview.payment_collections[].payments[].payment_session.status",
+      "kind": "enum",
+      "values": [
+        "authorized",
+        "captured",
+        "canceled",
+        "pending",
+        "requires_more",
+        "error"
+      ]
+    },
+    {
+      "path": "order_preview.payment_collections[].status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "not_paid",
+        "awaiting",
+        "authorized",
+        "partially_authorized"
+      ]
+    },
+    {
+      "path": "order_preview.payment_status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "not_paid",
+        "awaiting",
+        "authorized",
+        "partially_authorized",
+        "captured",
+        "partially_captured",
+        "partially_refunded",
+        "refunded",
+        "requires_action"
+      ]
+    },
+    {
+      "path": "order_preview.transactions[].reference",
+      "kind": "enum",
+      "values": [
+        "capture",
+        "refund"
+      ]
+    },
+    {
+      "path": "return.canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "return.status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "requested",
+        "received",
+        "partially_received",
+        "open"
+      ]
+    }
+  ],
   "captured_at": "2026-06-26T22:36:59.597Z",
   "source_sessions": [
     "live-capture-2026-06-26"

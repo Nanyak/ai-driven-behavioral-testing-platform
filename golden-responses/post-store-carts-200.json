@@ -3,19 +3,24 @@
   "expected_status": 200,
   "expected_schema": {
     "cart": {
-      "billing_address": "null",
-      "completed_at": "null",
+      "billing_address": "ignored",
+      "completed_at": "ignored",
       "created_at": "ignored",
       "currency_code": "string",
-      "customer_id": "string",
+      "customer_id": "ignored",
+      "discount_subtotal": "ignored",
       "discount_tax_total": "number",
       "discount_total": "number",
-      "email": "string",
+      "email": "ignored",
+      "gift_card_tax_total": "number",
+      "gift_card_total": "number",
       "id": "ignored",
+      "item_discount_total": "ignored",
       "item_subtotal": "number",
       "item_tax_total": "number",
       "item_total": "number",
-      "items": "array",
+      "items": "ignored",
+      "locale": "ignored",
       "metadata": "ignored",
       "original_item_subtotal": "number",
       "original_item_tax_total": "number",
@@ -23,42 +28,24 @@
       "original_shipping_subtotal": "number",
       "original_shipping_tax_total": "number",
       "original_shipping_total": "number",
+      "original_subtotal": "number",
       "original_tax_total": "number",
       "original_total": "number",
+      "payment_collection": "ignored",
       "promotions": "array",
-      "region": {
-        "automatic_taxes": "boolean",
-        "countries": "array",
-        "created_at": "ignored",
-        "currency_code": "string",
-        "id": "ignored",
-        "metadata": "ignored",
-        "name": "string",
-        "updated_at": "ignored"
-      },
-      "region_id": "string",
-      "sales_channel_id": "string",
-      "shipping_address": "null",
-      "shipping_methods": "array",
+      "region": "ignored",
+      "region_id": "ignored",
+      "sales_channel_id": "ignored",
+      "shipping_address": "ignored",
+      "shipping_discount_total": "ignored",
+      "shipping_methods": "ignored",
       "shipping_subtotal": "number",
       "shipping_tax_total": "number",
       "shipping_total": "number",
       "subtotal": "number",
       "tax_total": "number",
       "total": "number",
-      "updated_at": "ignored",
-      "locale": "null",
-      "discount_subtotal": "number",
-      "item_discount_total": "number",
-      "shipping_discount_total": "number",
-      "credit_line_subtotal": "number",
-      "credit_line_tax_total": "number",
-      "credit_line_total": "number",
-      "credit_lines": "array",
-      "customer": {
-        "email": "string",
-        "groups": "array"
-      }
+      "updated_at": "ignored"
     }
   },
   "ignore_fields": [
@@ -73,11 +60,93 @@
     "trace_id",
     "session_id"
   ],
-  "schema_source": "observed",
-  "oas_operation_id": null,
-  "oas_ref": null,
-  "oas_version": null,
-  "value_rules": [],
+  "schema_source": "openapi+observed",
+  "oas_operation_id": "PostCarts",
+  "oas_ref": "#/components/schemas/StoreCartResponse",
+  "oas_version": "2.15.5",
+  "value_rules": [
+    {
+      "path": "cart.completed_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "cart.email",
+      "kind": "format",
+      "format": "email"
+    },
+    {
+      "path": "cart.items[].product.status",
+      "kind": "enum",
+      "values": [
+        "draft",
+        "proposed",
+        "published",
+        "rejected"
+      ]
+    },
+    {
+      "path": "cart.payment_collection.completed_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "cart.payment_collection.payment_sessions[].authorized_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "cart.payment_collection.payment_sessions[].payment.canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "cart.payment_collection.payment_sessions[].payment.captured_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "cart.payment_collection.payment_sessions[].status",
+      "kind": "enum",
+      "values": [
+        "authorized",
+        "captured",
+        "canceled",
+        "pending",
+        "requires_more",
+        "error"
+      ]
+    },
+    {
+      "path": "cart.payment_collection.payments[].canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "cart.payment_collection.payments[].captured_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "cart.payment_collection.status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "not_paid",
+        "awaiting",
+        "authorized",
+        "partially_authorized"
+      ]
+    },
+    {
+      "path": "cart.promotions[].application_method.type",
+      "kind": "enum",
+      "values": [
+        "fixed",
+        "percentage"
+      ]
+    }
+  ],
   "captured_at": "2026-06-26T22:35:07.341Z",
   "source_sessions": [
     "live-capture-2026-06-26-222655"

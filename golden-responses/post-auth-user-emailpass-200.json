@@ -16,7 +16,11 @@
     "trace_id",
     "session_id"
   ],
-  "schema_source": "observed",
+  "schema_source": "openapi+observed",
+  "oas_operation_id": "PostUserEmailpass",
+  "oas_ref": null,
+  "oas_version": "2.15.5",
+  "value_rules": [],
   "captured_at": "2026-06-26T21:42:43.710Z",
   "source_sessions": [
     "sess-adminCancel-343a6e4e-e973-4c7f-ac6f-e88f31c489aa",

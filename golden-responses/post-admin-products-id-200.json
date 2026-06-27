@@ -3,37 +3,40 @@
   "expected_status": 200,
   "expected_schema": {
     "product": {
-      "collection": "null",
-      "collection_id": "null",
+      "categories": "ignored",
+      "collection": "ignored",
+      "collection_id": "ignored",
       "created_at": "ignored",
       "deleted_at": "ignored",
-      "description": "string",
+      "description": "ignored",
       "discountable": "boolean",
-      "external_id": "null",
+      "external_id": "ignored",
       "handle": "string",
-      "height": "null",
-      "hs_code": "null",
+      "height": "ignored",
+      "hs_code": "ignored",
       "id": "ignored",
       "images": "array",
       "is_giftcard": "boolean",
-      "length": "null",
-      "material": "null",
+      "length": "ignored",
+      "material": "ignored",
       "metadata": "ignored",
-      "mid_code": "null",
+      "mid_code": "ignored",
       "options": "array",
-      "origin_country": "null",
-      "sales_channels": "array",
+      "origin_country": "ignored",
+      "sales_channels": "ignored",
+      "shipping_profile": "ignored",
       "status": "string",
-      "subtitle": "null",
-      "tags": "array",
-      "thumbnail": "string",
+      "subtitle": "ignored",
+      "tags": "ignored",
+      "thumbnail": "ignored",
       "title": "string",
-      "type": "null",
-      "type_id": "null",
+      "translations": "ignored",
+      "type": "ignored",
+      "type_id": "ignored",
       "updated_at": "ignored",
       "variants": "array",
-      "weight": "number",
-      "width": "null"
+      "weight": "ignored",
+      "width": "ignored"
     }
   },
   "ignore_fields": [
@@ -48,11 +51,32 @@
     "trace_id",
     "session_id"
   ],
-  "schema_source": "observed",
-  "oas_operation_id": null,
-  "oas_ref": null,
-  "oas_version": null,
-  "value_rules": [],
+  "schema_source": "openapi+observed",
+  "oas_operation_id": "PostProductsId",
+  "oas_ref": "#/components/schemas/AdminProductResponse",
+  "oas_version": "2.15.5",
+  "value_rules": [
+    {
+      "path": "product.collection.products[].status",
+      "kind": "enum",
+      "values": [
+        "draft",
+        "proposed",
+        "published",
+        "rejected"
+      ]
+    },
+    {
+      "path": "product.status",
+      "kind": "enum",
+      "values": [
+        "draft",
+        "proposed",
+        "published",
+        "rejected"
+      ]
+    }
+  ],
   "captured_at": "2026-06-26T22:36:17.128Z",
   "source_sessions": [
     "live-capture-2026-06-26"

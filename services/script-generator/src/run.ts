@@ -12,7 +12,6 @@ import { fileURLToPath } from "node:url";
 import { loadAugmentedSpecs, resolveOperation } from "../../golden/src/oas-source.js";
 import type { OasDocument } from "../../golden/src/oas-types.js";
 import { buildGolden } from "../../golden/src/schema/schema-merge.js";
-import { createTypesGoldenResolver, type TypesGoldenResolver } from "../../golden/src/types-source/resolve.js";
 import type { GoldenResponse } from "../../golden/src/types.js";
 import { dedup } from "./dedup.js";
 import { emitSpec } from "./emit.js";
@@ -31,9 +30,6 @@ const GOLDEN_VENDOR_DIR = resolvePath(GENERATED_TESTS_DIR, "_golden");
 const GOLDEN_SOURCE_DIR = resolvePath(REPO_ROOT, "services", "golden", "src");
 const GOLDEN_RESPONSES_DIR = resolvePath(REPO_ROOT, "golden-responses");
 const HITL_STORE = resolvePath(REPO_ROOT, "data", "hitl", "approvals.json");
-// The installed Medusa backend — source of the version-matched @medusajs/types
-// the code-derived oracle reads (services/golden/src/types-source).
-const BACKEND_DIR = resolvePath(REPO_ROOT, "apps", "medusa", "apps", "backend");
 
 // Each generated spec stamps its flow_signature (ADR 0002). Same permissive
 // matcher coverage.ts uses, so a cosmetic stamp change does not silently break
@@ -132,38 +128,6 @@ type PathFolder = "happy-path" | "failure-path";
 const PERSONA_FOLDERS: PersonaFolder[] = ["guest", "customer", "admin"];
 const PATH_FOLDERS: PathFolder[] = ["happy-path", "failure-path"];
 
-// Endpoints whose published OpenAPI schema does NOT match what the running
-// Medusa instance actually returns (stateful cart/checkout mutations, order
-// actions, and the return lifecycle — response shape depends on entity state,
-// and Medusa's OAS is incomplete/inaccurate for them). For these, an OBSERVED
-// golden captured from live traffic is the authoritative oracle: rebuilding
-// from OAS reintroduces false missing_field/unexpected_field diffs and turns the
-// suite spuriously red. When an observed golden already exists on disk we KEEP
-// it instead of overwriting from OAS; if none exists we still fall back to OAS
-// so generation never fails closed. See "OAS-drift" investigation (2026-06-27).
-const OBSERVED_AUTHORITATIVE = new Set<string>([
-  "GET /admin/customers",
-  "GET /admin/orders/{id}",
-  "GET /admin/stock-locations",
-  "GET /store/orders/{id}",
-  "POST /admin/orders/{id}/cancel",
-  "POST /admin/orders/{id}/fulfillments",
-  "POST /admin/products/{id}",
-  "POST /admin/returns",
-  "POST /admin/returns/{id}/receive",
-  "POST /admin/returns/{id}/receive-items",
-  "POST /admin/returns/{id}/receive/confirm",
-  "POST /admin/returns/{id}/request",
-  "POST /admin/returns/{id}/request-items",
-  "POST /store/carts",
-  "POST /store/carts/{id}",
-  "POST /store/carts/{id}/complete",
-  "POST /store/carts/{id}/line-items",
-  "POST /store/carts/{id}/shipping-methods",
-  "POST /store/payment-collections",
-  "POST /store/payment-collections/{id}/payment-sessions",
-]);
-
 interface Route {
   persona: PersonaFolder;
   path: PathFolder;
@@ -226,8 +190,10 @@ function readExistingGolden(path: string): GoldenResponse | null {
 export interface GoldenSyncSummary {
   written: number;
   reusedObserved: number;
-  /** Goldens sourced from the code's @medusajs/types declarations (subset of written). */
-  typesSourced: number;
+}
+
+function hasObservedEvidence(golden: GoldenResponse | null): golden is GoldenResponse {
+  return golden?.schema_source === "observed" || golden?.schema_source === "openapi+observed";
 }
 
 /**
@@ -261,58 +227,15 @@ export function ensureGoldenResponses(
   const pending: Array<{ path: string; golden: GoldenResponse }> = [];
   const missing: string[] = [];
   let reusedObserved = 0;
-  let typesSourced = 0;
-
-  // Code-derived oracle: prefer the version-matched @medusajs/types .d.ts over
-  // Medusa's drifted published OpenAPI for any endpoint we have a type mapping
-  // for. Resilient: if the backend package isn't installed, fall back to OAS.
-  const typesResolver: TypesGoldenResolver | null = (() => {
-    try {
-      return createTypesGoldenResolver(BACKEND_DIR);
-    } catch (err) {
-      console.warn(
-        `  types-source disabled (could not load @medusajs/types): ${err instanceof Error ? err.message : String(err)}`
-      );
-      return null;
-    }
-  })();
 
   for (const item of required.values()) {
     const path = resolvePath(outputDir, goldenResponseFileName(item.endpoint, item.status));
     const existing = readExistingGolden(path);
 
-    // OAS is unreliable for these endpoints; a live-captured observed golden is
-    // authoritative. Preserve it verbatim rather than rebuilding from the spec.
-    if (
-      OBSERVED_AUTHORITATIVE.has(item.endpoint) &&
-      existing &&
-      existing.schema_source !== "openapi"
-    ) {
-      reusedObserved++;
-      continue;
-    }
-
-    // Primary oracle source: the code's own @medusajs/types declarations
-    // (version-matched to the runtime; accurate optionality/nullability). Carries
-    // forward any curated ignore_fields. Returns null for non-2xx / unmapped ops,
-    // which then fall through to the OpenAPI/observed path below.
-    const typesGolden =
-      typesResolver?.build(
-        item.method,
-        item.endpoint.slice(item.method.length + 1),
-        item.status,
-        existing?.ignore_fields
-      ) ?? null;
-    if (typesGolden) {
-      pending.push({ path, golden: typesGolden });
-      typesSourced++;
-      continue;
-    }
-
     const oas = resolveOperation(specs, item.method, item.endpoint.slice(item.method.length + 1), item.status);
 
     if (!oas) {
-      if (existing) {
+      if (hasObservedEvidence(existing)) {
         reusedObserved++;
       } else {
         missing.push(`${item.endpoint} -> ${item.status}`);
@@ -321,7 +244,7 @@ export function ensureGoldenResponses(
     }
 
     const observedSchema =
-      existing && existing.schema_source !== "openapi" ? existing.expected_schema : null;
+      hasObservedEvidence(existing) ? existing.expected_schema : null;
     const golden = buildGolden({
       endpoint: item.endpoint,
       observedStatus: item.status,
@@ -345,7 +268,7 @@ export function ensureGoldenResponses(
   for (const { path, golden } of pending) {
     writeFileSync(path, `${JSON.stringify(golden, null, 2)}\n`, "utf8");
   }
-  return { written: pending.length, reusedObserved, typesSourced };
+  return { written: pending.length, reusedObserved };
 }
 
 // Vendor services/golden/src/ into generated-tests/_golden/ so generated-tests/
@@ -705,7 +628,7 @@ function main(): void {
   }
   console.log(`  Behavioral invariants:    ${invariantStepCount} verified, rendered into specs`);
   console.log(
-    `  Golden schemas:           ${goldenSync.written} written (${goldenSync.typesSourced} @medusajs/types-sourced), ${goldenSync.reusedObserved} observed-only reused`
+    `  Golden schemas:           ${goldenSync.written} OAS-backed written, ${goldenSync.reusedObserved} observed-only reused`
   );
   console.log(`  Vendored _golden/ from:   services/golden/src/`);
   console.log(`  Output dir:               ${GENERATED_TESTS_DIR}`);

@@ -2,10 +2,9 @@
   "endpoint": "GET /store/payment-providers",
   "expected_status": 200,
   "expected_schema": {
+    "count": "number",
     "limit": "number",
     "offset": "number",
-    "count": "number",
-    "estimate_count": "ignored",
     "payment_providers": "array"
   },
   "ignore_fields": [
@@ -20,9 +19,9 @@
     "trace_id",
     "session_id"
   ],
-  "schema_source": "types",
-  "oas_operation_id": "StorePaymentProviderListResponse",
-  "oas_ref": "@medusajs/types#StorePaymentProviderListResponse",
+  "schema_source": "openapi",
+  "oas_operation_id": "GetPaymentProviders",
+  "oas_ref": null,
   "oas_version": "2.15.5",
   "value_rules": [],
   "captured_at": "2026-06-27T03:14:51.849Z",

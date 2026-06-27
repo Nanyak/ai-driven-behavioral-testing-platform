@@ -2,10 +2,10 @@
   "endpoint": "GET /store/products",
   "expected_status": 200,
   "expected_schema": {
-    "limit": "number",
-    "offset": "number",
     "count": "number",
     "estimate_count": "ignored",
+    "limit": "number",
+    "offset": "number",
     "products": "array"
   },
   "ignore_fields": [
@@ -20,11 +20,22 @@
     "trace_id",
     "session_id"
   ],
-  "schema_source": "types",
-  "oas_operation_id": "StoreProductListResponse",
-  "oas_ref": "@medusajs/types#StoreProductListResponse",
+  "schema_source": "openapi",
+  "oas_operation_id": "GetProducts",
+  "oas_ref": "#/components/schemas/StoreProductListResponse",
   "oas_version": "2.15.5",
-  "value_rules": [],
+  "value_rules": [
+    {
+      "path": "products[].status",
+      "kind": "enum",
+      "values": [
+        "draft",
+        "proposed",
+        "published",
+        "rejected"
+      ]
+    }
+  ],
   "captured_at": "2026-06-27T03:14:51.849Z",
   "source_sessions": []
 }
