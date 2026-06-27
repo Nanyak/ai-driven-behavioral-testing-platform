@@ -8,8 +8,8 @@
  *   - tsc --noEmit is clean (hard gate),
  *   - all unit tests pass (test/run-all.ts — also rebuilds the augmented spec),
  *   - build-oas injects the gate 401 into every gated cart/payment-collection
- *     op. On the REAL bundled Medusa spec every gated op already documents a
- *     401 (Medusa's own `unauthorized` response), so this check asserts the
+ *     op. In the static runtime-corrected spec every gated op already documents
+ *     a JSON 401, so this check asserts the
  *     UNION collision path (`oneOf`, never overwritten) on representative
  *     gated ops — not a plain add (ADR 0004 #4). It also asserts the gate
  *     does NOT touch GET, even where the real base spec documents a 401 on a
@@ -20,10 +20,9 @@
  *     POST /store/carts (-> StoreCartResponse, wrapping StoreCart) and
  *     GET /store/products (-> StoreProductListResponse).
  *
- * Reads ONLY the committed `openapi/base/` + rebuilds `openapi/augmented/`
- * from it — no network access. `npm run golden:fetch-base-oas` (manual,
- * networked) is the only path that touches the network; it is NOT invoked
- * here or by `build-oas`.
+ * Reads ONLY the committed, runtime-corrected `openapi/base/` and rebuilds
+ * `openapi/augmented/` from it. There is intentionally no network regeneration
+ * step: the static contract represents the installed Medusa 2.15.5 runtime.
  *
  * Reads/builds service-local output; needs no running stack. Run installs
  * first if node_modules is missing:  npm run golden:install

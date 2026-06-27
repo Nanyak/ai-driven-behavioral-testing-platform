@@ -1,5 +1,5 @@
 /**
- * Runs against the REAL bundled Medusa v2 spec (openapi/base/), not a
+ * Runs against the static runtime-corrected Medusa 2.15.5 spec (openapi/base/), not a
  * hand-authored fixture. The real `StoreCart` schema has no meaningfully
  * under-specified field to tighten (`shipping_address`/`region` etc. are
  * fully `$ref`'d typed objects, not generic `"object"` leaves, and the one
@@ -38,7 +38,7 @@ check("bodies-off: a golden is produced with schema_source 'openapi' (oracle wor
   assert.equal(golden.expected_status, 200);
   assert.equal(golden.oas_operation_id, "PostCarts");
   assert.equal(golden.oas_ref, "#/components/schemas/StoreCartResponse");
-  assert.equal(golden.oas_version, "2.0.0");
+  assert.equal(golden.oas_version, "2.15.5");
 });
 
 check(
@@ -148,7 +148,7 @@ check("an overlay-documented error step (gate 401) is spec-sourced with provenan
   // operationId populated). oas_ref is non-null only for responses with one
   // unambiguous top-level $ref (see the 200 case above/below).
   assert.equal(golden.oas_ref, null);
-  assert.equal(golden.oas_version, "2.0.0");
+  assert.equal(golden.oas_version, "2.15.5");
 });
 
 check("an error step the overlay/base does NOT cover falls back to observed status/schema", () => {

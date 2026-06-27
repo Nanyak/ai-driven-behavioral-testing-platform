@@ -1,12 +1,18 @@
 {
   "openapi": "3.0.0",
   "info": {
-    "version": "2.0.0",
-    "title": "Medusa Storefront API",
+    "version": "2.15.5",
+    "title": "Medusa Storefront API (Runtime-Corrected 2.15.5)",
     "license": {
       "name": "MIT",
       "url": "https://github.com/medusajs/medusa/blob/master/LICENSE"
-    }
+    },
+    "x-medusa-api-version": "2.0.0",
+    "x-medusa-core-version": "2.15.5",
+    "x-medusa-upstream-baseline-tag": "v2.15.5",
+    "x-medusa-upstream-baseline-commit": "b74b5b19569534412a67835ffae8fb3afbf6f5c5",
+    "x-medusa-runtime-corrected": true,
+    "x-medusa-runtime-source": "@medusajs/medusa@2.15.5 query projections, @medusajs/types@2.15.5, and local runtime observations"
   },
   "servers": [
     {
@@ -517,7 +523,7 @@
     },
     {
       "name": "Gift Cards",
-      "description": "A gift card is a prepaid card that customers can use to purchase products in the store.\nCustomers can purchase gift cards for themselves or others, and then use them to pay for their orders.\nThese API routes allow logged-in customers to create and manage their gift cards.\n<Note>\nGift Cards are available through the [Loyalty Plugin](https://docs.medusajs.com/resources/commerce-modules/loyalty).\n</Note>\n",
+      "description": "A gift card is a prepaid card that customers can use to purchase products in the store.\nCustomers can purchase gift cards for themselves or others, and then use them to pay for their orders.\nThese API routes allow logged-in customers to create and manage their gift cards.\n<Note>\nGift Cards are only available for Cloud users using the [Loyalty Plugin](https://docs.medusajs.com/cloud/loyalty-plugin).\n</Note>\n",
       "x-associatedSchema": {
         "type": "object",
         "description": "The gift card's details.",
@@ -644,14 +650,6 @@
             "example": "English (United States)"
           }
         }
-      }
-    },
-    {
-      "name": "Multi-Factor Authentication (MFA) Factors",
-      "description": "Multi-factor authentication (MFA) factors are additional ways to verify a customer's identity during login, in addition to their password. Examples of MFA factors include authenticator apps, SMS messages, and email.\nThese API routes allow customers to manage their MFA factors, such as enabling an authenticator app or generating recovery codes.\n",
-      "externalDocs": {
-        "description": "Learn more about MFA in Medusa",
-        "url": "https://docs.medusajs.com/resources/commerce-modules/auth/mfa"
       }
     },
     {
@@ -1877,7 +1875,7 @@
     {
       "name": "Store Credit Accounts",
       "x-associatedSchema": {
-        "description": "A store credit account is a way for customers to manage their store credit balance. Customers can use their store credit to pay for orders, and view their store credit balance.\nThese API routes allow customers to view their store credit accounts.\n<Note>\nStore Credit Accounts are only available through the [Loyalty Plugin](https://docs.medusajs.com/resources/commerce-modules/loyalty).\n</Note>\n",
+        "description": "A store credit account is a way for customers to manage their store credit balance. Customers can use their store credit to pay for orders, and view their store credit balance.\nThese API routes allow customers to view their store credit accounts.\n<Note>\nStore Credit Accounts are only available for Cloud users using the [Loyalty Plugin](https://docs.medusajs.com/cloud/loyalty-plugin).\n</Note>\n",
         "type": "object",
         "x-schemaName": "StoreStoreCreditAccount",
         "required": [
@@ -1956,67 +1954,6 @@
     }
   ],
   "paths": {
-    "/auth/customer/emailpass/verification/confirm": {
-      "post": {
-        "operationId": "PostActor_typeAuth_providerVerificationConfirm",
-        "summary": "Verify the Customer's Email",
-        "description": "Verifies the customer's email using a token that is typically sent to their email address. This is used to confirm the customer's email during registration or authentication when [email verification is required](https://docs.medusajs.com/resources/commerce-modules/auth/auth-providers/emailpass). You can listen to the `auth.verification_requested` event in a subscriber and send an email to the customer with the verification token.",
-        "x-authenticated": false,
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "description": "The details required to verify the customer's email.",
-                "required": [
-                  "token"
-                ],
-                "properties": {
-                  "token": {
-                    "type": "string",
-                    "title": "token",
-                    "description": "The verification token sent to the customer's email address."
-                  }
-                }
-              }
-            }
-          }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "Shell",
-            "label": "cURL",
-            "source": "curl -X POST '{backend_url}/auth/customer/emailpass/verification/confirm' \\\n-H 'Content-Type: application/json' \\\n--data-raw '{\n  \"token\": \"{value}\"\n}'"
-          }
-        ],
-        "tags": [
-          "Auth"
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "$ref": "#/components/responses/400_error"
-          },
-          "401": {
-            "$ref": "#/components/responses/unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/not_found_error"
-          },
-          "409": {
-            "$ref": "#/components/responses/invalid_state_error"
-          },
-          "422": {
-            "$ref": "#/components/responses/invalid_request_error"
-          },
-          "500": {
-            "$ref": "#/components/responses/500_error"
-          }
-        }
-      }
-    },
     "/auth/customer/{auth_provider}": {
       "post": {
         "operationId": "PostActor_typeAuth_provider",
@@ -2461,10 +2398,6 @@
         "x-sidebar-summary": "Verify MFA Challenge",
         "description": "Verify a multi-factor authentication (MFA) challenge issued during login. On success, this\ncompletes the authentication flow and returns a JWT token that can be used to authenticate\nsubsequent requests.\n",
         "x-authenticated": false,
-        "externalDocs": {
-          "description": "Learn more about MFA in Medusa",
-          "url": "https://docs.medusajs.com/resources/commerce-modules/auth/mfa"
-        },
         "parameters": [
           {
             "name": "id",
@@ -2515,7 +2448,7 @@
           }
         ],
         "tags": [
-          "Multi-Factor Authentication (MFA) Factors"
+          "Auth"
         ],
         "responses": {
           "200": {
@@ -2564,7 +2497,7 @@
           }
         ],
         "tags": [
-          "Multi-Factor Authentication (MFA) Factors"
+          "Auth"
         ],
         "responses": {
           "200": {
@@ -2597,10 +2530,6 @@
         "x-sidebar-summary": "Start MFA Factor Enrollment",
         "description": "Start the enrollment of a new multi-factor authentication (MFA) factor for the authenticated\nuser. The response contains the factor along with provider-specific setup data (such as a\nsecret and an `otpauth_url` for TOTP) that can be used to display a QR code. The factor must\nthen be verified via the verify endpoint before it can be used.\n",
         "x-authenticated": true,
-        "externalDocs": {
-          "description": "Learn more about MFA in Medusa",
-          "url": "https://docs.medusajs.com/resources/commerce-modules/auth/mfa"
-        },
         "parameters": [],
         "requestBody": {
           "content": {
@@ -2649,7 +2578,7 @@
           }
         ],
         "tags": [
-          "Multi-Factor Authentication (MFA) Factors"
+          "Auth"
         ],
         "responses": {
           "200": {
@@ -2730,7 +2659,7 @@
           }
         ],
         "tags": [
-          "Multi-Factor Authentication (MFA) Factors"
+          "Auth"
         ],
         "responses": {
           "200": {
@@ -2765,10 +2694,6 @@
         "x-sidebar-summary": "Verify and Enable MFA Factor",
         "description": "Verify a pending multi-factor authentication (MFA) factor by submitting a code generated from\nit. A successful verification enables the factor, after which it can be used to verify MFA\nchallenges during login.\n",
         "x-authenticated": true,
-        "externalDocs": {
-          "description": "Learn more about MFA in Medusa",
-          "url": "https://docs.medusajs.com/resources/commerce-modules/auth/mfa"
-        },
         "parameters": [
           {
             "name": "id",
@@ -2813,7 +2738,7 @@
           }
         ],
         "tags": [
-          "Multi-Factor Authentication (MFA) Factors"
+          "Auth"
         ],
         "responses": {
           "200": {
@@ -2848,10 +2773,6 @@
         "x-sidebar-summary": "Generate MFA Recovery Codes",
         "description": "Generate a new set of single-use recovery codes for the authenticated user. Recovery codes can\nbe used to verify MFA challenges when the user does not have access to their primary MFA\nfactor. Generating new codes replaces any previously issued codes, so they should be stored in\na safe place. At least one enabled MFA factor is required to generate recovery codes.\n",
         "x-authenticated": true,
-        "externalDocs": {
-          "description": "Learn more about MFA in Medusa",
-          "url": "https://docs.medusajs.com/resources/commerce-modules/auth/mfa"
-        },
         "parameters": [],
         "requestBody": {
           "content": {
@@ -2883,7 +2804,7 @@
           }
         ],
         "tags": [
-          "Multi-Factor Authentication (MFA) Factors"
+          "Auth"
         ],
         "responses": {
           "200": {
@@ -3080,172 +3001,6 @@
             "$ref": "#/components/responses/500_error"
           }
         }
-      }
-    },
-    "/auth/verification/confirm": {
-      "post": {
-        "operationId": "PostVerificationConfirm",
-        "summary": "Confirm Customer Verification",
-        "x-sidebar-summary": "Confirm Verification",
-        "description": "Confirm a verification token of the customer. This API route is used as the last step part of the email verification flow. It can also be used for custom flows, such as phone number verification. Once successfully verified, a customer can complete their registration and log into their account.",
-        "externalDocs": {
-          "url": "https://docs.medusajs.com/resources/storefront-development/customers/verify-account",
-          "description": "Storefront guide: Register Customer with Email Verification."
-        },
-        "x-authenticated": false,
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "description": "The verification details",
-                "required": [
-                  "code"
-                ],
-                "properties": {
-                  "code": {
-                    "type": "string",
-                    "title": "code",
-                    "description": "The token, OTP, or any other code that was sent to the customer for verification."
-                  },
-                  "code_provider": {
-                    "type": "string",
-                    "title": "code_provider",
-                    "description": "The provider to use for verification. This is optional. When not provided, the default `token` provider is used."
-                  }
-                }
-              }
-            }
-          }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "Shell",
-            "label": "cURL",
-            "source": "curl -X POST '{backend_url}/auth/verification/confirm' \\\n-H 'Content-Type: application/json' \\\n--data-raw '{\n  \"code\": \"{value}\"\n}'"
-          }
-        ],
-        "tags": [
-          "Verification"
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          },
-          "400": {
-            "$ref": "#/components/responses/400_error"
-          },
-          "401": {
-            "$ref": "#/components/responses/unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/not_found_error"
-          },
-          "409": {
-            "$ref": "#/components/responses/invalid_state_error"
-          },
-          "422": {
-            "$ref": "#/components/responses/invalid_request_error"
-          },
-          "500": {
-            "$ref": "#/components/responses/500_error"
-          }
-        },
-        "x-since": "2.16.0"
-      }
-    },
-    "/auth/verification/request": {
-      "post": {
-        "operationId": "PostVerificationRequest",
-        "summary": "Request Customer Verification",
-        "x-sidebar-summary": "Request Verification",
-        "description": "Create a verification request for a customer. This API route is used when a customer logs in, but their email requires verification. It can also be used for custom flows, such as phone number verification. Once successfully requested, a verification code will be generated and an `auth.verification_requested` event will be emitted. You can listen to this event and decide how to deliver the code to the customer.",
-        "externalDocs": {
-          "url": "https://docs.medusajs.com/resources/storefront-development/customers/verify-account",
-          "description": "Storefront guide: Register Customer with Email Verification."
-        },
-        "x-authenticated": false,
-        "parameters": [],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "description": "The verification request details",
-                "required": [
-                  "entity_id",
-                  "entity_type",
-                  "code_provider"
-                ],
-                "properties": {
-                  "entity_id": {
-                    "type": "string",
-                    "title": "entity_id",
-                    "description": "The identifier of the user or customer. For example, an email address."
-                  },
-                  "entity_type": {
-                    "type": "string",
-                    "title": "entity_type",
-                    "description": "The type of identity being verified. For example, \"email\" or \"phone_number\"."
-                  },
-                  "code_provider": {
-                    "type": "string",
-                    "title": "code_provider",
-                    "description": "The provider to use to create the verification token or code. By default, Medusa provides a `token` provider that generates a random token. You can also implement your own provider to generate a code or OTP."
-                  },
-                  "metadata": {
-                    "type": "object",
-                    "description": "Custom key-value pairs that can be passed to the verification request. This is optional and can be used to store additional information related to the verification request."
-                  }
-                }
-              }
-            }
-          }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "Shell",
-            "label": "cURL",
-            "source": "curl -X POST '{backend_url}/auth/verification/request' \\\n-H 'Content-Type: application/json' \\\n--data-raw '{\n  \"entity_id\": \"customer@example.com\",\n  \"entity_type\": \"email\",\n  \"code_provider\": \"token\"\n}'"
-          }
-        ],
-        "tags": [
-          "Verification"
-        ],
-        "responses": {
-          "201": {
-            "description": "OK"
-          },
-          "400": {
-            "$ref": "#/components/responses/400_error"
-          },
-          "401": {
-            "$ref": "#/components/responses/unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/not_found_error"
-          },
-          "409": {
-            "$ref": "#/components/responses/invalid_state_error"
-          },
-          "422": {
-            "$ref": "#/components/responses/invalid_request_error"
-          },
-          "500": {
-            "$ref": "#/components/responses/500_error"
-          }
-        },
-        "x-workflow": "requestVerificationWorkflow",
-        "x-events": [
-          {
-            "name": "auth.verification_requested",
-            "payload": "```ts\n{\n  entity_id, // The identifier of the user or customer. For example, an email address.\n  actor_type, // The type of actor. For example, \"customer\", \"user\", or custom.\n  provider, // The auth provider that requested verification.\n  auth_identity_id, // The ID of the auth identity being verified.\n  provider_identity_id, // The ID of the provider identity being verified.\n  code, // The generated verification code.\n  expires_at, // The code expiry date.\n  metadata, // Optional custom metadata passed from the request.\n}\n```",
-            "description": "Emitted when a verification code is generated. You can listen to\nthis event and decide how to deliver the code to the user or customer.",
-            "deprecated": false,
-            "since": "2.15.5"
-          }
-        ],
-        "x-since": "2.16.0"
       }
     },
     "/store/carts": {
@@ -4136,8 +3891,8 @@
         },
         "x-badges": [
           {
-            "text": "Plugin",
-            "description": "This API route is only available through the [Loyalty Plugin](https://docs.medusajs.com/resources/commerce-modules/loyalty).\n"
+            "text": "Cloud",
+            "description": "This API route is only available in [Medusa Cloud](https://docs.medusajs.com/cloud/loyalty-plugin).\n"
           }
         ]
       },
@@ -4250,8 +4005,8 @@
         },
         "x-badges": [
           {
-            "text": "Plugin",
-            "description": "This API route is only available through the [Loyalty Plugin](https://docs.medusajs.com/resources/commerce-modules/loyalty).\n"
+            "text": "Cloud",
+            "description": "This API route is only available in [Medusa Cloud](https://docs.medusajs.com/cloud/loyalty-plugin).\n"
           }
         ]
       }
@@ -4742,6 +4497,99 @@
                           "type": "boolean",
                           "title": "deleted",
                           "description": "Whether the item was deleted."
+                        },
+                        "parent": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "currency_code": {
+                              "type": "string"
+                            },
+                            "email": {},
+                            "locale": {
+                              "nullable": true
+                            },
+                            "region_id": {
+                              "type": "string"
+                            },
+                            "created_at": {
+                              "type": "string"
+                            },
+                            "updated_at": {
+                              "type": "string"
+                            },
+                            "completed_at": {
+                              "nullable": true
+                            },
+                            "total": {
+                              "type": "integer"
+                            },
+                            "subtotal": {
+                              "type": "integer"
+                            },
+                            "tax_total": {
+                              "type": "integer"
+                            },
+                            "discount_total": {
+                              "type": "integer"
+                            },
+                            "discount_subtotal": {
+                              "type": "integer"
+                            },
+                            "discount_tax_total": {
+                              "type": "integer"
+                            },
+                            "original_total": {
+                              "type": "integer"
+                            },
+                            "original_tax_total": {
+                              "type": "integer"
+                            },
+                            "item_total": {
+                              "type": "integer"
+                            },
+                            "item_subtotal": {
+                              "type": "integer"
+                            },
+                            "item_tax_total": {
+                              "type": "integer"
+                            },
+                            "item_discount_total": {
+                              "type": "integer"
+                            },
+                            "original_item_total": {
+                              "type": "integer"
+                            },
+                            "original_item_subtotal": {
+                              "type": "integer"
+                            },
+                            "original_item_tax_total": {
+                              "type": "integer"
+                            },
+                            "shipping_total": {
+                              "type": "integer"
+                            },
+                            "shipping_subtotal": {
+                              "type": "integer"
+                            },
+                            "shipping_tax_total": {
+                              "type": "integer"
+                            },
+                            "shipping_discount_total": {
+                              "type": "integer"
+                            },
+                            "original_shipping_tax_total": {
+                              "type": "integer"
+                            },
+                            "original_shipping_subtotal": {
+                              "type": "integer"
+                            },
+                            "original_shipping_total": {
+                              "type": "integer"
+                            }
+                          }
                         }
                       }
                     },
@@ -4752,6 +4600,15 @@
                         "parent": {
                           "$ref": "#/components/schemas/StoreCart",
                           "description": "The cart that the item belonged to."
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "object": {
+                          "type": "string"
+                        },
+                        "deleted": {
+                          "type": "boolean"
                         }
                       }
                     }
@@ -5145,44 +5002,38 @@
           "content": {
             "application/json": {
               "schema": {
-                "oneOf": [
+                "allOf": [
                   {
-                    "allOf": [
-                      {
-                        "$ref": "#/components/schemas/StoreAddCartShippingMethodsBase"
+                    "type": "object",
+                    "description": "The shipping method's details.",
+                    "required": [
+                      "option_id"
+                    ],
+                    "properties": {
+                      "option_id": {
+                        "type": "string",
+                        "title": "option_id",
+                        "description": "The ID of the shipping option to create the shipping method from."
                       },
-                      {
+                      "data": {
                         "type": "object",
-                        "description": "The shipping method's details.",
-                        "properties": {
-                          "additional_data": {
-                            "type": "object",
-                            "description": "Pass additional custom data to the API route. This data is passed to the underlying workflow under the `additional_data` parameter."
-                          }
+                        "description": "Any additional data relevant for the third-party fulfillment provider to process the shipment.",
+                        "externalDocs": {
+                          "url": "https://docs.medusajs.com/resources/storefront-development/checkout/shipping#data-request-body-parameter",
+                          "description": "Learn more about the data parameter."
                         }
                       }
-                    ]
+                    }
                   },
                   {
-                    "allOf": [
-                      {
-                        "type": "array",
-                        "description": "An array of shipping methods to add to the cart.",
-                        "items": {
-                          "$ref": "#/components/schemas/StoreAddCartShippingMethodsBase"
-                        }
-                      },
-                      {
+                    "type": "object",
+                    "description": "The shipping method's details.",
+                    "properties": {
+                      "additional_data": {
                         "type": "object",
-                        "description": "The shipping method's details.",
-                        "properties": {
-                          "additional_data": {
-                            "type": "object",
-                            "description": "Pass additional custom data to the API route. This data is passed to the underlying workflow under the `additional_data` parameter."
-                          }
-                        }
+                        "description": "Pass additional custom data to the API route. This data is passed to the underlying workflow under the `additional_data` parameter."
                       }
-                    ]
+                    }
                   }
                 ],
                 "description": "The shipping method's details."
@@ -5356,8 +5207,8 @@
         },
         "x-badges": [
           {
-            "text": "Plugin",
-            "description": "This API route is only available through the [Loyalty Plugin](https://docs.medusajs.com/resources/commerce-modules/loyalty).\n"
+            "text": "Cloud",
+            "description": "This API route is only available in [Medusa Cloud](https://docs.medusajs.com/cloud/loyalty-plugin).\n"
           }
         ]
       }
@@ -8260,8 +8111,8 @@
         },
         "x-badges": [
           {
-            "text": "Plugin",
-            "description": "This API route is only available through the [Loyalty Plugin](https://docs.medusajs.com/resources/commerce-modules/loyalty).\n"
+            "text": "Cloud",
+            "description": "This API route is only available in [Medusa Cloud](https://docs.medusajs.com/cloud/loyalty-plugin).\n"
           }
         ]
       }
@@ -8629,6 +8480,86 @@
                           "type": "number",
                           "title": "count",
                           "description": "The total number of items."
+                        },
+                        "orders": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "summary": {
+                                "type": "object",
+                                "properties": {
+                                  "paid_total": {
+                                    "type": "integer"
+                                  },
+                                  "raw_paid_total": {},
+                                  "refunded_total": {
+                                    "type": "integer"
+                                  },
+                                  "accounting_total": {},
+                                  "credit_line_total": {
+                                    "type": "integer"
+                                  },
+                                  "transaction_total": {
+                                    "type": "integer"
+                                  },
+                                  "pending_difference": {
+                                    "type": "integer"
+                                  },
+                                  "raw_refunded_total": {},
+                                  "current_order_total": {
+                                    "type": "integer"
+                                  },
+                                  "original_order_total": {
+                                    "type": "integer"
+                                  },
+                                  "raw_accounting_total": {},
+                                  "raw_credit_line_total": {},
+                                  "raw_transaction_total": {},
+                                  "raw_pending_difference": {},
+                                  "raw_current_order_total": {},
+                                  "raw_original_order_total": {}
+                                }
+                              },
+                              "display_id": {
+                                "type": "integer"
+                              },
+                              "custom_display_id": {
+                                "nullable": true
+                              },
+                              "total": {
+                                "type": "integer"
+                              },
+                              "currency_code": {
+                                "type": "string"
+                              },
+                              "metadata": {
+                                "nullable": true
+                              },
+                              "created_at": {
+                                "type": "string"
+                              },
+                              "updated_at": {
+                                "type": "string"
+                              },
+                              "version": {
+                                "type": "integer"
+                              },
+                              "items": {
+                                "type": "array"
+                              },
+                              "payment_status": {},
+                              "fulfillment_status": {
+                                "type": "string"
+                              }
+                            }
+                          }
                         }
                       }
                     },
@@ -8645,6 +8576,15 @@
                           "items": {
                             "$ref": "#/components/schemas/StoreOrder"
                           }
+                        },
+                        "count": {
+                          "type": "integer"
+                        },
+                        "offset": {
+                          "type": "integer"
+                        },
+                        "limit": {
+                          "type": "integer"
                         }
                       }
                     }
@@ -9756,7 +9696,8 @@
                           "type": "number",
                           "title": "count",
                           "description": "The total number of items."
-                        }
+                        },
+                        "payment_providers": {}
                       }
                     },
                     {
@@ -9772,6 +9713,15 @@
                           "items": {
                             "$ref": "#/components/schemas/StorePaymentProvider"
                           }
+                        },
+                        "count": {
+                          "type": "integer"
+                        },
+                        "offset": {
+                          "type": "integer"
+                        },
+                        "limit": {
+                          "type": "integer"
                         }
                       }
                     }
@@ -14720,6 +14670,16 @@
               }
             }
           },
+          "304": {
+            "description": "Not Modified. The runtime may still capture the response representation before transport.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreProductListResponse"
+                }
+              }
+            }
+          },
           "400": {
             "$ref": "#/components/responses/400_error"
           },
@@ -15185,6 +15145,38 @@
                           "type": "number",
                           "title": "count",
                           "description": "The total number of items."
+                        },
+                        "regions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "currency_code": {
+                                "type": "string"
+                              },
+                              "created_at": {
+                                "type": "string"
+                              },
+                              "updated_at": {
+                                "type": "string"
+                              },
+                              "deleted_at": {
+                                "nullable": true
+                              },
+                              "metadata": {
+                                "nullable": true
+                              },
+                              "countries": {
+                                "type": "array"
+                              }
+                            }
+                          }
                         }
                       }
                     },
@@ -15201,6 +15193,15 @@
                           "items": {
                             "$ref": "#/components/schemas/StoreRegion"
                           }
+                        },
+                        "count": {
+                          "type": "integer"
+                        },
+                        "offset": {
+                          "type": "integer"
+                        },
+                        "limit": {
+                          "type": "integer"
                         }
                       }
                     }
@@ -16896,10 +16897,38 @@
         ],
         "x-badges": [
           {
-            "text": "Plugin",
-            "description": "This API route is only available through the [Loyalty Plugin](https://docs.medusajs.com/resources/commerce-modules/loyalty).\n"
+            "text": "Cloud",
+            "description": "This API route is only available in [Medusa Cloud](https://docs.medusajs.com/cloud/loyalty-plugin).\n"
           }
         ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "GetHealth",
+        "summary": "Check application health",
+        "responses": {
+          "200": {
+            "description": "Application is healthy.",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Health response was not modified.",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -16924,47 +16953,6 @@
       }
     },
     "schemas": {
-      "Error": {
-        "title": "Response Error",
-        "type": "object",
-        "properties": {
-          "code": {
-            "type": "string",
-            "description": "A slug code to indicate the type of the error.",
-            "enum": [
-              "invalid_state_error",
-              "invalid_request_error",
-              "api_error",
-              "unknown_error"
-            ]
-          },
-          "message": {
-            "type": "string",
-            "description": "Description of the error that occurred.",
-            "example": "first_name must be a string"
-          },
-          "type": {
-            "type": "string",
-            "description": "A slug indicating the type of the error.",
-            "enum": [
-              "QueryRunnerAlreadyReleasedError",
-              "TransactionAlreadyStartedError",
-              "TransactionNotStartedError",
-              "conflict",
-              "unauthorized",
-              "payment_authorization_error",
-              "duplicate_error",
-              "not_allowed",
-              "invalid_data",
-              "not_found",
-              "database_error",
-              "unexpected_state",
-              "invalid_argument",
-              "unknown_error"
-            ]
-          }
-        }
-      },
       "AuthResponse": {
         "type": "object",
         "description": "The authentication's details.",
@@ -16992,6 +16980,48 @@
             "type": "string",
             "title": "location",
             "description": "The location to redirect the user to for further authentication with the third-party provider."
+          }
+        }
+      },
+      "Error": {
+        "title": "Response Error",
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "A slug code to indicate the type of the error.",
+            "enum": [
+              "invalid_state_error",
+              "invalid_request_error",
+              "api_error",
+              "unknown_error",
+              "insufficient_inventory"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "Description of the error that occurred.",
+            "example": "first_name must be a string"
+          },
+          "type": {
+            "type": "string",
+            "description": "A slug indicating the type of the error.",
+            "enum": [
+              "QueryRunnerAlreadyReleasedError",
+              "TransactionAlreadyStartedError",
+              "TransactionNotStartedError",
+              "conflict",
+              "unauthorized",
+              "payment_authorization_error",
+              "duplicate_error",
+              "not_allowed",
+              "invalid_data",
+              "not_found",
+              "database_error",
+              "unexpected_state",
+              "invalid_argument",
+              "unknown_error"
+            ]
           }
         }
       },
@@ -17133,9 +17163,7 @@
           "email",
           "company_name",
           "first_name",
-          "last_name",
-          "default_billing_address_id",
-          "default_shipping_address_id"
+          "last_name"
         ],
         "properties": {
           "id": {
@@ -17162,17 +17190,20 @@
           "company_name": {
             "type": "string",
             "title": "company_name",
-            "description": "The customer's company name."
+            "description": "The customer's company name.",
+            "nullable": true
           },
           "first_name": {
             "type": "string",
             "title": "first_name",
-            "description": "The customer's first name."
+            "description": "The customer's first name.",
+            "nullable": true
           },
           "last_name": {
             "type": "string",
             "title": "last_name",
-            "description": "The customer's last name."
+            "description": "The customer's last name.",
+            "nullable": true
           },
           "addresses": {
             "type": "array",
@@ -17184,7 +17215,8 @@
           "phone": {
             "type": "string",
             "title": "phone",
-            "description": "The customer's phone."
+            "description": "The customer's phone.",
+            "nullable": true
           },
           "metadata": {
             "type": "object",
@@ -17192,7 +17224,8 @@
             "externalDocs": {
               "url": "https://docs.medusajs.com/api/store#manage-metadata",
               "description": "Learn how to manage metadata"
-            }
+            },
+            "nullable": true
           },
           "created_at": {
             "type": "string",
@@ -17210,8 +17243,10 @@
             "type": "string",
             "format": "date-time",
             "title": "deleted_at",
-            "description": "The date the customer was deleted."
-          }
+            "description": "The date the customer was deleted.",
+            "nullable": true
+          },
+          "has_account": {}
         }
       },
       "AuthStoreSessionResponse": {
@@ -17408,9 +17443,10 @@
             "title": "option_id",
             "description": "The ID of the option this value belongs to."
           },
-          "metadata": {
-            "type": "object",
-            "description": "The value's metadata, can hold custom key-value pairs.",
+        "metadata": {
+          "type": "object",
+          "nullable": true,
+          "description": "The value's metadata, can hold custom key-value pairs.",
             "externalDocs": {
               "url": "https://docs.medusajs.com/api/store#manage-metadata",
               "description": "Learn how to manage metadata"
@@ -17428,9 +17464,10 @@
             "title": "updated_at",
             "description": "The date the value was updated."
           },
-          "deleted_at": {
-            "type": "string",
-            "format": "date-time",
+        "deleted_at": {
+          "type": "string",
+          "nullable": true,
+          "format": "date-time",
             "title": "deleted_at",
             "description": "The date the value was deleted."
           }
@@ -17472,7 +17509,8 @@
             "externalDocs": {
               "url": "https://docs.medusajs.com/api/store#manage-metadata",
               "description": "Learn how to manage metadata"
-            }
+            },
+            "nullable": true
           },
           "created_at": {
             "type": "string",
@@ -17490,7 +17528,8 @@
             "type": "string",
             "format": "date-time",
             "title": "deleted_at",
-            "description": "The date the product option was deleted."
+            "description": "The date the product option was deleted.",
+            "nullable": true
           }
         },
         "required": [
@@ -17653,7 +17692,8 @@
           "length": {
             "type": "number",
             "title": "length",
-            "description": "The variant's length."
+            "description": "The variant's length.",
+            "nullable": true
           },
           "title": {
             "type": "string",
@@ -17666,7 +17706,8 @@
             "externalDocs": {
               "url": "https://docs.medusajs.com/api/store#manage-metadata",
               "description": "Learn how to manage metadata"
-            }
+            },
+            "nullable": true
           },
           "id": {
             "type": "string",
@@ -17676,37 +17717,44 @@
           "width": {
             "type": "number",
             "title": "width",
-            "description": "The variant's width."
+            "description": "The variant's width.",
+            "nullable": true
           },
           "weight": {
             "type": "number",
             "title": "weight",
-            "description": "The variant's weight."
+            "description": "The variant's weight.",
+            "nullable": true
           },
           "height": {
             "type": "number",
             "title": "height",
-            "description": "The variant's height."
+            "description": "The variant's height.",
+            "nullable": true
           },
           "origin_country": {
             "type": "string",
             "title": "origin_country",
-            "description": "The variant's origin country."
+            "description": "The variant's origin country.",
+            "nullable": true
           },
           "hs_code": {
             "type": "string",
             "title": "hs_code",
-            "description": "The variant's HS code."
+            "description": "The variant's HS code.",
+            "nullable": true
           },
           "mid_code": {
             "type": "string",
             "title": "mid_code",
-            "description": "The variant's MID code."
+            "description": "The variant's MID code.",
+            "nullable": true
           },
           "material": {
             "type": "string",
             "title": "material",
-            "description": "The variant's material."
+            "description": "The variant's material.",
+            "nullable": true
           },
           "created_at": {
             "type": "string",
@@ -17724,7 +17772,8 @@
             "type": "string",
             "format": "date-time",
             "title": "deleted_at",
-            "description": "The date the variant was deleted."
+            "description": "The date the variant was deleted.",
+            "nullable": true
           },
           "product_id": {
             "type": "string",
@@ -17739,17 +17788,20 @@
           "barcode": {
             "type": "string",
             "title": "barcode",
-            "description": "The variant's barcode."
+            "description": "The variant's barcode.",
+            "nullable": true
           },
           "ean": {
             "type": "string",
             "title": "ean",
-            "description": "The variant's EAN."
+            "description": "The variant's EAN.",
+            "nullable": true
           },
           "upc": {
             "type": "string",
             "title": "upc",
-            "description": "The variant's UPC."
+            "description": "The variant's UPC.",
+            "nullable": true
           },
           "allow_backorder": {
             "type": "boolean",
@@ -17785,7 +17837,8 @@
           "thumbnail": {
             "type": "string",
             "title": "thumbnail",
-            "description": "The variant's thumbnail."
+            "description": "The variant's thumbnail.",
+            "nullable": true
           },
           "images": {
             "type": "array",
@@ -17978,7 +18031,8 @@
             "type": "string",
             "format": "date-time",
             "title": "deleted_at",
-            "description": "The date the image was deleted."
+            "description": "The date the image was deleted.",
+            "nullable": true
           },
           "metadata": {
             "type": "object",
@@ -17986,12 +18040,16 @@
             "externalDocs": {
               "url": "https://docs.medusajs.com/api/store#manage-metadata",
               "description": "Learn how to manage metadata"
-            }
+            },
+            "nullable": true
           },
           "rank": {
             "type": "number",
             "title": "rank",
             "description": "The image's rank among its sibling images"
+          },
+          "product_id": {
+            "type": "string"
           }
         }
       },
@@ -18005,7 +18063,6 @@
           "images",
           "length",
           "title",
-          "status",
           "description",
           "id",
           "created_at",
@@ -18023,25 +18080,35 @@
           "material",
           "collection_id",
           "type_id",
-          "discountable",
-          "external_id",
-          "deleted_at"
+          "discountable"
         ],
         "properties": {
           "categories": {
             "type": "array",
             "description": "The product's categories.",
             "items": {
-              "type": "object"
+              "type": "object",
+              "properties": {
+                "is_internal": {
+                  "type": "boolean"
+                }
+              }
             }
           },
           "type": {
-            "$ref": "#/components/schemas/StoreProductType"
+            "type": "object",
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StoreProductType"
+              }
+            ]
           },
           "length": {
             "type": "number",
             "title": "length",
-            "description": "The product's length."
+            "description": "The product's length.",
+            "nullable": true
           },
           "title": {
             "type": "string",
@@ -18068,7 +18135,8 @@
           "description": {
             "type": "string",
             "title": "description",
-            "description": "The product's description."
+            "description": "The product's description.",
+            "nullable": true
           },
           "id": {
             "type": "string",
@@ -18110,7 +18178,8 @@
           "subtitle": {
             "type": "string",
             "title": "subtitle",
-            "description": "The product's subtitle."
+            "description": "The product's subtitle.",
+            "nullable": true
           },
           "is_giftcard": {
             "type": "boolean",
@@ -18120,55 +18189,71 @@
           "thumbnail": {
             "type": "string",
             "title": "thumbnail",
-            "description": "The product's thumbnail URL."
+            "description": "The product's thumbnail URL.",
+            "nullable": true
           },
           "width": {
             "type": "number",
             "title": "width",
-            "description": "The product's width."
+            "description": "The product's width.",
+            "nullable": true
           },
           "weight": {
             "type": "number",
             "title": "weight",
-            "description": "The product's weight."
+            "description": "The product's weight.",
+            "nullable": true
           },
           "height": {
             "type": "number",
             "title": "height",
-            "description": "The product's height."
+            "description": "The product's height.",
+            "nullable": true
           },
           "origin_country": {
             "type": "string",
             "title": "origin_country",
-            "description": "The product's origin country."
+            "description": "The product's origin country.",
+            "nullable": true
           },
           "hs_code": {
             "type": "string",
             "title": "hs_code",
-            "description": "The product's HS code."
+            "description": "The product's HS code.",
+            "nullable": true
           },
           "mid_code": {
             "type": "string",
             "title": "mid_code",
-            "description": "The product's MID code."
+            "description": "The product's MID code.",
+            "nullable": true
           },
           "material": {
             "type": "string",
             "title": "material",
-            "description": "The product's material."
+            "description": "The product's material.",
+            "nullable": true
           },
           "collection": {
-            "$ref": "#/components/schemas/StoreCollection"
+            "type": "object",
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StoreCollection"
+              }
+            ]
           },
           "collection_id": {
             "type": "string",
             "title": "collection_id",
-            "description": "The ID of the collection that the product belongs to."
+            "description": "The ID of the collection that the product belongs to.",
+            "nullable": true
           },
           "type_id": {
             "type": "string",
             "title": "type_id",
-            "description": "The ID of the product's type."
+            "description": "The ID of the product's type.",
+            "nullable": true
           },
           "tags": {
             "type": "array",
@@ -18720,10 +18805,7 @@
             "title": "display_name",
             "description": "The country's display name."
           }
-        },
-        "required": [
-          "id"
-        ]
+      }
       },
       "AdminPaymentProvider": {
         "type": "object",
@@ -18797,7 +18879,8 @@
             "externalDocs": {
               "url": "https://docs.medusajs.com/api/store#manage-metadata",
               "description": "Learn how to manage metadata"
-            }
+            },
+            "nullable": true
           },
           "created_at": {
             "type": "string",
@@ -18810,6 +18893,9 @@
             "format": "date-time",
             "title": "updated_at",
             "description": "The date the region was updated."
+          },
+          "deleted_at": {
+            "nullable": true
           }
         }
       },
@@ -19849,7 +19935,20 @@
             "type": "string",
             "title": "completed_at",
             "description": "The date the cart was completed.",
-            "format": "date-time"
+            "format": "date-time",
+            "nullable": true
+          },
+          "locale": {
+            "nullable": true
+          },
+          "discount_subtotal": {
+            "type": "integer"
+          },
+          "item_discount_total": {
+            "type": "integer"
+          },
+          "shipping_discount_total": {
+            "type": "integer"
           }
         }
       },
@@ -21358,6 +21457,87 @@
             "type": "number",
             "title": "accounting_total",
             "description": "The order's total without the credit-line total."
+          },
+          "raw_paid_total": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "precision": {
+                "type": "integer"
+              }
+            }
+          },
+          "credit_line_total": {
+            "type": "integer"
+          },
+          "raw_refunded_total": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "precision": {
+                "type": "integer"
+              }
+            }
+          },
+          "raw_accounting_total": {},
+          "raw_credit_line_total": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "precision": {
+                "type": "integer"
+              }
+            }
+          },
+          "raw_transaction_total": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "precision": {
+                "type": "integer"
+              }
+            }
+          },
+          "raw_pending_difference": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "precision": {
+                "type": "integer"
+              }
+            }
+          },
+          "raw_current_order_total": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "precision": {
+                "type": "integer"
+              }
+            }
+          },
+          "raw_original_order_total": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "precision": {
+                "type": "integer"
+              }
+            }
           }
         }
       },
@@ -21440,12 +21620,7 @@
         "x-schemaName": "StoreOrder",
         "required": [
           "items",
-          "shipping_methods",
           "id",
-          "region_id",
-          "customer_id",
-          "sales_channel_id",
-          "email",
           "currency_code",
           "status",
           "payment_status",
@@ -21453,31 +21628,7 @@
           "summary",
           "created_at",
           "updated_at",
-          "original_item_total",
-          "original_item_subtotal",
-          "original_item_tax_total",
-          "item_total",
-          "item_subtotal",
-          "item_tax_total",
-          "item_discount_total",
-          "original_total",
-          "original_subtotal",
-          "original_tax_total",
-          "total",
-          "subtotal",
-          "tax_total",
-          "discount_total",
-          "discount_tax_total",
-          "gift_card_total",
-          "gift_card_tax_total",
-          "shipping_total",
-          "shipping_subtotal",
-          "shipping_tax_total",
-          "shipping_discount_total",
-          "original_shipping_total",
-          "original_shipping_subtotal",
-          "original_shipping_tax_total",
-          "credit_line_total"
+          "total"
         ],
         "properties": {
           "id": {
@@ -21590,7 +21741,8 @@
             "externalDocs": {
               "url": "https://docs.medusajs.com/api/store#manage-metadata",
               "description": "Learn how to manage metadata"
-            }
+            },
+            "nullable": true
           },
           "created_at": {
             "type": "string",
@@ -21750,7 +21902,14 @@
             "description": "The custom display ID of the order.",
             "externalDocs": {
               "url": "https://docs.medusajs.com/resources/commerce-modules/order/custom-display-id"
-            }
+            },
+            "nullable": true
+          },
+          "discount_subtotal": {
+            "type": "integer"
+          },
+          "version": {
+            "type": "integer"
           }
         }
       },
@@ -21818,29 +21977,6 @@
               "type": "string",
               "title": "promo_codes",
               "description": "A promotion code to remove from the cart."
-            }
-          }
-        }
-      },
-      "StoreAddCartShippingMethodsBase": {
-        "type": "object",
-        "description": "The shipping method's details.",
-        "x-schemaName": "StoreAddCartShippingMethodsBase",
-        "required": [
-          "option_id"
-        ],
-        "properties": {
-          "option_id": {
-            "type": "string",
-            "title": "option_id",
-            "description": "The ID of the shipping option to add to the cart."
-          },
-          "data": {
-            "type": "object",
-            "description": "Any additional data relevant for the third-party fulfillment provider to process the shipment.",
-            "externalDocs": {
-              "url": "https://docs.medusajs.com/resources/storefront-development/checkout/shipping#data-request-body-parameter",
-              "description": "Learn more about the data parameter."
             }
           }
         }
@@ -22466,8 +22602,7 @@
           "parent_category",
           "category_children",
           "created_at",
-          "updated_at",
-          "deleted_at"
+          "updated_at"
         ],
         "properties": {
           "id": {
@@ -22498,10 +22633,12 @@
           "parent_category_id": {
             "type": "string",
             "title": "parent_category_id",
-            "description": "The ID of the category's parent."
+            "description": "The ID of the category's parent.",
+            "nullable": true
           },
           "parent_category": {
-            "type": "object"
+            "type": "object",
+            "nullable": true
           },
           "category_children": {
             "type": "array",
@@ -22516,7 +22653,8 @@
             "externalDocs": {
               "url": "https://docs.medusajs.com/api/store#manage-metadata",
               "description": "Learn how to manage metadata"
-            }
+            },
+            "nullable": true
           },
           "created_at": {
             "type": "string",
@@ -22542,6 +22680,9 @@
             "items": {
               "$ref": "#/components/schemas/StoreProduct"
             }
+          },
+          "external_id": {
+            "nullable": true
           }
         }
       },
@@ -22741,6 +22882,93 @@
                 "title": "estimate_count",
                 "description": "The estimated count retrieved from the PostgreSQL query planner, which may be inaccurate.",
                 "x-featureFlag": "index_engine"
+              },
+              "products": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "subtitle": {
+                      "nullable": true
+                    },
+                    "description": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "handle": {
+                      "type": "string"
+                    },
+                    "is_giftcard": {},
+                    "discountable": {
+                      "type": "boolean"
+                    },
+                    "thumbnail": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "collection_id": {
+                      "nullable": true
+                    },
+                    "type_id": {
+                      "nullable": true
+                    },
+                    "weight": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "length": {
+                      "nullable": true
+                    },
+                    "height": {
+                      "nullable": true
+                    },
+                    "width": {
+                      "nullable": true
+                    },
+                    "hs_code": {
+                      "nullable": true
+                    },
+                    "origin_country": {
+                      "nullable": true
+                    },
+                    "mid_code": {
+                      "nullable": true
+                    },
+                    "material": {
+                      "nullable": true
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    },
+                    "variants": {
+                      "type": "array"
+                    },
+                    "type": {
+                      "nullable": true
+                    },
+                    "collection": {
+                      "nullable": true
+                    },
+                    "options": {
+                      "type": "array"
+                    },
+                    "tags": {
+                      "type": "array"
+                    },
+                    "images": {
+                      "type": "array"
+                    }
+                  }
+                }
               }
             }
           },
@@ -22757,6 +22985,15 @@
                 "items": {
                   "$ref": "#/components/schemas/StoreProduct"
                 }
+              },
+              "count": {
+                "type": "integer"
+              },
+              "offset": {
+                "type": "integer"
+              },
+              "limit": {
+                "type": "integer"
               }
             }
           }
@@ -23202,8 +23439,6 @@
           "id",
           "calculated_amount",
           "original_amount",
-          "original_amount_with_tax",
-          "original_amount_without_tax",
           "currency_code"
         ],
         "properties": {
@@ -23348,7 +23583,9 @@
             "type": "number",
             "title": "original_amount_without_tax",
             "description": "The original amount without taxes."
-          }
+          },
+          "raw_calculated_amount": {},
+          "raw_original_amount": {}
         }
       },
       "StoreCartShippingOption": {
@@ -23466,7 +23703,8 @@
             "description": "The shipping option's data, useful for the provider handling fulfillment.",
             "externalDocs": {
               "url": "https://docs.medusajs.com/resources/commerce-modules/fulfillment/shipping-option#data-property"
-            }
+            },
+            "nullable": true
           },
           "prices": {
             "type": "array",
@@ -23482,6 +23720,24 @@
             "type": "boolean",
             "title": "insufficient_inventory",
             "description": "Whether the shipping option's location doesn't have sufficient quantity for any of the cart's items."
+          },
+          "service_zone": {
+            "type": "object",
+            "properties": {
+              "fulfillment_set_id": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "fulfillment_set": {}
+            }
+          },
+          "rules": {
+            "type": "array"
+          },
+          "is_tax_inclusive": {
+            "type": "boolean"
           }
         }
       },
@@ -23657,6 +23913,103 @@
                           }
                         }
                       }
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "price_type": {
+                      "type": "string"
+                    },
+                    "service_zone_id": {
+                      "type": "string"
+                    },
+                    "shipping_profile_id": {
+                      "type": "string"
+                    },
+                    "provider_id": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "nullable": true
+                    },
+                    "type": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "code": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "provider": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "is_enabled": {
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "rules": {
+                      "type": "array"
+                    },
+                    "calculated_price": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "is_calculated_price_price_list": {
+                          "type": "boolean"
+                        },
+                        "is_calculated_price_tax_inclusive": {
+                          "type": "boolean"
+                        },
+                        "calculated_amount": {
+                          "type": "integer"
+                        },
+                        "raw_calculated_amount": {},
+                        "is_original_price_price_list": {
+                          "type": "boolean"
+                        },
+                        "is_original_price_tax_inclusive": {
+                          "type": "boolean"
+                        },
+                        "original_amount": {
+                          "type": "integer"
+                        },
+                        "raw_original_amount": {},
+                        "currency_code": {
+                          "type": "string"
+                        },
+                        "calculated_price": {},
+                        "original_price": {}
+                      }
+                    },
+                    "prices": {
+                      "type": "array"
+                    },
+                    "amount": {
+                      "type": "integer"
+                    },
+                    "is_tax_inclusive": {
+                      "type": "boolean"
+                    },
+                    "insufficient_inventory": {
+                      "type": "boolean"
                     }
                   }
                 }
@@ -23905,13 +24258,11 @@
         }
       },
       "unauthorized": {
-        "description": "User is not authorized. Must log in first",
+        "description": "JSON error returned when the request is not authorized.",
         "content": {
-          "text/plain": {
+          "application/json": {
             "schema": {
-              "type": "string",
-              "default": "Unauthorized",
-              "example": "Unauthorized"
+              "$ref": "#/components/schemas/Error"
             }
           }
         }

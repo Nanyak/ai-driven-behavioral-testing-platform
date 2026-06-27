@@ -29,7 +29,6 @@
     "behavior:install": "npm --prefix services/behavior-engine install",
     "behavior:mine": "npm --prefix services/behavior-engine run mine --",
     "golden:install": "npm --prefix services/golden install",
-    "golden:fetch-base-oas": "npm --prefix services/golden run fetch-base-oas",
     "golden:build-oas": "npm --prefix services/golden run build-oas",
     "golden:test": "npm --prefix services/golden test",
     "script-generator:install": "npm --prefix services/script-generator install",

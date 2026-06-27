@@ -4,9 +4,8 @@
  * Two kinds of coverage here, kept deliberately separate:
  *
  *  - REAL DATA (`buildAugmentedSpec`, reads the committed `openapi/base/`,
- *    the genuine bundled Medusa v2 spec): every one of the 16 real gated
- *    cart/payment-collection operations ALREADY documents a 401 (Medusa's
- *    own `unauthorized` response, a `text/plain` envelope), so building
+ *    the runtime-corrected Medusa 2.15.5 spec): every one of the 16 real gated
+ *    cart/payment-collection operations ALREADY documents a JSON 401, so building
  *    against real data only ever exercises the UNION collision branch —
  *    never the pure-add branch. That's the real spec's actual shape, not a
  *    test gap.
@@ -29,8 +28,48 @@ function check(name: string, fn: () => void): void {
 }
 
 // ---------------------------------------------------------------------------
-// REAL DATA: against the committed openapi/base/store.json (bundled Medusa v2).
+// REAL DATA: against the committed, runtime-corrected Medusa 2.15.5 OAS.
 // ---------------------------------------------------------------------------
+
+check("[real data] is the complete spec pinned to the installed Medusa core release", () => {
+  const { doc: store } = buildAugmentedSpec("store");
+  const { doc: admin } = buildAugmentedSpec("admin");
+  const storeInfo = store.info as typeof store.info & Record<string, string>;
+  const adminInfo = admin.info as typeof admin.info & Record<string, string>;
+
+  assert.equal(storeInfo.version, "2.15.5");
+  assert.equal(adminInfo.version, "2.15.5");
+  assert.equal(storeInfo["x-medusa-api-version"], "2.0.0");
+  assert.equal(adminInfo["x-medusa-api-version"], "2.0.0");
+  assert.equal(storeInfo["x-medusa-core-version"], "2.15.5");
+  assert.equal(adminInfo["x-medusa-core-version"], "2.15.5");
+  assert.equal(storeInfo["x-medusa-runtime-corrected"], true);
+  assert.equal(adminInfo["x-medusa-runtime-corrected"], true);
+  assert.ok(Object.keys(store.paths).length >= 50, "expected the complete Store API");
+  assert.ok(Object.keys(admin.paths).length >= 250, "expected the complete Admin API");
+});
+
+check("[real data] carries the verified 2.15.5 runtime corrections", () => {
+  const { doc: store } = buildAugmentedSpec("store");
+  const { doc: admin } = buildAugmentedSpec("admin");
+
+  const product = store.components.schemas.StoreProduct;
+  assert.equal(product.properties?.hs_code && "nullable" in product.properties.hs_code
+    ? product.properties.hs_code.nullable
+    : false, true);
+  assert.ok(!product.required?.includes("status"), "default Store product projection omits status");
+
+  const customerResponse = admin.paths["/admin/customers"].get!.responses["200"];
+  assert.ok("content" in customerResponse);
+  const customerSchema = customerResponse.content!["application/json"].schema as {
+    allOf: Array<{ properties?: { customers?: { type?: string } } }>;
+  };
+  assert.equal(customerSchema.allOf[1].properties?.customers?.type, "array");
+
+  const unauthorized = store.components.responses?.unauthorized;
+  assert.ok(unauthorized?.content?.["application/json"]);
+  assert.equal(unauthorized?.content?.["text/plain"], undefined);
+});
 
 check("[real data] injects the gate 401 into every gated cart/payment-collection operation", () => {
   const { report } = buildAugmentedSpec("store");
@@ -39,8 +78,8 @@ check("[real data] injects the gate 401 into every gated cart/payment-collection
   assert.ok(paths.includes("POST /store/payment-collections"));
   assert.ok(paths.includes("POST /store/carts/{id}/complete"));
   assert.ok(paths.includes("POST /store/carts/{id}/line-items"));
-  // The real base spec already documents a 401 on every gated op (Medusa's
-  // own `unauthorized` response), so all 16 real injections are unions.
+  // The static runtime spec already documents a JSON 401 on every gated op,
+  // so all 16 real injections are unions.
   assert.equal(report.gateInjections.length, 16);
   assert.ok(report.gateInjections.every((i) => i.status === "unioned"));
 });

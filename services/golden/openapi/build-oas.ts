@@ -58,7 +58,7 @@ const GATE_TRIGGER_DESCRIPTION =
   "Unauthenticated/non-customer request blocked by the requireCustomerAuth gate middleware (ADR 0004).";
 
 /**
- * The real bundled Medusa spec shares common error envelopes via
+ * The static runtime-corrected Medusa spec shares common error envelopes via
  * response-level `$ref` (e.g. `responses.401: { $ref: "#/components/responses/unauthorized" }`)
  * rather than inlining them per-operation.
  */
@@ -85,10 +85,9 @@ function injectGateResponse(doc: OasDocument, responses: Record<string, OasRespo
     return "added";
   }
 
-  // Status already documented for a different trigger (real Medusa spec: a
-  // response-level $ref to `components/responses/unauthorized`, a `text/plain`
-  // envelope distinct from the gate's `application/json` GateUnauthorized
-  // envelope) — union the schemas, NEVER overwrite (ADR 0004 #4).
+  // Status already documented for a different trigger via the shared
+  // `components/responses/unauthorized` JSON envelope — union the schemas,
+  // NEVER overwrite (ADR 0004 #4).
   const resolvedExisting = resolveResponseRef(doc, existing);
   const existingMediaType = resolvedExisting.content?.["application/json"] ?? firstMediaType(resolvedExisting.content);
   const existingSchema = existingMediaType?.schema;

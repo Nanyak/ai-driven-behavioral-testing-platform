@@ -1,8 +1,8 @@
 /**
- * Asserts against the REAL bundled Medusa v2 spec (openapi/base/, ADR 0004
+ * Asserts against the static runtime-corrected Medusa 2.15.5 spec (openapi/base/, ADR 0004
  * augmented): real $ref names (`StoreCartResponse`/`StoreProductListResponse`,
- * not the old hand-authored `StoreCart` fixture name), real `info.version`
- * ("2.0.0"), and the real union shape on gated 401s.
+ * not the old hand-authored `StoreCart` fixture name), the exact core-tag
+ * `info.version` ("2.15.5"), and the real union shape on gated 401s.
  */
 import { strict as assert } from "node:assert";
 import { loadAugmentedSpecs, resolveOperation } from "../src/oas/oas-source.js";
@@ -24,7 +24,7 @@ check("resolves POST /store/carts 200 into a typed schema with operationId + ref
   // nested StoreCart it wraps — oas-source resolves the wrapper into a flat
   // shape but keeps provenance at the contract clause the operation documents.
   assert.equal(resolution!.ref, "#/components/schemas/StoreCartResponse");
-  assert.equal(resolution!.oasVersion, "2.0.0");
+  assert.equal(resolution!.oasVersion, "2.15.5");
   assert.equal(typeof resolution!.schema, "object");
   // The response envelope wraps StoreCart under a "cart" key (StoreCartResponse
   // = { cart: $ref StoreCart }) — nested-ref resolution must follow through it.
@@ -52,8 +52,8 @@ check("resolves GET /store/products 200 into a typed list-envelope schema (allOf
 check("the augmented spec documents the gate 401 on POST /store/carts (real-data union)", () => {
   const resolution = resolveOperation(specs, "POST", "/store/carts", 401);
   assert.ok(resolution, "expected the overlay to have injected/unioned a 401 for POST /store/carts");
-  // The real base spec ALREADY documents 401 (`text/plain` "Unauthorized")
-  // on every gated op, so this is always the union branch in real data —
+  // The static base spec already documents a JSON 401 on every gated op, so
+  // this is always the union branch in real data —
   // never a fresh add. The flattened union still exposes the gate's
   // {type, message} object shape (it carries more structure than the bare
   // string leaf — see unionFlat's shape-mismatch rule).
@@ -73,9 +73,8 @@ check("the augmented spec documents the gate 401 on POST /store/payment-collecti
 check("a real collision (base already documents 401) is unioned, not overwritten — both fields present", () => {
   const resolution = resolveOperation(specs, "POST", "/store/carts/{id}/complete", 401);
   assert.ok(resolution, "expected a 401 resolution for the union case");
-  // Real base 401 here is Medusa's shared `unauthorized` response (text/plain
-  // "Unauthorized" string), unioned with the gate's GateUnauthorized
-  // {type, message} object — both branches flattened together for comparison.
+  // The shared runtime JSON error is unioned with the gate's GateUnauthorized
+  // {type, message} object — both branches flatten together for comparison.
   const schema = resolution!.schema as Record<string, unknown>;
   assert.equal(schema.type, "string");
   assert.equal(schema.message, "string");
@@ -91,7 +90,7 @@ check("resolves an ADR 0003 admin-reversal operation from the (real) admin spec"
   assert.ok(resolution, "expected the admin order-cancel operation to resolve");
   assert.equal(resolution!.operationId, "PostOrdersIdCancel");
   assert.equal(resolution!.ref, "#/components/schemas/AdminOrderResponse");
-  assert.equal(resolution!.oasVersion, "2.0.0");
+  assert.equal(resolution!.oasVersion, "2.15.5");
 });
 
 console.log(`\noas-source.test: ${passed} checks passed`);
