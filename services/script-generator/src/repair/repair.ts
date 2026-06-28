@@ -11,8 +11,10 @@
  * flows are never touched (their oracle is the source of truth).
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { dirname, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 import { loadAugmentedSpecs } from "../../../golden/src/oas-source.js";
 import type { OasSpecs } from "../resolve.js";
 import { makeClaudeCliAgent, type RepairAgent } from "./agent.js";
@@ -110,6 +112,32 @@ function briefFailures(failures: StepOutcome[]): RepairOutcome["finalFailures"] 
   return failures.map((f) => ({ endpoint: f.endpoint, expected: f.expected, actual: f.actual }));
 }
 
+/** Reject malformed model output before it can replace a runnable spec on disk. */
+export function typescriptSyntaxViolations(source: string, fileName = "repaired.spec.ts"): string[] {
+  const result = ts.transpileModule(source, {
+    fileName,
+    reportDiagnostics: true,
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.ESNext,
+    },
+  });
+  return (result.diagnostics ?? [])
+    .filter((diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error)
+    .map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"));
+}
+
+function generatedSuiteTypecheckFailure(): string | null {
+  const result = spawnSync("npx", ["tsc", "--noEmit", "--pretty", "false"], {
+    cwd: GENERATED_TESTS_DIR,
+    encoding: "utf8",
+    maxBuffer: 8 * 1024 * 1024,
+  });
+  if (result.status === 0) return null;
+  return `${result.stdout || ""}${result.stderr || ""}`.trim().slice(-3000) ||
+    "generated-tests TypeScript compilation failed";
+}
+
 /** Repair one spec end-to-end. Mutates the file on disk; restores the original on failure. */
 function repairOne(
   spec: EmittedSpec,
@@ -134,11 +162,21 @@ function repairOne(
   base.expectedSignature = verdict.expectedSignature;
 
   if (verdict.fixme) return { ...base, result: "skipped-fixme", attempts: 0 };
-  if (!verdict.ran) return { ...base, result: "error", attempts: 0 };
+  if (!verdict.ran) {
+    return {
+      ...base,
+      result: "error",
+      attempts: 0,
+      violations: [
+        verdict.stdoutTail.trim().slice(-1000) || "verification did not produce a Playwright report",
+      ],
+    };
+  }
   if (verdict.matched) return { ...base, result: "already-green", attempts: 0 };
 
   const violations: string[] = [];
   let attempts = 0;
+  let rejectionFeedback = "";
 
   for (let i = 0; i < maxAttempts; i++) {
     attempts++;
@@ -156,7 +194,11 @@ function repairOne(
 
     let candidate: string;
     try {
-      candidate = agent(renderRepairPrompt(task));
+      candidate = agent(
+        `${renderRepairPrompt(task)}${rejectionFeedback
+          ? `\n\n## Previous candidate rejection\n${rejectionFeedback}\nReturn a corrected full spec.`
+          : ""}`
+      );
     } catch (err) {
       violations.push(`agent error: ${err instanceof Error ? err.message : String(err)}`);
       break;
@@ -167,11 +209,29 @@ function repairOne(
     const check = checkOracleUnchanged(original, candidate);
     if (!check.ok) {
       violations.push(...check.violations);
+      rejectionFeedback = check.violations.slice(0, 6).join("\n");
       continue; // reject this candidate, try again (do NOT write it)
+    }
+    const syntaxViolations = typescriptSyntaxViolations(candidate, spec.relPath);
+    if (syntaxViolations.length > 0) {
+      violations.push(...syntaxViolations.map((violation) => `TypeScript syntax: ${violation}`));
+      rejectionFeedback = syntaxViolations
+        .slice(0, 6)
+        .map((violation) => `TypeScript syntax: ${violation}`)
+        .join("\n");
+      continue; // malformed model output must never replace the runnable draft
     }
 
     const stamped = stampProvenance(candidate);
     writeFileSync(absPath, stamped);
+    const typecheckFailure = generatedSuiteTypecheckFailure();
+    if (typecheckFailure) {
+      const violation = `TypeScript compile gate: ${typecheckFailure}`;
+      violations.push(violation);
+      rejectionFeedback = violation;
+      writeFileSync(absPath, original);
+      continue;
+    }
     verdict = verifySpec(spec.relPath, absPath);
     if (verdict.matched) {
       // Keep the before/after sources so the dashboard can show the review diff
@@ -269,8 +329,18 @@ export function printRepairSummary(outcomes: RepairOutcome[]): void {
   for (const [k, v] of Object.entries(by)) console.log(`  ${k.padEnd(18)} ${v}`);
   for (const o of outcomes) {
     if (o.result === "repaired") console.log(`  ✓ repaired   ${o.relPath} (${o.attempts} attempt(s))`);
-    if (o.result === "unrepaired" || o.result === "rejected")
+    if (o.result === "unrepaired" || o.result === "rejected" || o.result === "error")
       console.log(`  ✗ ${o.result.padEnd(10)} ${o.relPath} — ${o.violations.slice(0, 2).join("; ") || "still red"}`);
   }
   console.log(`\n  Report: ${REPAIR_REPORT}`);
+}
+
+/** Outcomes that mean the requested repair did not establish a runnable baseline. */
+export function hasBlockingRepairOutcomes(outcomes: RepairOutcome[]): boolean {
+  return outcomes.length === 0 ||
+    outcomes.some((outcome) =>
+      outcome.result === "error" ||
+      outcome.result === "unrepaired" ||
+      outcome.result === "rejected"
+    );
 }

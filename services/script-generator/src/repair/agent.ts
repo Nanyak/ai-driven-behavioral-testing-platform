@@ -10,6 +10,9 @@
  * oracle-guard before anything touches disk.
  */
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 export type RepairAgent = (prompt: string) => string;
 
@@ -22,17 +25,24 @@ export interface AgentOptions {
    * Allow READ-ONLY live API exploration: the agent may call `curl` (and only
    * curl) so it can discover entity state — e.g. list orders and find one that is
    * genuinely cancelable — before writing the arrange. `Bash(curl:*)` permits the
-   * curl command prefix ONLY, so the agent still cannot touch the filesystem (no
-   * `echo >`, `rm`, Write, or Edit). The returned spec is still oracle-guarded.
+   * curl command prefix only. Because shell redirection is still possible, each
+   * invocation runs in a disposable scratch directory. The returned spec remains
+   * oracle-guarded before the caller writes it.
    */
   explore?: boolean;
 }
 
-/** Strip a leading ```lang fence and trailing ``` the model may add despite instructions. */
-function stripFences(text: string): string {
+/**
+ * Normalize the model's text-only response into a spec source. Besides markdown
+ * fences, models occasionally prepend a sentence despite the output contract;
+ * the immutable generated header is the only safe start boundary.
+ */
+export function normalizeAgentSource(text: string): string {
   const trimmed = text.trim();
   const fenced = /^```[a-zA-Z]*\n([\s\S]*?)\n```$/.exec(trimmed);
-  return (fenced ? fenced[1] : trimmed).trim();
+  const unfenced = (fenced ? fenced[1] : trimmed).trim();
+  const header = unfenced.indexOf("// flow_signature:");
+  return (header > 0 ? unfenced.slice(header) : unfenced).trim();
 }
 
 export function makeClaudeCliAgent(opts: AgentOptions = {}): RepairAgent {
@@ -44,13 +54,21 @@ export function makeClaudeCliAgent(opts: AgentOptions = {}): RepairAgent {
       : ["-p", "--output-format", "json", "--allowedTools", "", "--max-turns", "1"];
     if (opts.model) args.push("--model", opts.model);
 
-    const proc = spawnSync("claude", args, {
-      input: prompt,
-      encoding: "utf8",
-      timeout: opts.timeoutMs ?? (opts.explore ? 420_000 : 180_000),
-      maxBuffer: 32 * 1024 * 1024,
-      cwd: opts.cwd,
-    });
+    const ownsScratch = opts.cwd === undefined;
+    const cwd = opts.cwd ?? mkdtempSync(join(tmpdir(), "resolver-agent-"));
+    const proc = (() => {
+      try {
+        return spawnSync("claude", args, {
+          input: prompt,
+          encoding: "utf8",
+          timeout: opts.timeoutMs ?? (opts.explore ? 420_000 : 180_000),
+          maxBuffer: 32 * 1024 * 1024,
+          cwd,
+        });
+      } finally {
+        if (ownsScratch) rmSync(cwd, { recursive: true, force: true });
+      }
+    })();
 
     if (proc.error) throw new Error(`claude CLI failed to start: ${proc.error.message}`);
     if (proc.status !== 0) {
@@ -66,6 +84,6 @@ export function makeClaudeCliAgent(opts: AgentOptions = {}): RepairAgent {
     if (parsed.is_error || typeof parsed.result !== "string") {
       throw new Error(`claude CLI returned an error result (${parsed.subtype ?? "unknown"})`);
     }
-    return stripFences(parsed.result);
+    return normalizeAgentSource(parsed.result);
   };
 }

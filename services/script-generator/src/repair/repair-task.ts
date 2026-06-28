@@ -129,10 +129,16 @@ HARD RULES (a violation makes your output rejected unread):
 4. Keep it a single self-contained spec file. Use only \`request\`, \`expect\`, \`scope\`,
    and the existing imports. Auth: admin via \`scope.adminToken\`, customer via
    \`scope.customerToken\`, both already established in setup.
+5. The full file must compile under strict TypeScript. Helpers such as \`safeJson\`
+   return \`unknown\`; narrow or cast before reading properties. Do not add imports
+   or APIs that are absent from the supplied source.
 
 You MAY explore the live API read-only with \`curl\` to discover the right arrange
 (e.g. which orders are actually cancelable) BEFORE writing the spec. Use GET
-requests only — do not mutate state during exploration. When done exploring,
+requests only — do not mutate state during exploration. The complete source and
+all relevant evidence are included below: DO NOT attempt to read files, search the
+workspace, edit files, or run Playwright yourself. Those tools are intentionally
+unavailable; the caller writes and verifies your returned source. When done exploring,
 output ONLY the full setup/arrange-repaired spec file as your final message, no markdown fences,
 no commentary.`;
 

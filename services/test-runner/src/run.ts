@@ -155,6 +155,12 @@ export interface RunOptions {
   target: Target;
   execute?: boolean;
   extraArgs?: string[];
+  /**
+   * Exact generated spec paths for trusted internal verification workflows.
+   * This deliberately bypasses HITL admission so a quarantined draft can be
+   * verified before approval. Normal suite runs must leave this undefined.
+   */
+  directSpecPaths?: string[];
 }
 
 export interface RunResult {
@@ -163,6 +169,64 @@ export interface RunResult {
   htmlReportDir: string;
   stdout: string;
   stderr: string;
+}
+
+export type DirectSpecValidation =
+  | { ok: true; paths: string[] }
+  | { ok: false; error: string };
+
+/**
+ * Validate the narrow admission bypass used by the resolver-agent repair loop.
+ * Paths must name existing generated specs inside the selected persona folder;
+ * absolute paths, traversal, cross-persona paths, and non-spec files are rejected.
+ */
+export function validateDirectSpecPaths(
+  target: Target,
+  paths: string[],
+  generatedTestsDir = GENERATED_TESTS_DIR
+): DirectSpecValidation {
+  if (!PROJECTS.includes(target as Project)) {
+    return { ok: false, error: "direct spec execution requires a persona target" };
+  }
+  if (paths.length === 0) {
+    return { ok: false, error: "direct spec execution requires at least one path" };
+  }
+
+  const validated = new Set<string>();
+  for (const raw of paths) {
+    if (
+      typeof raw !== "string" ||
+      raw.length === 0 ||
+      raw.includes("\\") ||
+      raw.startsWith("/") ||
+      raw.split("/").some((part) => part === "" || part === "." || part === "..")
+    ) {
+      return { ok: false, error: `invalid direct spec path "${raw}"` };
+    }
+
+    const absolute = resolvePath(generatedTestsDir, raw);
+    const rootPrefix = generatedTestsDir.endsWith(sep) ? generatedTestsDir : `${generatedTestsDir}${sep}`;
+    if (!absolute.startsWith(rootPrefix)) {
+      return { ok: false, error: `direct spec path escapes generated-tests: "${raw}"` };
+    }
+
+    const relative = absolute
+      .slice(rootPrefix.length)
+      .split(sep)
+      .join("/");
+    if (!relative.startsWith(`${target}/`) || !relative.endsWith(".spec.ts")) {
+      return {
+        ok: false,
+        error: `direct spec path must be a ${target} .spec.ts file: "${raw}"`,
+      };
+    }
+    if (!existsSync(absolute) || !statSync(absolute).isFile()) {
+      return { ok: false, error: `direct spec path does not exist: "${raw}"` };
+    }
+    validated.add(relative);
+  }
+
+  return { ok: true, paths: [...validated].sort() };
 }
 
 /**
@@ -233,7 +297,7 @@ export function buildArgs(target: Target, extraArgs: string[] = [], specPaths: s
 }
 
 export function runPlaywright(options: RunOptions): RunResult {
-  const { target, execute = true, extraArgs = [] } = options;
+  const { target, execute = true, extraArgs = [], directSpecPaths } = options;
   mkdirSync(REPORTS_DIR, { recursive: true });
 
   const jsonReportPath = resolvePath(REPORTS_DIR, "results.json");
@@ -245,7 +309,22 @@ export function runPlaywright(options: RunOptions): RunResult {
 
   clearPreviousRunArtifacts(jsonReportPath, htmlReportDir);
 
-  const specPaths = selectedSpecPaths(target);
+  let specPaths: string[];
+  if (directSpecPaths !== undefined) {
+    const direct = validateDirectSpecPaths(target, directSpecPaths);
+    if (!direct.ok) {
+      return {
+        status: 1,
+        jsonReportPath,
+        htmlReportDir,
+        stdout: "",
+        stderr: `${direct.error}\n`,
+      };
+    }
+    specPaths = direct.paths;
+  } else {
+    specPaths = selectedSpecPaths(target);
+  }
   if (specPaths.length === 0) {
     const mode = target === "drafts" ? "draft" : "hash-matching approved";
     return {

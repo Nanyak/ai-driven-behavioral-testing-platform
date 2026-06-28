@@ -9,8 +9,10 @@ import {
   HelpCircle,
   History,
   ListTree,
+  Loader2,
   RefreshCw,
   ShieldAlert,
+  ShieldCheck,
   Trash2,
   Wrench,
   XCircle,
@@ -27,11 +29,18 @@ import {
   type RepairDiff,
   type ReviewFlow,
 } from "./decisions.js";
-import { startJob as startPipelineJob } from "../pipeline/pipeline.js";
+import { usePipeline } from "../pipeline/usePipeline.js";
+import type { JobStatus } from "../pipeline/pipeline.js";
 
 /** The 12-hex spec hash a repair run scopes to, from `…/<hash>.spec.ts`. */
 function specHash(testPath: string): string {
   return testPath.split("/").pop()?.replace(/\.spec\.ts$/, "") ?? testPath;
+}
+
+interface RepairTarget {
+  signature: string;
+  hash: string;
+  flowName: string;
 }
 
 const PERSONA_LABELS: Record<string, string> = {
@@ -211,6 +220,8 @@ function RepairedDiff({ flow }: { flow: ReviewFlow }) {
   }
 
   const rendered = diff ? collapseContext(lineDiff(diff.before, diff.after)) : [];
+  const additions = rendered.filter((line) => line.type === "add").length;
+  const deletions = rendered.filter((line) => line.type === "del").length;
 
   return (
     <section className="repair-diff">
@@ -234,6 +245,11 @@ function RepairedDiff({ flow }: { flow: ReviewFlow }) {
                 Arrange/setup only — assertions and expected statuses are oracle-guarded and
                 identical on both sides.
               </p>
+              <div className="repair-diff-summary" aria-label="Repair diff summary">
+                <span className="add">+{additions} added</span>
+                <span className="del">−{deletions} removed</span>
+                <span className="guarded"><ShieldCheck size={12} aria-hidden="true" /> oracle unchanged</span>
+              </div>
               <pre className="repair-diff-pre">
                 {rendered.map((l, idx) => (
                   <div key={idx} className={`dl ${l.type}`}>
@@ -428,19 +444,99 @@ function Legend() {
   );
 }
 
+function RepairRunStatus({
+  status,
+  error,
+  hash,
+}: {
+  status: JobStatus | null;
+  error: string | null;
+  hash: string;
+}) {
+  const output = status?.output ?? "";
+  const running = (!status && !error) || status?.state === "running";
+  const failed = status?.state === "failed" || Boolean(error);
+  const repaired = status?.state === "passed" && /(?:^|\s)repaired\s+\d/m.test(output);
+  const alreadyGreen = status?.state === "passed" && output.includes("already-green");
+
+  const title = running
+    ? "Verifying this draft"
+    : failed
+      ? "Repair stopped safely"
+      : repaired
+        ? "Repair applied and reverified"
+        : alreadyGreen
+          ? "No repair needed"
+          : "Repair job finished";
+  const detail = running
+    ? "The exact draft is running against the live SUT. Claude is called only if its expected status sequence does not reproduce."
+    : failed
+      ? "No unverified rewrite was kept. The original draft and every oracle assertion remain intact."
+      : repaired
+        ? "Arrange/setup changed; expected statuses, golden checks, and business invariants stayed frozen. Review the diff before approval."
+        : alreadyGreen
+          ? "This flow already reproduces its mined outcome, so Claude was not called and the source was left unchanged."
+          : "Review the job output before approving this artifact.";
+
+  return (
+    <section
+      className={`repair-run-status ${running ? "running" : failed ? "failed" : "passed"}`}
+      aria-live="polite"
+      role={failed ? "alert" : "status"}
+    >
+      <div className="repair-run-head">
+        {running ? (
+          <Loader2 size={17} className="spin" aria-hidden="true" />
+        ) : failed ? (
+          <ShieldAlert size={17} aria-hidden="true" />
+        ) : (
+          <ShieldCheck size={17} aria-hidden="true" />
+        )}
+        <div>
+          <strong>{title}</strong>
+          <span>spec {hash}</span>
+        </div>
+      </div>
+      <p>{error ?? detail}</p>
+      {running ? (
+        <ol className="repair-progress" aria-label="Repair stages">
+          <li className="active">Verify baseline</li>
+          <li>Repair setup if red</li>
+          <li>Guard oracle and re-run</li>
+        </ol>
+      ) : null}
+      {!running && output ? (
+        <details className="repair-output">
+          <summary>Repair job output</summary>
+          <pre>{output.slice(-4000)}</pre>
+        </details>
+      ) : null}
+    </section>
+  );
+}
+
 function DetailPanel({
   flow,
   onDecide,
   onDelete,
   onRepair,
   pending,
+  repairStatus,
+  repairError,
+  repairHash,
 }: {
   flow: ReviewFlow;
   onDecide: (status: Decision) => void;
   onDelete: () => void;
   onRepair: () => void;
   pending: boolean;
+  repairStatus: JobStatus | null;
+  repairError: string | null;
+  repairHash: string | null;
 }) {
+  const repairRunning = Boolean(
+    repairHash && !repairError && (!repairStatus || repairStatus.state === "running")
+  );
   return (
     <aside className="review-detail">
       <header>
@@ -527,6 +623,9 @@ function DetailPanel({
         <code className="signature">{flow.signature}</code>
       </section>
 
+      {repairHash ? (
+        <RepairRunStatus status={repairStatus} error={repairError} hash={repairHash} />
+      ) : null}
       {flow.repaired_by_agent ? <RepairedDiff flow={flow} /> : null}
       {flow.test_path ? <ArtifactReview flow={flow} /> : null}
 
@@ -534,7 +633,7 @@ function DetailPanel({
         <button
           type="button"
           className="approve"
-          disabled={pending || !flow.test_path || !flow.body_plan_hash}
+          disabled={pending || repairRunning || !flow.test_path || !flow.body_plan_hash}
           title={
             !flow.test_path
               ? "No generated test to approve"
@@ -549,7 +648,7 @@ function DetailPanel({
         <button
           type="button"
           className="discard"
-          disabled={pending}
+          disabled={pending || repairRunning}
           onClick={() => onDecide("discarded")}
         >
           <XCircle size={16} aria-hidden="true" /> Discard
@@ -557,7 +656,7 @@ function DetailPanel({
         <button
           type="button"
           className="repair-test"
-          disabled={pending || !flow.test_path || flow.lifecycle === "approved"}
+          disabled={pending || repairRunning || !flow.test_path || flow.lifecycle === "approved"}
           title={
             !flow.test_path
               ? "No generated test to repair"
@@ -567,12 +666,17 @@ function DetailPanel({
           }
           onClick={onRepair}
         >
-          <Wrench size={16} aria-hidden="true" /> Repair this flow
+          {repairRunning ? (
+            <Loader2 size={16} className="spin" aria-hidden="true" />
+          ) : (
+            <Wrench size={16} aria-hidden="true" />
+          )}{" "}
+          {repairRunning ? "Repairing…" : "Repair this flow"}
         </button>
         <button
           type="button"
           className="delete-test"
-          disabled={pending || !flow.test_path}
+          disabled={pending || repairRunning || !flow.test_path}
           title={
             flow.test_path
               ? `Delete ${flow.test_path} from generated-tests/`
@@ -635,7 +739,15 @@ export function ReviewView() {
   const [selected, setSelected] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [repairConfirm, setRepairConfirm] = useState<RepairTarget | null>(null);
+  const [repairTarget, setRepairTarget] = useState<RepairTarget | null>(null);
+  const {
+    status: pipelineStatus,
+    error: pipelineError,
+    run: runPipeline,
+  } = usePipeline((finished) => {
+    if (finished.job === "repair") void reload();
+  });
 
   const flows = data?.flows ?? [];
   const prior = data?.prior_decisions ?? [];
@@ -692,7 +804,6 @@ export function ReviewView() {
     }
     setPending(true);
     setActionError(null);
-    setNotice(null);
     try {
       await removeTest(flow);
     } catch (err) {
@@ -704,29 +815,20 @@ export function ReviewView() {
 
   async function handleRepair(flow: ReviewFlow) {
     if (!flow.test_path) return;
-    const hash = specHash(flow.test_path);
-    if (
-      !window.confirm(
-        `Run the resolver agent on ${hash}?\n\nThis calls the Claude agent against the live SUT ` +
-          `(incurs LLM cost) and rewrites only the spec's arrange/setup so it reproduces the mined ` +
-          `outcome. Assertions are oracle-guarded. One job runs at a time.`
-      )
-    ) {
-      return;
-    }
-    setPending(true);
+    setRepairConfirm({
+      signature: flow.signature,
+      hash: specHash(flow.test_path),
+      flowName: flow.flow_name,
+    });
+  }
+
+  function confirmRepair() {
+    if (!repairConfirm) return;
+    const target = repairConfirm;
+    setRepairConfirm(null);
+    setRepairTarget(target);
     setActionError(null);
-    setNotice(null);
-    try {
-      await startPipelineJob("repair", { only: hash });
-      setNotice(
-        `Repair started for ${hash}. Watch progress in the Pipeline tab, then reload here when it finishes.`
-      );
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Failed to start repair");
-    } finally {
-      setPending(false);
-    }
+    void runPipeline("repair", { only: target.hash });
   }
 
   if (state === "loading" && !data) {
@@ -836,7 +938,6 @@ export function ReviewView() {
       </div>
 
       {actionError ? <p className="review-action-error">{actionError}</p> : null}
-      {notice ? <p className="review-action-note">{notice}</p> : null}
 
       <div className="review-layout">
         <div className="review-list-wrap">
@@ -889,9 +990,70 @@ export function ReviewView() {
             onDecide={(decision) => handleDecide(selectedFlow, decision)}
             onDelete={() => handleDelete(selectedFlow)}
             onRepair={() => handleRepair(selectedFlow)}
+            repairStatus={
+              repairTarget?.signature === selectedFlow.signature &&
+              pipelineStatus?.job === "repair"
+                ? pipelineStatus
+                : null
+            }
+            repairError={
+              repairTarget?.signature === selectedFlow.signature ? pipelineError : null
+            }
+            repairHash={
+              repairTarget?.signature === selectedFlow.signature ? repairTarget.hash : null
+            }
           />
         ) : null}
       </div>
+
+      {repairConfirm ? (
+        <div
+          className="modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="repair-confirm-title"
+          aria-describedby="repair-confirm-description"
+        >
+          <div className="modal repair-confirm-modal">
+            <div className="modal-head">
+              <Wrench size={18} aria-hidden="true" />
+              <h3 id="repair-confirm-title">Repair this flow?</h3>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setRepairConfirm(null)}
+                aria-label="Cancel repair"
+              >
+                <XCircle size={17} aria-hidden="true" />
+              </button>
+            </div>
+            <p id="repair-confirm-description">
+              The exact draft for <strong>{repairConfirm.flowName}</strong> will run against the
+              live SUT. Claude is called only if the mined status sequence does not reproduce.
+            </p>
+            <div className="repair-confirm-facts">
+              <span><ShieldCheck size={14} aria-hidden="true" /> Assertions stay frozen</span>
+              <span><Wrench size={14} aria-hidden="true" /> Arrange/setup only</span>
+              <span><FileCode2 size={14} aria-hidden="true" /> {repairConfirm.hash}</span>
+            </div>
+            <p className="repair-cost-note">
+              This may incur LLM cost. A failed or rejected rewrite is discarded automatically.
+            </p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="run-view-report"
+                onClick={() => setRepairConfirm(null)}
+              >
+                Cancel
+              </button>
+              <button type="button" className="run-button" onClick={confirmRepair}>
+                <Wrench size={15} aria-hidden="true" /> Run repair
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

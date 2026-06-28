@@ -10,6 +10,7 @@ import {
   clearPreviousRunArtifacts,
   effectiveBodyPlanHash,
   exactApprovalMatches,
+  validateDirectSpecPaths,
 } from "./run.js";
 
 let passed = 0;
@@ -95,6 +96,32 @@ check("exact allowlist paths are passed to Playwright with persona scoping", () 
     buildArgs("customer", [], ["customer/happy-path/a.spec.ts"]),
     ["playwright", "test", "customer/happy-path/a.spec.ts", "--project", "customer"]
   );
+});
+
+check("repair direct-spec bypass accepts only an exact same-persona generated spec", () => {
+  const dir = mkdtempSync(join(tmpdir(), "runner-direct-spec-"));
+  const adminDir = join(dir, "admin", "happy-path");
+  const customerDir = join(dir, "customer", "happy-path");
+  mkdirSync(adminDir, { recursive: true });
+  mkdirSync(customerDir, { recursive: true });
+  writeFileSync(join(adminDir, "a.spec.ts"), "// admin");
+  writeFileSync(join(customerDir, "b.spec.ts"), "// customer");
+
+  assert.deepEqual(
+    validateDirectSpecPaths("admin", ["admin/happy-path/a.spec.ts"], dir),
+    { ok: true, paths: ["admin/happy-path/a.spec.ts"] }
+  );
+  assert.equal(
+    validateDirectSpecPaths("admin", ["customer/happy-path/b.spec.ts"], dir).ok,
+    false
+  );
+  assert.equal(
+    validateDirectSpecPaths("admin", ["../admin/happy-path/a.spec.ts"], dir).ok,
+    false
+  );
+  assert.equal(validateDirectSpecPaths("all", ["admin/happy-path/a.spec.ts"], dir).ok, false);
+
+  rmSync(dir, { recursive: true, force: true });
 });
 
 console.log(`\nrun.test: ${passed} checks passed`);

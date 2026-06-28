@@ -765,6 +765,38 @@ select:focus-visible {
   margin-top: 8px;
 }
 
+.repair-diff-summary {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.repair-diff-summary span {
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  display: inline-flex;
+  font-size: 10px;
+  font-weight: 650;
+  gap: 4px;
+  padding: 3px 7px;
+}
+
+.repair-diff-summary .add,
+.repair-diff-summary .guarded {
+  background: var(--success-bg);
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.repair-diff-summary .del {
+  background: var(--danger-bg);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
 .repair-diff-pre {
   background: var(--code-bg);
   border-radius: 8px;
@@ -797,6 +829,104 @@ select:focus-visible {
 .repair-diff-pre .dl.del {
   background: var(--danger-bg);
   color: var(--danger);
+}
+
+.repair-run-status {
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 10px;
+  margin-top: 14px;
+  padding: 12px 14px;
+}
+
+.repair-run-status.running {
+  border-left-color: var(--warn);
+}
+
+.repair-run-status.failed {
+  background: var(--danger-bg);
+  border-left-color: var(--danger);
+}
+
+.repair-run-status.passed {
+  background: var(--success-bg);
+  border-left-color: var(--success);
+}
+
+.repair-run-head {
+  align-items: center;
+  display: flex;
+  gap: 9px;
+}
+
+.repair-run-head > div {
+  display: grid;
+  gap: 2px;
+}
+
+.repair-run-head strong {
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.repair-run-head span {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.repair-run-status > p {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 8px 0 0;
+}
+
+.repair-progress {
+  display: grid;
+  gap: 5px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+
+.repair-progress li {
+  border-top: 2px solid var(--border-strong);
+  color: var(--text-muted);
+  font-size: 10px;
+  padding-top: 5px;
+}
+
+.repair-progress li.active {
+  border-top-color: var(--warn);
+  color: var(--text-primary);
+}
+
+.repair-output {
+  margin-top: 9px;
+}
+
+.repair-output summary {
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 650;
+  min-height: 32px;
+  padding: 7px 0 0;
+}
+
+.repair-output pre {
+  background: var(--code-bg);
+  border-radius: 7px;
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 5px 0 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 9px;
+  white-space: pre-wrap;
 }
 
 /* Exact artifact + request-body plan review */
@@ -1024,9 +1154,16 @@ select:focus-visible {
 }
 
 .review-actions {
-  display: flex;
+  display: grid;
   gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-top: 16px;
+}
+
+.review-actions button {
+  justify-content: center;
+  min-height: 44px;
+  width: 100%;
 }
 
 .review-actions .approve {
@@ -1040,7 +1177,6 @@ select:focus-visible {
 }
 
 .review-actions .delete-test {
-  margin-left: auto;
   background: transparent;
   color: var(--danger);
   border-color: var(--danger);
@@ -1085,7 +1221,7 @@ select:focus-visible {
   }
 
   .review-actions {
-    flex-wrap: wrap;
+    grid-template-columns: 1fr;
   }
 
   .review-actions .delete-test {
@@ -1095,6 +1231,35 @@ select:focus-visible {
   .artifact-integrity {
     font-size: 11px;
   }
+}
+
+.repair-confirm-modal {
+  max-width: 520px;
+}
+
+.repair-confirm-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 14px 0 0;
+}
+
+.repair-confirm-facts span {
+  align-items: center;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+  display: inline-flex;
+  font-size: 11px;
+  gap: 5px;
+  padding: 5px 9px;
+}
+
+.modal .repair-cost-note {
+  color: var(--warn);
+  font-size: 12px;
+  margin-top: 12px;
 }
 
 .review-empty,

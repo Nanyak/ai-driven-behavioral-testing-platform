@@ -10,7 +10,13 @@
  *   2. repair-task bundles the live expected-vs-actual evidence + OAS slice.
  */
 import { strict as assert } from "node:assert";
+import { normalizeAgentSource } from "./agent.js";
 import { checkOracleUnchanged, oracleFingerprint } from "./oracle-guard.js";
+import {
+  hasBlockingRepairOutcomes,
+  typescriptSyntaxViolations,
+  type RepairOutcome,
+} from "./repair.js";
 import { buildRepairTask, renderRepairPrompt } from "./repair-task.js";
 import type { OasSpecs } from "../resolve.js";
 import type { StepOutcome } from "./verify.js";
@@ -215,6 +221,41 @@ check("buildRepairTask + renderRepairPrompt include live evidence and OAS", () =
   assert.ok(prompt.includes("has been canceled"), "prompt carries the response body");
   assert.ok(prompt.includes("Cancel order"), "prompt carries the OAS slice");
   assert.ok(prompt.includes("DO NOT change any assertion"), "prompt carries the hard rules");
+  assert.ok(prompt.includes("DO NOT attempt to read files"), "prompt prevents wasted filesystem tool turns");
+  assert.ok(prompt.includes("compile under strict TypeScript"), "prompt carries the compile gate");
+});
+
+check("repair command fails truthfully for unresolved outcomes", () => {
+  const outcome = (result: RepairOutcome["result"]): RepairOutcome => ({
+    relPath: "admin/happy-path/a.spec.ts",
+    flowName: "A",
+    signature: SIG,
+    expectedSignature: "200",
+    result,
+    attempts: result === "already-green" ? 0 : 1,
+    violations: [],
+    finalFailures: [],
+  });
+
+  assert.equal(hasBlockingRepairOutcomes([outcome("already-green")]), false);
+  assert.equal(hasBlockingRepairOutcomes([outcome("repaired")]), false);
+  assert.equal(hasBlockingRepairOutcomes([outcome("skipped-approved")]), false);
+  assert.equal(hasBlockingRepairOutcomes([outcome("error")]), true);
+  assert.equal(hasBlockingRepairOutcomes([outcome("unrepaired")]), true);
+  assert.equal(hasBlockingRepairOutcomes([outcome("rejected")]), true);
+  assert.equal(hasBlockingRepairOutcomes([]), true);
+});
+
+check("agent output normalization strips prose and syntax gate rejects malformed source", () => {
+  const withProse = `Here is the clean repaired spec:
+
+${baseSpec}`;
+  assert.equal(normalizeAgentSource(withProse), baseSpec.trim());
+  assert.deepEqual(typescriptSyntaxViolations(baseSpec), []);
+  assert.ok(
+    typescriptSyntaxViolations(`This is prose.\n${baseSpec}`).length > 0,
+    "leading prose must be rejected before the candidate is written"
+  );
 });
 
 console.log(`\nrepair.test: ${passed} checks passed`);

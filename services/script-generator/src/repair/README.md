@@ -43,6 +43,8 @@ deterministic emit -> verify each spec vs status_signature
 ## Usage
 
 Live setup/arrange repair is off by default. Requires the SUT up (it runs specs live).
+The standalone repair command reads the existing artifact manifest and never
+regenerates unrelated specs; `--only` therefore scopes both verification and mutation.
 
 ```
 npm run script-generator:repair                 # repair all mismatching flows

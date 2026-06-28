@@ -17,7 +17,12 @@ import { dedup } from "./dedup.js";
 import { emitSpec } from "./emit.js";
 import { loadCandidates, type Candidate } from "./load.js";
 import { buildFlowPlan, type OasSpecs } from "./resolve.js";
-import { printRepairSummary, runRepair, type EmittedSpec } from "./repair/repair.js";
+import {
+  hasBlockingRepairOutcomes,
+  printRepairSummary,
+  runRepair,
+  type EmittedSpec,
+} from "./repair/repair.js";
 import { loadInvariants, verifiedInvariantsByStep } from "./invariants/types.js";
 import { deterministicInvariantsByStep, mergeInvariantMaps } from "./invariants/deterministic.js";
 import { businessInvariantRuntimeSource } from "./invariants/templates.js";
@@ -655,6 +660,9 @@ function main(): void {
       specs,
     });
     printRepairSummary(outcomes);
+    if (hasBlockingRepairOutcomes(outcomes)) {
+      process.exitCode = 1;
+    }
   }
 }
 
