@@ -985,6 +985,7 @@ export function ReviewView() {
 
         {selectedFlow ? (
           <DetailPanel
+            key={selectedFlow.signature}
             flow={selectedFlow}
             pending={pending}
             onDecide={(decision) => handleDecide(selectedFlow, decision)}
