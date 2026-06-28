@@ -236,7 +236,8 @@ function RepairedDiff({ flow }: { flow: ReviewFlow }) {
           {loadState === "error" ? <p className="muted">Could not load the repair diff.</p> : null}
           {loadState === "empty" ? (
             <p className="muted">
-              No stored before/after for this flow (the last repair run didn't record one).
+              Historical diff unavailable. This repair predates persistent diff history, or its
+              stored snapshot was removed.
             </p>
           ) : null}
           {diff ? (

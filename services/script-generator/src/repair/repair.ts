@@ -10,7 +10,7 @@
  * is baseline establishment, not a "keep tests green" autopilot. Approved/blessed
  * flows are never touched (their oracle is the source of truth).
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -160,6 +160,20 @@ export interface RepairOutcome {
   beforeSource?: string;
   /** Agent setup/arrange-repaired spec after repair (set only on `repaired`) — for the review diff. */
   afterSource?: string;
+}
+
+export interface RepairHistoryRecord extends RepairOutcome {
+  repaired_at: string;
+}
+
+export interface RepairReport {
+  version: 2;
+  generated_at: string;
+  /** Summary and outcomes describe only the most recent repair command. */
+  summary: Record<string, number>;
+  outcomes: RepairOutcome[];
+  /** Append-only successful repair snapshots used by the dashboard diff. */
+  repair_history: RepairHistoryRecord[];
 }
 
 export interface RunRepairOptions {
@@ -396,16 +410,86 @@ export function runRepair(specsToConsider: EmittedSpec[], options: RunRepairOpti
   return outcomes;
 }
 
-function writeRepairReport(outcomes: RepairOutcome[]): void {
-  mkdirSync(dirname(REPAIR_REPORT), { recursive: true });
-  const summary = outcomes.reduce<Record<string, number>>((acc, o) => {
-    acc[o.result] = (acc[o.result] ?? 0) + 1;
+function asRepairHistoryRecord(value: unknown, fallbackTimestamp: string): RepairHistoryRecord | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<RepairHistoryRecord>;
+  if (
+    candidate.result !== "repaired" ||
+    typeof candidate.signature !== "string" ||
+    typeof candidate.beforeSource !== "string" ||
+    typeof candidate.afterSource !== "string"
+  ) {
+    return null;
+  }
+  return {
+    ...(candidate as RepairOutcome),
+    signature: candidate.signature.toLowerCase(),
+    repaired_at:
+      typeof candidate.repaired_at === "string" ? candidate.repaired_at : fallbackTimestamp,
+  };
+}
+
+/**
+ * Preserve every successful before/after snapshot across repair commands.
+ * Legacy reports had only `outcomes`, so their successful entries are migrated
+ * into history the first time the v2 report is written.
+ */
+export function mergeRepairReport(
+  previous: unknown,
+  outcomes: RepairOutcome[],
+  generatedAt = new Date().toISOString()
+): RepairReport {
+  const previousDoc =
+    previous && typeof previous === "object"
+      ? (previous as {
+          generated_at?: unknown;
+          outcomes?: unknown;
+          repair_history?: unknown;
+        })
+      : {};
+  const previousTimestamp =
+    typeof previousDoc.generated_at === "string" ? previousDoc.generated_at : generatedAt;
+  const storedValues = Array.isArray(previousDoc.repair_history)
+    ? previousDoc.repair_history
+    : Array.isArray(previousDoc.outcomes)
+      ? previousDoc.outcomes
+      : [];
+  const repairHistory = storedValues
+    .map((value) => asRepairHistoryRecord(value, previousTimestamp))
+    .filter((value): value is RepairHistoryRecord => value !== null);
+
+  for (const outcome of outcomes) {
+    const record = asRepairHistoryRecord(outcome, generatedAt);
+    if (record) repairHistory.push({ ...record, repaired_at: generatedAt });
+  }
+
+  const summary = outcomes.reduce<Record<string, number>>((acc, outcome) => {
+    acc[outcome.result] = (acc[outcome.result] ?? 0) + 1;
     return acc;
   }, {});
-  writeFileSync(
-    REPAIR_REPORT,
-    JSON.stringify({ generated_at: new Date().toISOString(), summary, outcomes }, null, 2)
-  );
+  return {
+    version: 2,
+    generated_at: generatedAt,
+    summary,
+    outcomes,
+    repair_history: repairHistory,
+  };
+}
+
+function writeRepairReport(outcomes: RepairOutcome[]): void {
+  mkdirSync(dirname(REPAIR_REPORT), { recursive: true });
+  let previous: unknown = null;
+  if (existsSync(REPAIR_REPORT)) {
+    try {
+      previous = JSON.parse(readFileSync(REPAIR_REPORT, "utf8"));
+    } catch {
+      // A malformed runtime report must not block a new repair run.
+    }
+  }
+  const report = mergeRepairReport(previous, outcomes);
+  const temporaryPath = `${REPAIR_REPORT}.tmp`;
+  writeFileSync(temporaryPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  renameSync(temporaryPath, REPAIR_REPORT);
 }
 
 export function printRepairSummary(outcomes: RepairOutcome[]): void {

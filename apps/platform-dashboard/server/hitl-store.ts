@@ -494,16 +494,29 @@ interface RepairOutcomeRecord {
   attempts: number;
   beforeSource?: string;
   afterSource?: string;
+  repaired_at?: string;
 }
 
-/** Outcomes from the last repair run, keyed by lowercased flow signature. Empty when absent. */
+/** Latest durable successful repair per lowercased flow signature. Empty when absent. */
 function repairOutcomesBySignature(): Map<string, RepairOutcomeRecord> {
   const map = new Map<string, RepairOutcomeRecord>();
   if (!existsSync(REPAIR_REPORT)) return map;
   try {
-    const doc = JSON.parse(readFileSync(REPAIR_REPORT, "utf8")) as { outcomes?: RepairOutcomeRecord[] };
-    for (const o of doc.outcomes ?? []) {
-      if (typeof o.signature === "string") map.set(o.signature.toLowerCase(), o);
+    const doc = JSON.parse(readFileSync(REPAIR_REPORT, "utf8")) as {
+      outcomes?: RepairOutcomeRecord[];
+      repair_history?: RepairOutcomeRecord[];
+    };
+    const records = Array.isArray(doc.repair_history) ? doc.repair_history : doc.outcomes ?? [];
+    for (const record of records) {
+      if (
+        typeof record.signature === "string" &&
+        record.result === "repaired" &&
+        typeof record.beforeSource === "string" &&
+        typeof record.afterSource === "string"
+      ) {
+        // History is append-only, so a later repair for the same flow wins.
+        map.set(record.signature.toLowerCase(), record);
+      }
     }
   } catch {
     /* malformed report -> no repair annotations, never fatal */

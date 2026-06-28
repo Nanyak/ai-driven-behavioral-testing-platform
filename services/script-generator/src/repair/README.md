@@ -38,7 +38,9 @@ deterministic emit -> verify each spec vs status_signature
   slices into the agent prompt.
 - `agent.ts` — headless `claude` CLI (tools disabled, single turn → pure text).
   Swap in `@anthropic-ai/sdk` for CI by implementing the `RepairAgent` interface.
-- `repair.ts` — the loop + `reports/resolver-repair.json`.
+- `repair.ts` — the loop + `reports/resolver-repair.json`. The report keeps
+  current-run outcomes alongside append-only successful `repair_history`, so a
+  later repair cannot erase an earlier flow's before/after review diff.
 
 ## Usage
 

@@ -14,6 +14,7 @@ import { normalizeAgentSource } from "./agent.js";
 import { checkOracleUnchanged, oracleFingerprint } from "./oracle-guard.js";
 import {
   hasBlockingRepairOutcomes,
+  mergeRepairReport,
   typescriptSyntaxViolations,
   type RepairOutcome,
 } from "./repair.js";
@@ -259,6 +260,72 @@ check("repair command fails truthfully for unresolved outcomes", () => {
   assert.equal(hasBlockingRepairOutcomes([outcome("unrepaired")]), true);
   assert.equal(hasBlockingRepairOutcomes([outcome("rejected")]), true);
   assert.equal(hasBlockingRepairOutcomes([]), true);
+});
+
+check("repair report preserves successful diffs across later runs", () => {
+  const repaired = (signature: string, label: string): RepairOutcome => ({
+    relPath: `guest/failure-path/${signature.slice(0, 12)}.spec.ts`,
+    flowName: label,
+    signature,
+    expectedSignature: "200",
+    result: "repaired",
+    attempts: 1,
+    violations: [],
+    finalFailures: [],
+    beforeSource: `// before ${label}`,
+    afterSource: `// after ${label}`,
+  });
+  const alreadyGreen = (signature: string, label: string): RepairOutcome => ({
+    relPath: `guest/failure-path/${signature.slice(0, 12)}.spec.ts`,
+    flowName: label,
+    signature,
+    expectedSignature: "200",
+    result: "already-green",
+    attempts: 0,
+    violations: [],
+    finalFailures: [],
+  });
+  const sigA = "a".repeat(64);
+  const sigB = "b".repeat(64);
+  const legacyA = repaired(sigA, "Flow A");
+
+  const migrated = mergeRepairReport(
+    {
+      generated_at: "2026-01-01T00:00:00.000Z",
+      summary: { repaired: 1 },
+      outcomes: [legacyA],
+    },
+    [alreadyGreen(sigB, "Flow B")],
+    "2026-01-02T00:00:00.000Z"
+  );
+  assert.equal(migrated.version, 2);
+  assert.equal(migrated.outcomes[0].result, "already-green");
+  assert.deepEqual(migrated.summary, { "already-green": 1 });
+  assert.equal(migrated.repair_history.length, 1);
+  assert.equal(migrated.repair_history[0].signature, sigA);
+  assert.equal(migrated.repair_history[0].repaired_at, "2026-01-01T00:00:00.000Z");
+
+  const withB = mergeRepairReport(
+    migrated,
+    [repaired(sigB, "Flow B")],
+    "2026-01-03T00:00:00.000Z"
+  );
+  assert.deepEqual(
+    withB.repair_history.map((entry) => entry.signature),
+    [sigA, sigB],
+    "repairing Flow B must retain Flow A's historical diff"
+  );
+
+  const laterGreenRun = mergeRepairReport(
+    withB,
+    [alreadyGreen(sigA, "Flow A")],
+    "2026-01-04T00:00:00.000Z"
+  );
+  assert.deepEqual(
+    laterGreenRun.repair_history.map((entry) => entry.signature),
+    [sigA, sigB],
+    "an already-green run must not erase stored repair history"
+  );
 });
 
 check("agent output normalization strips prose and syntax gate rejects malformed source", () => {
