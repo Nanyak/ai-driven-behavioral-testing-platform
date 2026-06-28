@@ -22,9 +22,10 @@ artifact the next stage reads. For the component breakdown see
 | 3 | Generate traffic | `npm run traffic:generate` | Logged requests in Elasticsearch | `npm run check:phase5` |
 | 4 | Ingest logs | `npm run ingest:run` | `data/sessions/session-flows-*.json` + golden candidates | `npm run check:phase6` |
 | 5 | Mine behavior | `npm run behavior:mine` | Test candidates + `classification-report-<runId>.json` | `npm run check:phase7` |
-| 6 | Generate tests | `npm run script-generator:generate` | `generated-tests/**/*.spec.ts` | `npm run check:phase9` |
-| 7 | Run suite | `npm run test:all` | `reports/report.{json,html}` | `npm run check:phase10`, `check:phase11` |
-| 8 | Read report | `open reports/report.html` | — | report is **green** |
+| 6 | Generate drafts | `npm run script-generator:generate` | specs + `generated-tests/.artifacts.json` | `npm run check:phase9` |
+| 7 | Review + approve | `npm run dashboard:dev` → Flow Review | hash-bound decisions in `data/hitl/approvals.json` | exact source/body plan reviewed |
+| 8 | Run approved suite | `npm run test:all` | `reports/report.{json,html}` | `npm run check:phase10`, `check:phase11` |
+| 9 | Read report | `open reports/report.html` | — | report is **green** |
 
 ## Clean checkout → green report (copy/paste)
 
@@ -56,10 +57,13 @@ npm run behavior:mine
 # 6. Generate Playwright API tests from the candidates
 npm run script-generator:generate
 
-# 7. Execute the generated suite against Medusa
+# 7. In another terminal, review source + redacted body plans and approve them
+npm run dashboard:dev
+
+# 8. Execute exact hash-matching approved artifacts against Medusa
 npm run test:all
 
-# 8. Read the report
+# 9. Read the report
 open reports/report.html
 ```
 
@@ -76,7 +80,12 @@ npm run test:customer   # registered_customer specs only (both subfolders)
 npm run test:admin      # admin_operator specs only (both subfolders)
 npm run test:happy      # happy-path specs across all personas
 npm run test:failure    # failure-path (has_errors) specs across all personas
+npm run test:drafts     # explicit run of undecided/changed artifacts
 ```
+
+Normal suite targets admit only approved specs whose current source and body-plan
+hashes still match the approval record. A regenerated, edited, or agent-repaired
+artifact is quarantined until it is reviewed again.
 
 ## Regression demo (catch a regression end to end)
 
@@ -130,7 +139,8 @@ Because stages are decoupled through files, any stage can be re-run in isolation
 - Re-mine without re-ingesting: `npm run behavior:mine` (reads the newest
   `data/sessions/session-flows-*.json`).
 - Re-generate tests without re-mining: `npm run script-generator:generate`.
-- Re-run the suite without re-generating: `npm run test:all`.
+- Re-run hash-matching approved tests without re-generating: `npm run test:all`.
+- Exercise quarantined drafts explicitly: `npm run test:drafts`.
 
 ## Troubleshooting
 

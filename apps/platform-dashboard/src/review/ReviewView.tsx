@@ -3,10 +3,12 @@ import {
   AlertTriangle,
   CheckCircle2,
   CircleDashed,
+  Code2,
   FileCode2,
   FlaskConical,
   HelpCircle,
   History,
+  ListTree,
   RefreshCw,
   ShieldAlert,
   Trash2,
@@ -15,7 +17,16 @@ import {
 } from "lucide-react";
 import { useFlows } from "./useFlows.js";
 import { EmptyState, Skeleton } from "../ui/primitives.js";
-import { fetchRepairDiff, type Decision, type Lifecycle, type PriorDecision, type RepairDiff, type ReviewFlow } from "./decisions.js";
+import {
+  fetchArtifactReview,
+  fetchRepairDiff,
+  type ArtifactReview as ArtifactReviewPayload,
+  type Decision,
+  type Lifecycle,
+  type PriorDecision,
+  type RepairDiff,
+  type ReviewFlow,
+} from "./decisions.js";
 import { startJob as startPipelineJob } from "../pipeline/pipeline.js";
 
 /** The 12-hex spec hash a repair run scopes to, from `…/<hash>.spec.ts`. */
@@ -91,6 +102,17 @@ function ConflictChip() {
       title="Same journey as an approved flow but expects a different outcome — likely drift/regression."
     >
       <AlertTriangle size={13} aria-hidden="true" /> conflicts
+    </span>
+  );
+}
+
+function ArtifactMismatchChip() {
+  return (
+    <span
+      className="lifecycle-badge conflict"
+      title="The current source or body plan no longer matches the approved hash and is quarantined."
+    >
+      <AlertTriangle size={13} aria-hidden="true" /> artifact changed
     </span>
   );
 }
@@ -228,6 +250,129 @@ function RepairedDiff({ flow }: { flow: ReviewFlow }) {
   );
 }
 
+function shortDigest(value: string | null): string {
+  return value ? `${value.slice(0, 12)}…${value.slice(-8)}` : "unavailable";
+}
+
+function ArtifactReview({ flow }: { flow: ReviewFlow }) {
+  const [open, setOpen] = useState(false);
+  const [artifact, setArtifact] = useState<ArtifactReviewPayload | null>(null);
+  const [loadState, setLoadState] = useState<"idle" | "loading" | "error" | "empty">("idle");
+
+  async function toggle() {
+    const next = !open;
+    setOpen(next);
+    if (next && artifact === null && loadState === "idle") {
+      setLoadState("loading");
+      try {
+        const payload = await fetchArtifactReview(flow.signature);
+        if (payload) {
+          setArtifact(payload);
+          setLoadState("idle");
+        } else {
+          setLoadState("empty");
+        }
+      } catch {
+        setLoadState("error");
+      }
+    }
+  }
+
+  const stateLabel =
+    artifact?.matches_approval === true
+      ? "Exact approved artifact"
+      : artifact?.matches_approval === false
+        ? "Changed since approval"
+        : "Draft artifact";
+  const bodyPlanForEvidence =
+    artifact?.body_plan &&
+    typeof artifact.body_plan === "object" &&
+    "baseline" in artifact.body_plan
+      ? (artifact.body_plan as { baseline?: unknown }).baseline
+      : artifact?.body_plan;
+  const selectedOptionals =
+    bodyPlanForEvidence &&
+    typeof bodyPlanForEvidence === "object" &&
+    Array.isArray((bodyPlanForEvidence as { steps?: unknown }).steps)
+      ? (
+          (bodyPlanForEvidence as {
+            steps: Array<{
+              method?: string;
+              endpoint?: string;
+              selected_optional_fields?: string[];
+            }>;
+          }).steps
+        ).flatMap((step) =>
+          (step.selected_optional_fields ?? []).map((path) => ({
+            step: `${step.method ?? ""} ${step.endpoint ?? ""}`.trim(),
+            path,
+          }))
+        )
+      : [];
+
+  return (
+    <section className="artifact-review">
+      <button
+        type="button"
+        className="prior-toggle"
+        onClick={() => void toggle()}
+        aria-expanded={open}
+      >
+        <Code2 size={14} aria-hidden="true" />
+        <span>Review executable artifact</span>
+        <span className="how-caret">{open ? "▲" : "▼"}</span>
+      </button>
+      {open ? (
+        <div className="artifact-review-body">
+          {loadState === "loading" ? <p className="muted">Loading source and body plan…</p> : null}
+          {loadState === "error" ? <p className="review-action-error">Could not load the artifact.</p> : null}
+          {loadState === "empty" ? <p className="muted">No generated artifact is available.</p> : null}
+          {artifact ? (
+            <>
+              <div className={`artifact-integrity ${artifact.matches_approval === false ? "mismatch" : ""}`}>
+                <strong>{stateLabel}</strong>
+                <span>Spec SHA-256: <code>{shortDigest(artifact.spec_hash)}</code></span>
+                <span>Body-plan SHA-256: <code>{shortDigest(artifact.body_plan_hash)}</code></span>
+              </div>
+              {artifact.body_plan_hash === null ? (
+                <p className="review-action-error">
+                  Body-plan manifest unavailable. Regenerate tests before approval.
+                </p>
+              ) : null}
+              <div className="artifact-provenance" aria-label="Body rule provenance">
+                {artifact.body_rule_sources.map((source) => (
+                  <span key={source} className={`provenance-chip ${source}`}>{source}</span>
+                ))}
+              </div>
+              {selectedOptionals.length > 0 ? (
+                <div className="optional-evidence">
+                  <strong>Evidence-selected optional fields</strong>
+                  <ul>
+                    {selectedOptionals.map((item) => (
+                      <li key={`${item.step}:${item.path}`}>
+                        <code>{item.path}</code>
+                        <span>{item.step}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              <details className="artifact-disclosure">
+                <summary><ListTree size={14} aria-hidden="true" /> Redacted body plan</summary>
+                <pre>{JSON.stringify(artifact.body_plan, null, 2)}</pre>
+              </details>
+              <details className="artifact-disclosure">
+                <summary><FileCode2 size={14} aria-hidden="true" /> Complete Playwright source</summary>
+                <pre>{artifact.source}</pre>
+              </details>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function HowItWorks() {
   const [open, setOpen] = useState(false);
   return (
@@ -242,20 +387,19 @@ function HowItWorks() {
           <ul>
             <li>
               <strong>Tests are generated before you review them.</strong> The script-generator
-              writes a Playwright spec for each mined flow automatically. A flow can already have a
-              test while still being <em>Awaiting review</em>.
+              writes a draft Playwright spec for each mined flow automatically. Drafts are excluded
+              from normal suite runs until approved.
             </li>
             <li>
-              <strong>Approve</strong> = bless this flow and keep its test.{" "}
+              <strong>Approve</strong> = bind the exact spec and body-plan hashes as the runnable baseline.{" "}
               <strong>Discard</strong> = reject the flow. Both record your decision and stop
               the flow from re-surfacing as a new candidate on the next{" "}
               <code>behavior:mine</code> (the skip gate).
             </li>
             <li>
-              Approve/Discard never touch the <code>.spec.ts</code> file — they only record a
-              judgment. To stop a spec from being executed, use <strong>Delete test</strong>,
-              which removes the file from <code>generated-tests/</code>. Deleting is separate
-              from discarding: it changes no decision record.
+              If approved source changes later, its hash no longer matches and the runner quarantines
+              it until you review and approve the new artifact. Use the explicit <code>drafts</code>{" "}
+              target to exercise undecided specs.
             </li>
             <li>
               <strong>Persona is derived from observed behavior</strong>, never declared. A{" "}
@@ -303,6 +447,7 @@ function DetailPanel({
         <h2>{flow.flow_name}</h2>
         <div className="detail-badges">
           {flow.conflicts_with_approved ? <ConflictChip /> : null}
+          {flow.artifact_matches_approval === false ? <ArtifactMismatchChip /> : null}
           {flow.repaired_by_agent ? <AgentBadge attempts={flow.repair_attempts} /> : null}
           <LifecycleBadge lifecycle={flow.lifecycle} />
         </div>
@@ -383,12 +528,20 @@ function DetailPanel({
       </section>
 
       {flow.repaired_by_agent ? <RepairedDiff flow={flow} /> : null}
+      {flow.test_path ? <ArtifactReview flow={flow} /> : null}
 
       <footer className="review-actions">
         <button
           type="button"
           className="approve"
-          disabled={pending}
+          disabled={pending || !flow.test_path || !flow.body_plan_hash}
+          title={
+            !flow.test_path
+              ? "No generated test to approve"
+              : !flow.body_plan_hash
+                ? "Regenerate tests to create the body-plan manifest before approval"
+                : "Approve this exact spec and body-plan hash"
+          }
           onClick={() => onDecide("approved")}
         >
           <CheckCircle2 size={16} aria-hidden="true" /> Approve
@@ -431,12 +584,9 @@ function DetailPanel({
         </button>
       </footer>
       <p className="review-note">
-        <strong>Approve</strong> keeps the test and blesses the flow; <strong>Discard</strong>{" "}
-        marks it rejected. Both write to <code>data/hitl/approvals.json</code> and feed the
-        skip gate so the flow won't re-surface on the next <code>behavior:mine</code> — neither
-        touches the <code>.spec.ts</code> file. <strong>Delete test</strong> removes the{" "}
-        <code>.spec.ts</code> from <code>generated-tests/</code> so it won't be executed; it
-        does not record a decision.
+        <strong>Approve</strong> stores the exact spec/body-plan hashes and admits that artifact to
+        normal runs. <strong>Discard</strong> rejects it and keeps it out of normal runs.{" "}
+        <strong>Delete test</strong> removes the draft file but records no decision.
       </p>
     </aside>
   );
@@ -496,7 +646,11 @@ export function ReviewView() {
       if (errorsOnly && !flow.attributes.has_errors) return false;
       if (
         status === "attention" &&
-        !(flow.lifecycle === "awaiting_review" || flow.conflicts_with_approved)
+        !(
+          flow.lifecycle === "awaiting_review" ||
+          flow.conflicts_with_approved ||
+          flow.artifact_matches_approval === false
+        )
       ) {
         return false;
       }
@@ -506,8 +660,8 @@ export function ReviewView() {
       return true;
     });
     return filtered.sort((a, b) => {
-      const ca = a.conflicts_with_approved ? 0 : 1;
-      const cb = b.conflicts_with_approved ? 0 : 1;
+      const ca = a.conflicts_with_approved || a.artifact_matches_approval === false ? 0 : 1;
+      const cb = b.conflicts_with_approved || b.artifact_matches_approval === false ? 0 : 1;
       if (ca !== cb) return ca - cb;
       const la = LIFECYCLE_ORDER[a.lifecycle];
       const lb = LIFECYCLE_ORDER[b.lifecycle];
@@ -622,7 +776,7 @@ export function ReviewView() {
     {
       key: "attention",
       label: "Needs attention",
-      n: (c?.awaiting_review ?? 0) + (c?.conflicts ?? 0),
+      n: (c?.awaiting_review ?? 0) + (c?.conflicts ?? 0) + (c?.stale_approvals ?? 0),
     },
     { key: "awaiting_review", label: "Awaiting review", n: c?.awaiting_review },
     { key: "approved", label: "Approved", n: c?.approved },
@@ -671,7 +825,7 @@ export function ReviewView() {
         <div className="review-counts">
           {c ? (
             <span>
-              {c.conflicts} conflicts · {c.awaiting_review} awaiting · {c.approved} approved ·{" "}
+              {c.conflicts} conflicts · {c.stale_approvals} changed · {c.awaiting_review} awaiting · {c.approved} approved ·{" "}
               {c.discarded} discarded · {c.covered}/{c.total} covered
             </span>
           ) : null}
@@ -714,6 +868,7 @@ export function ReviewView() {
                       </span>
                     ) : null}
                     {flow.conflicts_with_approved ? <ConflictChip /> : null}
+                    {flow.artifact_matches_approval === false ? <ArtifactMismatchChip /> : null}
                     {flow.repaired_by_agent ? <AgentBadge attempts={flow.repair_attempts} /> : null}
                     <LifecycleBadge lifecycle={flow.lifecycle} />
                   </span>

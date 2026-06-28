@@ -10,6 +10,7 @@ const TARGET_HINTS: Record<RunTarget, string> = {
   admin: "Admin operator specs only",
   happy: "Happy-path specs across personas",
   failure: "Failure-path specs across personas",
+  drafts: "Undecided or changed specs only (explicit quarantine run)",
 };
 
 export function TestRunnerView({ onViewReports }: { onViewReports: () => void }) {
@@ -67,8 +68,8 @@ export function TestRunnerView({ onViewReports }: { onViewReports: () => void })
         </div>
 
         <p className="muted run-hint">
-          Runs <code>npm run test:&lt;suite&gt;</code> against the live SUT. The archived run shows
-          up under the <strong>Reports</strong> tab when it finishes.
+          Normal suites run exact hash-matching approved artifacts only. Choose{" "}
+          <code>drafts</code> to explicitly exercise quarantined, undecided specs.
         </p>
 
         {error ? <p className="review-action-error">{error}</p> : null}

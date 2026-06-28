@@ -3,7 +3,7 @@
 // standalone GET emitted just before the step that needs it.
 import type { OasDocument, OasMethod, OasSchema } from "../../golden/src/oas-types.js";
 import { isRefSchema } from "../../golden/src/oas-types.js";
-import type { CandidateStep } from "./load.js";
+import type { CandidateStep, RequestBodyEvidence } from "./load.js";
 
 export interface OasSpecs {
   store: OasDocument;
@@ -18,11 +18,18 @@ export type BodyFieldValue =
 
 export type SynthesizedBody = Record<string, BodyFieldValue>;
 
-export type BodyPlan =
+export type BodyRuleProvenance = "openapi" | "observed" | "profile";
+
+export type BodyPlan = (
   | { kind: "observed"; payload: unknown }
   | { kind: "synthesized"; fields: SynthesizedBody }
   | { kind: "empty" }
-  | { kind: "unresolvable"; reason: string };
+  | { kind: "unresolvable"; reason: string }
+) & {
+  source?: BodyRuleProvenance;
+  /** Optional OAS fields admitted by aggregated observed-shape evidence. */
+  observed_optional_fields?: string[];
+};
 
 // Params are an ORDERED list (by occurrence in the template), not a name-keyed
 // map: a path can repeat a param name (`/store/carts/{id}/line-items/{id}`), and
@@ -406,6 +413,7 @@ interface FlatField {
   required: boolean;
   type: string;
   schema: OasSchema;
+  path: string;
 }
 
 function resolveSchemaRef(doc: OasDocument, schema: OasSchema): { properties: Record<string, OasSchema>; required: string[] } {
@@ -447,12 +455,70 @@ function leafTypeOf(doc: OasDocument, schema: OasSchema): string {
   return "object";
 }
 
-function flattenRequiredFields(doc: OasDocument, schema: OasSchema): FlatField[] {
+export const OPTIONAL_FIELD_MIN_SAMPLES = 3;
+export const OPTIONAL_FIELD_PRESENCE_THRESHOLD = 0.8;
+
+function evidenceAt(evidence: RequestBodyEvidence | undefined, path: string) {
+  return evidence?.fields.find((field) => field.path === path);
+}
+
+function safeStringPlaceholder(fieldName: string, format?: string): string {
+  const normalized = fieldName.toLowerCase();
+  if (format === "email" || normalized === "email" || normalized.endsWith("_email")) {
+    return "generated-test@example.com";
+  }
+  if (format === "date-time") return "2020-01-01T00:00:00.000Z";
+  if (format === "date") return "2020-01-01";
+  if (format === "uuid") return "00000000-0000-4000-8000-000000000000";
+  if (format === "uri" || format === "url" || normalized.endsWith("_url")) {
+    return "https://example.com";
+  }
+  if (normalized.includes("phone")) return "+10000000000";
+  if (normalized === "first_name") return "Generated";
+  if (normalized === "last_name") return "Tester";
+  if (normalized === "city") return "Test City";
+  if (normalized === "postal_code" || normalized === "zip") return "00000";
+  if (normalized === "country_code") return "us";
+  if (normalized === "province") return "Test Province";
+  if (/address_(?:1|2)|address_line/.test(normalized)) return "1 Test Street";
+  return `test-${fieldName}`;
+}
+
+const UNSAFE_MASKED_LITERAL_FIELD =
+  /password|passwd|pwd|token|secret|authorization|cookie|api[-_]?key|session|csrf|jwt|credential|pan|card|cvv|ssn|tin/i;
+
+function includeObservedOptional(evidence: RequestBodyEvidence | undefined, path: string): boolean {
+  const field = evidenceAt(evidence, path);
+  return Boolean(
+    evidence &&
+      evidence.sample_count >= OPTIONAL_FIELD_MIN_SAMPLES &&
+      field &&
+      field.present_count >= OPTIONAL_FIELD_MIN_SAMPLES &&
+      field.presence_rate >= OPTIONAL_FIELD_PRESENCE_THRESHOLD
+  );
+}
+
+function flattenRequestFields(
+  doc: OasDocument,
+  schema: OasSchema,
+  evidence: RequestBodyEvidence | undefined,
+  includeOptionals: boolean
+): FlatField[] {
   const { properties, required } = resolveSchemaRef(doc, schema);
   const requiredSet = new Set(required);
   return Object.entries(properties)
-    .filter(([name]) => requiredSet.has(name))
-    .map(([name, child]) => ({ name, required: true, type: leafTypeOf(doc, child), schema: child }));
+    .filter(
+      ([name]) =>
+        requiredSet.has(name) ||
+        (includeOptionals && includeObservedOptional(evidence, `$.${name}`))
+    )
+    .map(([name, child]) => ({
+      name,
+      required: requiredSet.has(name),
+      type: leafTypeOf(doc, child),
+      schema: child,
+      path: `$.${name}`,
+    }));
 }
 
 /** Resolve a schema down to its concrete shape (follow $ref, collapse oneOf to
@@ -494,25 +560,92 @@ function synthValueExpr(
   schema: OasSchema,
   fieldName: string,
   ensure: (varName: string) => boolean,
-  edgeOmit: boolean
+  edgeOmit: boolean,
+  evidence?: RequestBodyEvidence,
+  path = `$.${fieldName}`
 ): string | null {
   const scopeVar = ID_FIELD_TO_SCOPE[fieldName];
   if (scopeVar) return ensure(scopeVar) ? `scope.${scopeVar}` : null;
 
   const type = leafTypeOf(doc, schema);
-  if (type === "number" || type === "integer") return "1";
-  if (type === "boolean") return "true";
-  if (type === "string") return JSON.stringify(`test-${fieldName}`);
+  const concrete = derefSchema(doc, schema);
+  const constraints = isRefSchema(concrete) ? {} : concrete;
+  const observed = evidenceAt(evidence, path);
+  // Masked evidence proves presence only. Its captured value, primitive type,
+  // and hints may be a redaction sentinel (or otherwise structurally lossy), so
+  // they must never influence synthesis. The OAS/runtime/profile remains the
+  // sole source of the emitted value and shape.
+  const safeHint = observed?.masked
+    ? undefined
+    : observed?.safe_hints.find(
+        (hint) =>
+          hint.count >= OPTIONAL_FIELD_MIN_SAMPLES &&
+          hint.count / Math.max(1, observed.present_count) >= OPTIONAL_FIELD_PRESENCE_THRESHOLD
+      )?.hint;
+  const enumValues = Array.isArray(constraints.enum) ? constraints.enum : [];
+  const constrained = constraints.const;
+  if (
+    observed?.masked &&
+    UNSAFE_MASKED_LITERAL_FIELD.test(fieldName) &&
+    constrained === undefined &&
+    enumValues.length === 0
+  ) {
+    // Presence alone cannot invent credentials/secrets. A runtime scope mapping
+    // or explicit endpoint profile must supply these; optional fields are omitted
+    // and required ones become unresolvable.
+    return null;
+  }
+  const allowedSafeHint =
+    safeHint !== undefined &&
+    (enumValues.length === 0 || enumValues.some((value) => value === safeHint))
+      ? safeHint
+      : undefined;
+  if (type === "number" || type === "integer") {
+    const value =
+      typeof constrained === "number"
+        ? constrained
+        : typeof enumValues[0] === "number"
+          ? enumValues[0]
+        : typeof constraints.minimum === "number"
+          ? Math.max(1, constraints.minimum)
+          : 1;
+    return String(value);
+  }
+  if (type === "boolean") {
+    const value =
+      typeof constrained === "boolean"
+        ? constrained
+        : typeof allowedSafeHint === "boolean"
+          ? allowedSafeHint
+          : typeof enumValues[0] === "boolean"
+            ? enumValues[0]
+          : true;
+    return String(value);
+  }
+  if (type === "string") {
+    const value =
+      typeof constrained === "string"
+        ? constrained
+        : typeof allowedSafeHint === "string"
+          ? allowedSafeHint
+          : typeof enumValues[0] === "string"
+            ? enumValues[0]
+          : safeStringPlaceholder(fieldName, constraints.format);
+    return JSON.stringify(value);
+  }
 
   if (type === "object") {
     const { properties, required } = resolveSchemaRef(doc, schema);
+    const requiredSet = new Set(required);
     const parts: string[] = [];
-    for (const name of required) {
+    for (const name of Object.keys(properties)) {
+      const childPath = `${path}.${name}`;
+      if (!requiredSet.has(name) && !includeObservedOptional(evidence, childPath)) continue;
       const child = properties[name];
       if (!child) continue;
-      const expr = synthValueExpr(doc, child, name, ensure, edgeOmit);
+      const expr = synthValueExpr(doc, child, name, ensure, edgeOmit, evidence, childPath);
       if (expr === null) {
-        if (edgeOmit) continue;
+        if (edgeOmit || !requiredSet.has(name)) continue;
         return null;
       }
       parts.push(`${JSON.stringify(name)}: ${expr}`);
@@ -523,7 +656,7 @@ function synthValueExpr(
   if (type === "array") {
     const items = (derefSchema(doc, schema) as { items?: OasSchema }).items;
     if (!items) return "[]";
-    const expr = synthValueExpr(doc, items, fieldName, ensure, edgeOmit);
+    const expr = synthValueExpr(doc, items, fieldName, ensure, edgeOmit, evidence, `${path}[]`);
     if (expr === null) return edgeOmit ? "[]" : null;
     return `[${expr}]`;
   }
@@ -608,7 +741,8 @@ function synthesizeBody(
   method: string,
   endpoint: string,
   ensure: (varName: string) => boolean,
-  edgeOmitOnFailure: boolean
+  edgeOmitOnFailure: boolean,
+  evidence?: RequestBodyEvidence
 ): BodyPlan {
   const found = requestSchemaFor(specs, method, endpoint);
   if (!found) {
@@ -679,47 +813,95 @@ function synthesizeBody(
       },
     };
   }
-  const fields = flattenRequiredFields(found.doc, found.schema);
+  const fields = flattenRequestFields(
+    found.doc,
+    found.schema,
+    evidence,
+    !edgeOmitOnFailure
+  );
   if (fields.length === 0) {
     return { kind: "empty" };
   }
   const synthesized: SynthesizedBody = {};
+  let usedObservedOptional = false;
+  const observedOptionalFields: string[] = [];
   for (const field of fields) {
     const scopeVar = ID_FIELD_TO_SCOPE[field.name];
     if (scopeVar) {
       if (!ensure(scopeVar)) {
-        if (edgeOmitOnFailure) continue; // omit: reproduces the logged missing-required-field condition
+        if (edgeOmitOnFailure || !field.required) continue;
         return {
           kind: "unresolvable",
           reason: `required field "${field.name}" needs runtime value "${scopeVar}", which no prior step or standalone resolver produced`,
         };
       }
       synthesized[field.name] = { kind: "runtime", ref: scopeVar };
+      usedObservedOptional ||= !field.required;
+      if (!field.required) observedOptionalFields.push(field.path);
       continue;
     }
-    if (field.type === "number" || field.type === "integer") {
-      synthesized[field.name] = { kind: "literal", value: 1 };
-    } else if (field.type === "boolean") {
-      synthesized[field.name] = { kind: "literal", value: true };
-    } else if (field.type === "string") {
-      synthesized[field.name] = { kind: "literal", value: `test-${field.name}` };
+    if (field.type === "number" || field.type === "integer" || field.type === "boolean" || field.type === "string") {
+      const expr = synthValueExpr(
+        found.doc,
+        field.schema,
+        field.name,
+        ensure,
+        edgeOmitOnFailure,
+        evidence,
+        field.path
+      );
+      if (expr === null) {
+        if (edgeOmitOnFailure || !field.required) continue;
+        return {
+          kind: "unresolvable",
+          reason: `required field "${field.name}" could not be synthesized from the OAS`,
+        };
+      }
+      synthesized[field.name] = { kind: "raw", expr };
+      usedObservedOptional ||= !field.required;
+      if (!field.required) observedOptionalFields.push(field.path);
     } else {
       // Composite (array/object): the OAS describes the nested shape, so walk it.
-      const expr = synthValueExpr(found.doc, field.schema, field.name, ensure, edgeOmitOnFailure);
+      const expr = synthValueExpr(
+        found.doc,
+        field.schema,
+        field.name,
+        ensure,
+        edgeOmitOnFailure,
+        evidence,
+        field.path
+      );
       if (expr === null) {
-        if (edgeOmitOnFailure) continue; // omit reproduces the logged missing-required-field condition
+        if (edgeOmitOnFailure || !field.required) continue;
         return {
           kind: "unresolvable",
           reason: `required field "${field.name}" ("${field.type}") could not be synthesized from the OAS`,
         };
       }
+      if (
+        !field.required &&
+        evidenceAt(evidence, field.path)?.masked &&
+        (expr === "{}" || expr === "[]")
+      ) {
+        // A legacy whole-container mask proves presence but not enough shape to
+        // construct a meaningful object/array. Fresh structured masking supplies
+        // nested paths; until then, omit instead of sending an invented empty value.
+        continue;
+      }
       synthesized[field.name] = { kind: "raw", expr };
+      usedObservedOptional ||= !field.required;
+      if (!field.required) observedOptionalFields.push(field.path);
     }
   }
   if (Object.keys(synthesized).length === 0) {
     return { kind: "empty" };
   }
-  return { kind: "synthesized", fields: synthesized };
+  return {
+    kind: "synthesized",
+    fields: synthesized,
+    source: usedObservedOptional ? "observed" : "openapi",
+    observed_optional_fields: observedOptionalFields,
+  };
 }
 
 /**
@@ -969,7 +1151,14 @@ export function buildFlowPlan(
         // creds authCredentialBody threads for the happy login.
         (step.expected_status >= 400 ? negativeInputBody(step.method, step.endpoint) : null) ??
         authCredentialBody(step.method, step.endpoint) ??
-        synthesizeBody(specs, step.method, step.endpoint, ensure, step.expected_status >= 400);
+        synthesizeBody(
+          specs,
+          step.method,
+          step.endpoint,
+          ensure,
+          step.expected_status >= 400,
+          step.request_body_evidence
+        );
     }
 
     const captures = captureRulesFor(step.method, step.endpoint);

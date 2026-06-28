@@ -38,9 +38,9 @@
     "session_id"
   ],
   "schema_source": "observed",
-  "captured_at": "2026-06-26T21:42:43.710Z",
+  "captured_at": "2026-06-27T21:08:25.096Z",
   "source_sessions": [
-    "sess-adminCatalog-af145671-9659-4591-a2d8-88fbeccf018f",
-    "sess-seed-admin-b2938610-5bbb-414f-8f37-9a81a47f97b7"
+    "sess-adminCatalog-d62bfea1-d452-4fdd-8bc5-c23d670d5000",
+    "sess-seed-admin-edbcfa4a-5505-46a5-9bef-bb842db32b50"
   ]
 }

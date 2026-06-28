@@ -6,6 +6,8 @@
       "billing_address": "ignored",
       "canceled_at": "ignored",
       "created_at": "ignored",
+      "credit_line_subtotal": "ignored",
+      "credit_line_tax_total": "ignored",
       "credit_line_total": "ignored",
       "credit_lines": "ignored",
       "currency_code": "ignored",
@@ -235,8 +237,12 @@
       ]
     }
   ],
-  "captured_at": "2026-06-26T22:36:36.834Z",
+  "captured_at": "2026-06-27T21:08:25.096Z",
   "source_sessions": [
-    "live-capture-2026-06-26-222655"
+    "sess-adminCancel-354573c0-8af0-4ea1-a2c8-48629674fb53",
+    "sess-adminCancel-70c4a746-afde-42c4-a943-52329b1f9cb3",
+    "sess-adminCancel-b23b4784-e26f-43a3-ba93-4a3417785429",
+    "sess-adminCancel-da552189-eb32-45ba-86f0-aad745bb6e10",
+    "sess-adminCancel-db51fa6d-1956-4b1f-9a5f-b5888030bd40"
   ]
 }

@@ -1,5 +1,6 @@
 import type { Plugin } from "vite";
 import {
+  artifactReview,
   deleteTestFile,
   listReports,
   loadFlows,
@@ -45,6 +46,26 @@ export function hitlApiPlugin(): Plugin {
         } catch (error) {
           sendJson(res, 500, { error: error instanceof Error ? error.message : "load failed" });
         }
+      });
+
+      // Lazy artifact payload: source can be large, so keep it out of /api/flows.
+      // The response also carries the redacted body plan and exact approval hashes.
+      server.middlewares.use("/api/artifacts/review", (req, res, next) => {
+        if (req.method !== "GET") {
+          next();
+          return;
+        }
+        const signature = new URL(req.url ?? "", "http://localhost").searchParams.get("signature");
+        if (!signature) {
+          sendJson(res, 400, { error: "signature query param is required" });
+          return;
+        }
+        const artifact = artifactReview(signature);
+        if (!artifact) {
+          sendJson(res, 404, { error: "generated artifact not found for this flow" });
+          return;
+        }
+        sendJson(res, 200, artifact);
       });
 
       // The before/after sources for a resolver-agent-repaired flow, so the review
@@ -154,15 +175,26 @@ export function hitlApiPlugin(): Plugin {
               });
               return;
             }
+            const artifact = artifactReview(signature);
+            if (status === "approved" && (!artifact || !artifact.body_plan_hash)) {
+              sendJson(res, 409, {
+                error:
+                  "Approval requires a generated spec and body-plan manifest. Regenerate the test, then review it again.",
+              });
+              return;
+            }
             const entry = upsertDecision({
               flow_signature: signature,
               status,
-              test_path: body.test_path ?? null,
+              test_path: artifact?.test_path ?? body.test_path ?? null,
               flow_name: body.flow_name,
               persona: body.persona,
               route_key: body.route_key,
               status_signature: body.status_signature,
               step_count: body.step_count,
+              spec_hash: status === "approved" ? artifact?.spec_hash : undefined,
+              body_plan_hash: status === "approved" ? artifact?.body_plan_hash ?? undefined : undefined,
+              body_rule_sources: status === "approved" ? artifact?.body_rule_sources : undefined,
             });
             sendJson(res, 200, { entry });
           } catch (error) {
@@ -223,7 +255,7 @@ export function hitlApiPlugin(): Plugin {
             const target = body.target ?? "all";
             if (!isValidTarget(target)) {
               sendJson(res, 400, {
-                error: "target must be one of: all, guest, customer, admin, happy, failure",
+                error: "target must be one of: all, guest, customer, admin, happy, failure, drafts",
               });
               return;
             }

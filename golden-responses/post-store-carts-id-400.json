@@ -18,16 +18,12 @@
     "session_id"
   ],
   "schema_source": "observed",
-  "captured_at": "2026-06-26T21:42:43.710Z",
+  "captured_at": "2026-06-27T21:08:25.096Z",
   "source_sessions": [
-    "sess-cartAbandon-1a3cdd0e-bfaa-49b2-9d74-7daca2ce3391",
-    "sess-cartAbandon-d6883bcb-b0d7-4628-9368-460fc6d387db",
-    "sess-cartAbandon-edcd1b2c-a437-4347-901a-b00baa514e55",
-    "sess-multiItemCheckout-08251149-a718-4c1c-86cf-4e0f14cace04",
-    "sess-multiItemCheckout-f3e3e2c2-7737-42f8-ba92-a50a66f6a40f",
-    "sess-returningCheckout-139ec7ab-04cb-4f2e-82a2-918e471796d6",
-    "sess-returningCheckout-8492a282-3ff3-4b96-a0ea-bab68401fe67",
-    "sess-returningCheckout-9b9cf8a5-e727-4413-8c16-ec6a60959247",
-    "sess-returningCheckout-e899cfa9-eb2a-422e-8861-1fa89ff8f4bc"
+    "sess-cartAbandon-6251d04a-3539-4aa2-8eba-21a79b5c5d46",
+    "sess-multiItemCheckout-eb8b1fbf-d5cb-47aa-b739-8f623b81f93a",
+    "sess-returningCheckout-1a9acb16-d741-4b53-90df-569bff10f17d",
+    "sess-returningCheckout-26d9272e-f6d8-4337-bc26-e28d7ce2b576",
+    "sess-returningCheckout-8d8bf1a4-853b-4eb1-8043-152ac0f1e6cb"
   ]
 }

@@ -45,6 +45,10 @@ check("[real data] is the complete spec pinned to the installed Medusa core rele
   assert.equal(adminInfo["x-medusa-core-version"], "2.15.5");
   assert.equal(storeInfo["x-medusa-runtime-corrected"], true);
   assert.equal(adminInfo["x-medusa-runtime-corrected"], true);
+  assert.match(storeInfo["x-medusa-runtime-source"], /Installed @medusajs\/medusa@2\.15\.5/);
+  assert.match(adminInfo["x-medusa-runtime-source"], /Installed @medusajs\/medusa@2\.15\.5/);
+  assert.doesNotMatch(storeInfo["x-medusa-runtime-source"], /@medusajs\/types/);
+  assert.doesNotMatch(adminInfo["x-medusa-runtime-source"], /@medusajs\/types/);
   assert.ok(Object.keys(store.paths).length >= 50, "expected the complete Store API");
   assert.ok(Object.keys(admin.paths).length >= 250, "expected the complete Admin API");
 });
@@ -58,6 +62,38 @@ check("[real data] carries the verified 2.15.5 runtime corrections", () => {
     ? product.properties.hs_code.nullable
     : false, true);
   assert.ok(!product.required?.includes("status"), "default Store product projection omits status");
+
+  const cart = store.components.schemas.StoreCart;
+  assert.ok(cart.required?.includes("credit_line_subtotal"));
+  assert.ok(cart.required?.includes("credit_line_tax_total"));
+  assert.ok(cart.required?.includes("credit_line_total"));
+  assert.ok(cart.required?.includes("credit_lines"));
+  assert.ok(!cart.required?.includes("original_subtotal"));
+  assert.ok(!cart.required?.includes("gift_card_total"));
+  assert.ok(!cart.required?.includes("gift_card_tax_total"));
+  assert.ok(cart.properties?.customer);
+
+  const adminOrder = admin.components.schemas.AdminOrder;
+  assert.ok(adminOrder.properties?.credit_line_subtotal);
+  assert.ok(adminOrder.properties?.credit_line_tax_total);
+
+  const paymentCollection = store.components.schemas.StorePaymentCollection;
+  assert.ok(!paymentCollection.required?.includes("status"));
+  assert.ok(!paymentCollection.required?.includes("payment_providers"));
+
+  const storeOrder = store.components.schemas.StoreOrder;
+  assert.ok(storeOrder.properties?.credit_line_subtotal);
+  assert.ok(storeOrder.properties?.credit_line_tax_total);
+  assert.ok(storeOrder.properties?.credit_lines);
+
+  const orderPreview = admin.components.schemas.AdminOrderPreview;
+  assert.ok(!orderPreview.required?.includes("currency_code"));
+  assert.ok(!orderPreview.required?.includes("payment_status"));
+  assert.ok(!orderPreview.required?.includes("gift_card_total"));
+  assert.ok(!orderPreview.required?.includes("order_change"));
+  assert.ok(orderPreview.properties?.return_received_total);
+  assert.ok(orderPreview.properties?.raw_total);
+  assert.ok(orderPreview.properties?.raw_return_received_total);
 
   const customerResponse = admin.paths["/admin/customers"].get!.responses["200"];
   assert.ok("content" in customerResponse);

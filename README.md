@@ -110,13 +110,19 @@ npm run behavior:mine
 # 6. Generate Playwright API tests + required OpenAPI-backed golden schemas
 npm run script-generator:generate
 
-# 7. Execute the generated suite against Medusa (writes reports/report.{json,html})
+# 7. Review generated source/body plans and approve exact artifacts
+npm run dashboard:dev             # Flow Review → Review executable artifact → Approve
+
+# 8. Execute hash-matching approved tests (writes reports/report.{json,html})
 npm run test:all
 
-# 8. (Optional) Triage any failures — advisory root-cause verdicts as a sidecar
+# 9. (Optional) Explicitly exercise quarantined drafts
+npm run test:drafts
+
+# 10. (Optional) Triage failures — advisory root-cause verdicts as a sidecar
 npm run triage
 
-# 9. Read the report
+# 11. Read the report
 open reports/report.html
 ```
 
@@ -221,10 +227,12 @@ regression demo, and troubleshooting are in `docs/pipeline.md`. Quick references
 - **Structured logs:** `logs/medusa-json.log` (JSON lines, bodies-off by default)
 
 For a synthetic golden-capture run with request payloads and response bodies, set
-`LOG_CAPTURE_BODIES=true` before starting or recreating Medusa. To keep PII-bearing
-fields unmasked for local fixture simulation, also set
-`LOG_CAPTURE_RAW_BODIES=true`; keep that raw option off for shared or production
-logs.
+`LOG_CAPTURE_BODIES=true` before starting or recreating Medusa. By default,
+ordinary values are retained while sensitive scalar fields and every leaf below
+sensitive containers are replaced with type-preserving safe values; object and
+array shape remains available to the behavior engine. To disable masking for
+local fixture simulation, also set `LOG_CAPTURE_RAW_BODIES=true`; keep that raw
+option off for shared or production logs.
 
 ### Known limitations
 

@@ -13,14 +13,8 @@ import {
   GATE_UNAUTHORIZED_BODY,
   GATE_UNAUTHORIZED_STATUS
 } from "./gate-contract"
+import { reduceValue } from "./body-redaction"
 
-const SENSITIVE_KEY_PATTERN =
-  /password|passwd|pwd|token|secret|authorization|cookie|api[-_]?key|session|csrf|jwt|credential|phone|email|address|pan|card|payment|account|paper|document|ssn|tin/i
-const MAX_STRING_LENGTH = 500
-const MAX_ARRAY_ITEMS = 10
-const MAX_OBJECT_KEYS = 30
-const MAX_DEPTH = 4
-const MASKED_VALUE = "[masked]"
 const ensuredLogDirectories = new Set<string>()
 
 type HeaderValue = string | string[] | undefined
@@ -138,88 +132,6 @@ function normalizeEndpoint(rawEndpoint: string): string {
       return segment
     })
     .join("/")
-}
-
-function truncateString(value: string): string {
-  if (value.length <= MAX_STRING_LENGTH) {
-    return value
-  }
-
-  return `${value.slice(0, MAX_STRING_LENGTH)}...[truncated]`
-}
-
-function maskValueByKey(key: string, value: unknown): unknown {
-  if (!SENSITIVE_KEY_PATTERN.test(key)) {
-    return undefined
-  }
-
-  if (value === null || value === undefined || value === "") {
-    return value
-  }
-
-  return MASKED_VALUE
-}
-
-function reduceValue(value: unknown, depth = 0, maskSensitive = true): unknown {
-  if (value === null || value === undefined) {
-    return value
-  }
-
-  if (typeof value === "string") {
-    return truncateString(value)
-  }
-
-  if (typeof value === "number" || typeof value === "boolean") {
-    return value
-  }
-
-  if (Buffer.isBuffer(value)) {
-    return `[buffer:${value.length}]`
-  }
-
-  if (depth >= MAX_DEPTH) {
-    if (Array.isArray(value)) {
-      return `[array:${value.length}]`
-    }
-
-    if (typeof value === "object") {
-      return "[object]"
-    }
-  }
-
-  if (Array.isArray(value)) {
-    const reducedItems = value
-      .slice(0, MAX_ARRAY_ITEMS)
-      .map((item) => reduceValue(item, depth + 1, maskSensitive))
-
-    if (value.length > MAX_ARRAY_ITEMS) {
-      reducedItems.push(`[${value.length - MAX_ARRAY_ITEMS} more items]`)
-    }
-
-    return reducedItems
-  }
-
-  if (typeof value === "object") {
-    const entries = Object.entries(value as Record<string, unknown>)
-    const reducedEntries = entries.slice(0, MAX_OBJECT_KEYS).map(([key, entryValue]) => {
-      if (maskSensitive) {
-        const maskedValue = maskValueByKey(key, entryValue)
-        if (maskedValue !== undefined) {
-          return [key, maskedValue]
-        }
-      }
-
-      return [key, reduceValue(entryValue, depth + 1, maskSensitive)]
-    })
-
-    if (entries.length > MAX_OBJECT_KEYS) {
-      reducedEntries.push(["__truncated_keys", entries.length - MAX_OBJECT_KEYS])
-    }
-
-    return Object.fromEntries(reducedEntries)
-  }
-
-  return String(value)
 }
 
 function tryParseResponseBody(body: unknown): unknown {

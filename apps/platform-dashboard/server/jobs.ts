@@ -19,8 +19,8 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { REPO_ROOT } from "./hitl-store.js";
 
 /** The six suite targets the test-runner accepts (mirrors test-run.ts). */
-export type RunTarget = "all" | "guest" | "customer" | "admin" | "happy" | "failure";
-const RUN_TARGETS: RunTarget[] = ["all", "guest", "customer", "admin", "happy", "failure"];
+export type RunTarget = "all" | "guest" | "customer" | "admin" | "happy" | "failure" | "drafts";
+const RUN_TARGETS: RunTarget[] = ["all", "guest", "customer", "admin", "happy", "failure", "drafts"];
 
 /** Pipeline-authoring jobs the dashboard can trigger, plus the per-target suite runs. */
 export type JobId = "mine" | "generate" | "repair" | "triage" | `test:${RunTarget}`;

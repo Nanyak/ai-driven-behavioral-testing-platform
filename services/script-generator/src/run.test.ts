@@ -15,6 +15,8 @@ import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, rmSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadAugmentedSpecs } from "../../golden/src/oas-source.js";
+import { manifestEntry } from "./artifacts.js";
+import { buildFlowPlan, type FlowPlan, type OasSpecs } from "./resolve.js";
 import {
   approvedOutcomes,
   cleanPersonaFolderPreservingApproved,
@@ -234,6 +236,156 @@ check("ensureGoldenResponses fails closed when no schema source exists", () => {
   );
   assert.equal(existsSync(join(dir, "get-store-not-a-real-operation-200.json")), false);
   rmSync(dir, { recursive: true, force: true });
+});
+
+check("artifact manifest hashes a redacted body plan and exact source", () => {
+  const plan: FlowPlan = {
+    steps: [
+      {
+        step: {
+          method: "POST",
+          endpoint: "/store/customers",
+          expected_status: 200,
+          request_payload: { email: "person@example.com", password: "secret", first_name: "Ada" },
+        },
+        resolveCalls: [],
+        path: { template: "/store/customers", params: [] },
+        query: {},
+        body: {
+          kind: "observed",
+          payload: { email: "person@example.com", password: "secret", first_name: "Ada" },
+        },
+        auth: "publishable-key",
+        captures: {},
+      },
+    ],
+    errors: [],
+  };
+  const entry = manifestEntry(SIG_APPROVED, "customer/happy-path/a.spec.ts", "exact source", plan);
+  const payload = (entry.body_plan.steps[0].body as { kind: "observed"; payload: Record<string, unknown> }).payload;
+  assert.equal(payload.email, "<redacted>");
+  assert.equal(payload.password, "<redacted>");
+  assert.equal(payload.first_name, "<redacted>");
+  assert.deepEqual(entry.body_rule_sources, ["observed"]);
+  assert.equal(entry.generated_spec_hash.length, 64);
+  assert.equal(entry.body_plan_hash.length, 64);
+});
+
+check("typical optionals use masked presence without consuming masked values or shapes", () => {
+  const specs = {
+    store: {
+      openapi: "3.0.0",
+      info: { title: "test", version: "1" },
+      paths: {
+        "/demo": {
+          post: {
+            operationId: "demo",
+            responses: {},
+            requestBody: {
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["title"],
+                    properties: {
+                      title: { type: "string" },
+                      status: { type: "string", enum: ["published", "draft"] },
+                      metadata: {
+                        type: "object",
+                        required: ["label"],
+                        properties: { label: { type: "string" } },
+                      },
+                      rare: { type: "string" },
+                      email: { type: "string" },
+                      shipping_address: {
+                        $ref: "#/components/schemas/CustomAddressInput",
+                      },
+                      access_token: { type: "string" },
+                      unsupported_masked_scalar: { type: "null" },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      components: {
+        schemas: {
+          CustomAddressInput: {
+            type: "object",
+            required: ["address_1", "city", "country_code"],
+            properties: {
+              address_1: { type: "string" },
+              city: { type: "string" },
+              country_code: { type: "string" },
+            },
+          },
+        },
+      },
+    },
+    admin: {
+      openapi: "3.0.0",
+      info: { title: "test", version: "1" },
+      paths: {},
+      components: { schemas: {} },
+    },
+  } as unknown as OasSpecs;
+  const evidence = {
+    sample_count: 5,
+    body_present_count: 5,
+    shape_count: 2,
+    fields: [
+      { path: "$.status", present_count: 5, presence_rate: 1, masked: false, primitive_types: ["string"], safe_hints: [{ type: "string", hint: "published", count: 5 }] },
+      { path: "$.metadata", present_count: 4, presence_rate: 0.8, masked: true, primitive_types: ["string"], safe_hints: [{ type: "string", hint: "[masked]", count: 4 }] },
+      { path: "$.rare", present_count: 3, presence_rate: 0.6, masked: false, primitive_types: ["string"], safe_hints: [] },
+      { path: "$.email", present_count: 5, presence_rate: 1, masked: true, primitive_types: ["string"], safe_hints: [{ type: "string", hint: "captured@example.com", count: 5 }] },
+      { path: "$.shipping_address", present_count: 5, presence_rate: 1, masked: true, primitive_types: ["object"], safe_hints: [] },
+      { path: "$.shipping_address.address_1", present_count: 5, presence_rate: 1, masked: true, primitive_types: ["string"], safe_hints: [] },
+      { path: "$.shipping_address.city", present_count: 5, presence_rate: 1, masked: true, primitive_types: ["string"], safe_hints: [] },
+      { path: "$.shipping_address.country_code", present_count: 5, presence_rate: 1, masked: true, primitive_types: ["string"], safe_hints: [] },
+      { path: "$.access_token", present_count: 5, presence_rate: 1, masked: true, primitive_types: ["string"], safe_hints: [{ type: "string", hint: "must-not-be-replayed", count: 5 }] },
+      { path: "$.unsupported_masked_scalar", present_count: 5, presence_rate: 1, masked: true, primitive_types: ["string"], safe_hints: [{ type: "string", hint: "must-not-be-replayed", count: 5 }] },
+    ],
+  };
+  const plan = buildFlowPlan(
+    [{ method: "POST", endpoint: "/demo", expected_status: 200, request_body_evidence: evidence }],
+    specs,
+    false
+  );
+  const body = plan.steps[0].body;
+  assert.equal(body.kind, "synthesized");
+  if (body.kind !== "synthesized") return;
+  assert.deepEqual(Object.keys(body.fields), ["title", "status", "metadata", "email", "shipping_address"]);
+  assert.equal(body.fields.status.kind, "raw");
+  assert.equal(body.fields.status.kind === "raw" ? body.fields.status.expr : "", '"published"');
+  assert.equal(
+    body.fields.metadata.kind === "raw" ? body.fields.metadata.expr : "",
+    '{ "label": "test-label" }',
+    "masked object presence selects the field, but its OAS supplies the shape"
+  );
+  assert.equal(
+    body.fields.email.kind === "raw" ? body.fields.email.expr : "",
+    '"generated-test@example.com"',
+    "masked scalar hints are ignored in favor of an OAS-derived placeholder"
+  );
+  assert.equal(
+    body.fields.shipping_address.kind === "raw" ? body.fields.shipping_address.expr : "",
+    '{ "address_1": "1 Test Street", "city": "Test City", "country_code": "us" }',
+    "masked address presence selects the field while OAS and safe fixtures supply every value"
+  );
+  assert.equal(
+    "access_token" in body.fields,
+    false,
+    "masked credential presence cannot invent or replay a token"
+  );
+  assert.equal(
+    "unsupported_masked_scalar" in body.fields,
+    false,
+    "masked presence cannot make an unsupported scalar schema safely synthesizable"
+  );
+  assert.equal(body.source, "observed");
+  assert.deepEqual(body.observed_optional_fields, ["$.status", "$.metadata", "$.email", "$.shipping_address"]);
 });
 
 console.log(`\nrun.test: ${passed} checks passed`);

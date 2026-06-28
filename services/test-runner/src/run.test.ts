@@ -5,7 +5,12 @@ import { join } from "node:path";
 import { buildReport } from "./report/build.js";
 import { renderHtml } from "./report/html.js";
 import { formatReportSummary } from "./report/summary.js";
-import { clearPreviousRunArtifacts } from "./run.js";
+import {
+  buildArgs,
+  clearPreviousRunArtifacts,
+  effectiveBodyPlanHash,
+  exactApprovalMatches,
+} from "./run.js";
 
 let passed = 0;
 function check(name: string, fn: () => void): void {
@@ -61,6 +66,35 @@ check("previous JSON and HTML reporter artifacts are removed before a run", () =
   assert.equal(existsSync(json), false);
   assert.equal(existsSync(html), false);
   rmSync(dir, { recursive: true, force: true });
+});
+
+check("approval binds both exact spec and body-plan hashes", () => {
+  const decision = {
+    flow_signature: "a".repeat(64),
+    status: "approved",
+    spec_hash: "spec-a",
+    body_plan_hash: "plan-a",
+  };
+  assert.equal(exactApprovalMatches("spec-a", "plan-a", decision), true);
+  assert.equal(exactApprovalMatches("spec-b", "plan-a", decision), false);
+  assert.equal(exactApprovalMatches("spec-a", "plan-b", decision), false);
+  assert.equal(exactApprovalMatches("spec-a", "plan-a", { ...decision, status: "discarded" }), false);
+});
+
+check("agent-repaired body plan is bound to the repaired source hash", () => {
+  const manifest = { body_plan_hash: "baseline", body_plan: { version: 1, steps: [] } };
+  const repaired = effectiveBodyPlanHash("// repaired-by: resolver-agent", "source-a", manifest);
+  const changed = effectiveBodyPlanHash("// repaired-by: resolver-agent", "source-b", manifest);
+  assert.notEqual(repaired, "baseline");
+  assert.notEqual(repaired, changed);
+  assert.equal(effectiveBodyPlanHash("// generated", "source-a", manifest), "baseline");
+});
+
+check("exact allowlist paths are passed to Playwright with persona scoping", () => {
+  assert.deepEqual(
+    buildArgs("customer", [], ["customer/happy-path/a.spec.ts"]),
+    ["playwright", "test", "customer/happy-path/a.spec.ts", "--project", "customer"]
+  );
 });
 
 console.log(`\nrun.test: ${passed} checks passed`);

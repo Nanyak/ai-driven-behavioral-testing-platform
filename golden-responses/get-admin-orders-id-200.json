@@ -6,6 +6,8 @@
       "billing_address": "ignored",
       "canceled_at": "ignored",
       "created_at": "ignored",
+      "credit_line_subtotal": "ignored",
+      "credit_line_tax_total": "ignored",
       "credit_line_total": "ignored",
       "credit_lines": "ignored",
       "currency_code": "ignored",
@@ -235,8 +237,29 @@
       ]
     }
   ],
-  "captured_at": "2026-06-26T22:36:31.409Z",
+  "captured_at": "2026-06-27T21:08:25.096Z",
   "source_sessions": [
-    "live-capture-2026-06-26"
+    "sess-adminCancel-354573c0-8af0-4ea1-a2c8-48629674fb53",
+    "sess-adminCancel-70c4a746-afde-42c4-a943-52329b1f9cb3",
+    "sess-adminCancel-b23b4784-e26f-43a3-ba93-4a3417785429",
+    "sess-adminCancel-da552189-eb32-45ba-86f0-aad745bb6e10",
+    "sess-adminCancel-db51fa6d-1956-4b1f-9a5f-b5888030bd40",
+    "sess-adminFulfill-0bbc76c3-6bd1-4c7b-924d-f837dbd76b72",
+    "sess-adminFulfill-0e850d94-b220-4006-89cc-5eb0564ac661",
+    "sess-adminFulfill-4eacf14b-662b-4a9a-9de1-05030c8da8c6",
+    "sess-adminFulfill-84369955-f48f-4dd4-a5e4-0f00c3fa4756",
+    "sess-adminFulfill-8b478a0c-1af5-4918-8026-a23e15b164ee",
+    "sess-adminFulfill-9de4bb87-7a49-4324-adcc-19ed0beb65d5",
+    "sess-adminFulfill-cec9218b-c8be-48d3-accc-914197942a67",
+    "sess-adminFulfill-cf56f4b3-1893-4c5b-9cf1-097864d1898b",
+    "sess-adminFulfill-f5486d7a-d86b-41f6-9158-68d3ddac07a9",
+    "sess-adminFulfill-f9c8e39f-b99f-4e61-9efa-c3d9874e858d",
+    "sess-adminRefund-28d7260b-ac2e-4cb9-9e2d-cd9ddf594a53",
+    "sess-adminRefund-abbcb669-d08c-404e-9776-5101ef9955d1",
+    "sess-adminRefund-b91b7ce4-8596-4b48-9d86-c69e87090f4b",
+    "sess-adminRefund-d03bf919-fe7f-42e5-a471-3d20231240de",
+    "sess-adminRefund-f4ef4adf-6638-4f33-b678-04070e32594c",
+    "sess-adminReturnReject-548023be-ea35-4b9c-b498-664374f4b782",
+    "sess-adminReturnReject-9c5d83f7-ec49-48c3-a49c-838080f97db9"
   ]
 }

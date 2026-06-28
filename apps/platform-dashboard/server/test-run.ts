@@ -9,7 +9,7 @@ import { getJobStatus, isJobId, startJob, type JobStatus, type RunTarget } from 
 export type { RunTarget } from "./jobs.js";
 export type RunStatus = JobStatus;
 
-const VALID_TARGETS: RunTarget[] = ["all", "guest", "customer", "admin", "happy", "failure"];
+const VALID_TARGETS: RunTarget[] = ["all", "guest", "customer", "admin", "happy", "failure", "drafts"];
 
 export function isValidTarget(value: unknown): value is RunTarget {
   return typeof value === "string" && (VALID_TARGETS as string[]).includes(value);

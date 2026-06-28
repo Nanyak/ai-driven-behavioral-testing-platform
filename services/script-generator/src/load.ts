@@ -6,11 +6,31 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
+import { aggregateRequestBodyEvidence } from "../../behavior-engine/src/body-evidence.js";
+import { loadSessions, type SessionFlow } from "../../behavior-engine/src/io/sessions.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CANDIDATES_DIR = resolvePath(__dirname, "..", "..", "behavior-engine", "data", "candidates");
 
 export type Persona = "guest_shopper" | "registered_customer" | "admin_operator";
+
+export interface RequestBodyEvidence {
+  sample_count: number;
+  body_present_count: number;
+  shape_count: number;
+  fields: Array<{
+    path: string;
+    present_count: number;
+    presence_rate: number;
+    masked: boolean;
+    primitive_types: string[];
+    safe_hints: Array<{
+      type: string;
+      hint: string | boolean | null;
+      count: number;
+    }>;
+  }>;
+}
 
 export interface CandidateStep {
   method: string;
@@ -18,6 +38,8 @@ export interface CandidateStep {
   expected_status: number;
   /** Observed request payload, when bodies-on logging captured one (rare; ADR 0001). */
   request_payload?: unknown;
+  /** Aggregated privacy-safe request shape evidence from supporting sessions. */
+  request_body_evidence?: RequestBodyEvidence;
 }
 
 export interface CandidateAttributes {
@@ -67,5 +89,38 @@ export function newestCandidatesFile(dir: string = CANDIDATES_DIR): string {
 /** Load and parse the newest (or explicitly given) candidates file. */
 export function loadCandidates(path?: string): CandidateFile {
   const file = path ?? newestCandidatesFile();
-  return JSON.parse(readFileSync(file, "utf8")) as CandidateFile;
+  const candidateFile = JSON.parse(readFileSync(file, "utf8")) as CandidateFile;
+  if (
+    candidateFile.candidates.every((candidate) =>
+      candidate.steps.every((step) => step.request_body_evidence !== undefined)
+    )
+  ) {
+    return candidateFile;
+  }
+
+  // Backward-compatible enrichment for candidate artifacts created before body
+  // evidence became part of the mining contract. This reads only privacy-safe
+  // request_body_features from the candidate's own source sessions; it never
+  // copies request_payload values and does not rewrite the candidate file.
+  try {
+    const sessions = loadSessions().sessions;
+    const byId = new Map(sessions.map((session) => [session.session_id, session]));
+    for (const candidate of candidateFile.candidates) {
+      const supporting = candidate.source_sessions
+        .map((id) => byId.get(id))
+        .filter((session): session is SessionFlow => session !== undefined);
+      for (const step of candidate.steps) {
+        step.request_body_evidence ??= aggregateRequestBodyEvidence(
+          supporting,
+          step.method,
+          step.endpoint,
+          step.expected_status
+        );
+      }
+    }
+  } catch {
+    // Missing/malformed session artifacts keep legacy behavior: OAS-required
+    // fields only. Generation remains available and deterministic.
+  }
+  return candidateFile;
 }

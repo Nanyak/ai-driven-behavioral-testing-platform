@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import { reduceValue } from "../../../apps/medusa/apps/backend/src/api/body-redaction.ts";
 import { buildSessionFlows, extractBodyFeatures } from "../src/pipeline.js";
 import type { RawLogDoc } from "../src/types.js";
 
@@ -97,6 +98,85 @@ assert.deepEqual(absentFeatures, {
   shape_hash: null,
   truncated: false,
 });
+
+const rawStructuredBody = {
+  shipping_address: {
+    city: "Hanoi",
+    latitude: 21.0285,
+    verified: true,
+    lines: ["private street"],
+  },
+  payment_details: {
+    amount: 123.45,
+    reusable: true,
+  },
+  payment_status: "captured",
+  accounting_code: "revenue",
+  paper_size: "A4",
+  document_type: "invoice",
+};
+const structuredMaskedBody = reduceValue(rawStructuredBody);
+const serializedStructuredBody = JSON.stringify(structuredMaskedBody);
+assert.equal(serializedStructuredBody.includes("Hanoi"), false);
+assert.equal(serializedStructuredBody.includes("21.0285"), false);
+assert.equal(serializedStructuredBody.includes("private street"), false);
+assert.equal(serializedStructuredBody.includes("123.45"), false);
+const structuredMaskedFeatures = extractBodyFeatures(structuredMaskedBody);
+
+assert.ok(
+  structuredMaskedFeatures.primitive_type_paths.some(
+    (entry) =>
+      entry.path === "$.shipping_address.latitude" && entry.type === "number"
+  )
+);
+assert.ok(
+  structuredMaskedFeatures.primitive_type_paths.some(
+    (entry) =>
+      entry.path === "$.shipping_address.verified" && entry.type === "boolean"
+  )
+);
+assert.ok(
+  structuredMaskedFeatures.masked_field_paths.includes(
+    "$.shipping_address.latitude"
+  )
+);
+assert.ok(
+  structuredMaskedFeatures.masked_field_paths.includes(
+    "$.shipping_address.verified"
+  )
+);
+assert.ok(
+  structuredMaskedFeatures.masked_field_paths.includes(
+    "$.payment_details.amount"
+  )
+);
+assert.equal(
+  structuredMaskedFeatures.masked_field_paths.includes("$.payment_status"),
+  false
+);
+assert.equal(
+  structuredMaskedFeatures.masked_field_paths.includes("$.accounting_code"),
+  false
+);
+assert.equal(
+  structuredMaskedFeatures.masked_field_paths.includes("$.paper_size"),
+  false
+);
+assert.equal(
+  structuredMaskedFeatures.masked_field_paths.includes("$.document_type"),
+  false
+);
+assert.ok(
+  structuredMaskedFeatures.safe_scalar_hints.some(
+    (hint) => hint.path === "$.payment_status" && hint.hint === "captured"
+  )
+);
+assert.equal(
+  structuredMaskedFeatures.safe_scalar_hints.some((hint) =>
+    hint.path.startsWith("$.shipping_address")
+  ),
+  false
+);
 
 const docs: RawLogDoc[] = [
   {

@@ -30,20 +30,20 @@
     "session_id"
   ],
   "schema_source": "observed",
-  "captured_at": "2026-06-26T21:42:43.710Z",
+  "captured_at": "2026-06-27T21:08:25.096Z",
   "source_sessions": [
-    "sess-newCheckout-11b28a0e-0df7-499a-90db-8133ae86182f",
-    "sess-newCheckout-1e061ec9-a2c6-4861-853f-93636df50307",
-    "sess-newCheckout-22a13685-1763-487b-bd4f-715cec2ba68e",
-    "sess-newCheckout-affd3f95-555b-4dca-90de-40795ecd8295",
-    "sess-newCheckout-c69afbe0-2fae-46af-a3bf-9dd0d1a42739",
-    "sess-newCheckout-ddcb156d-5d30-4489-9439-fb49389bba18",
-    "sess-profileMgmt-2c405445-9c41-4d77-822d-eb93673c5dee",
-    "sess-profileMgmt-35804f83-cb77-4f8f-9d7b-e01a4cc3592c",
-    "sess-profileMgmt-3b8e2787-f044-4ade-b493-ec4c0ca409ed",
-    "sess-profileMgmt-b6e40548-23ed-43fc-8d74-5f6032a1b14e",
-    "sess-profileMgmt-cf7414ef-a19f-4630-be2f-f2a5dedafc48",
-    "sess-profileMgmt-f4af5a46-c762-44bd-84b9-080abb9c48ce",
-    "sess-profileMgmt-fd6b33f0-96a1-4403-a10e-e8e61a12b806"
+    "sess-newCheckout-0b480d03-ca41-46a6-832b-f5dbedb18b6d",
+    "sess-newCheckout-370c48dd-399c-49b0-8f4e-f9dc778288e2",
+    "sess-newCheckout-712ad107-3e18-42d1-9c0d-d855af7e550d",
+    "sess-newCheckout-b279bca9-8c77-46e1-a053-36e519f4adde",
+    "sess-newCheckout-b3d4e8f3-fe9d-40ce-a4ac-cfa5d8ee2b2b",
+    "sess-newCheckout-d594040b-76a6-41fd-84b9-e6a59cf07d48",
+    "sess-profileMgmt-47cc0f45-cb2b-409b-8b8e-bb5234385a39",
+    "sess-profileMgmt-482757bf-c0e2-4372-af2a-f6ee9b96f359",
+    "sess-profileMgmt-654fd443-06d3-478a-908e-ec60e9639ac1",
+    "sess-profileMgmt-9de00dc1-e101-4ac7-970e-500bbabf8138",
+    "sess-profileMgmt-ab59df51-1c08-4a57-93a7-d37e2d457114",
+    "sess-profileMgmt-ac9a0396-a7cf-45d6-8da9-a58f83c4e969",
+    "sess-profileMgmt-eefabe42-a96f-49c0-9d4b-bbb82e3ae02b"
   ]
 }

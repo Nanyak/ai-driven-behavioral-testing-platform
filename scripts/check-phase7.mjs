@@ -61,6 +61,13 @@ function main() {
   if (sig.status === 0) ok("signature golden test passes");
   else fail("signature golden test", (sig.stderr || sig.stdout || "").trim().split("\n").pop());
 
+  const bodyEvidence = spawnSync("npx", ["tsx", "src/body-evidence.test.ts"], {
+    cwd: SERVICE,
+    encoding: "utf8",
+  });
+  if (bodyEvidence.status === 0) ok("privacy-safe request body evidence test passes");
+  else fail("request body evidence test", (bodyEvidence.stderr || bodyEvidence.stdout || "").trim().split("\n").pop());
+
   // [1] TypeScript compiles clean (hard gate).
   console.log("\n[1] TypeScript compile (tsc --noEmit)");
   const tsc = spawnSync("npx", ["tsc", "--noEmit"], { cwd: SERVICE, encoding: "utf8" });

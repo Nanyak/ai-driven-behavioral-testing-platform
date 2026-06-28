@@ -8,7 +8,8 @@
     "dev": "node ../../node_modules/@medusajs/cli/cli.js develop",
     "start": "node ../../node_modules/@medusajs/cli/cli.js start",
     "setup": "node ../../node_modules/@medusajs/cli/cli.js db:setup --db medusa --no-interactive --execute-safe-links",
-    "seed": "node ../../node_modules/@medusajs/cli/cli.js db:migrate:scripts"
+    "seed": "node ../../node_modules/@medusajs/cli/cli.js db:migrate:scripts",
+    "test:redaction": "node --require ts-node/register --test test/body-redaction.test.ts"
   },
   "dependencies": {
     "@medusajs/admin-sdk": "2.15.5",

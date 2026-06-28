@@ -65,13 +65,13 @@ behavior candidates → Playwright specs → run results → report.**
 | --- | --- | --- |
 | Medusa backend (SUT) | `apps/medusa/` | The real e-commerce system under test. Hosts Store + Admin REST APIs and the structured logging middleware. |
 | Storefront | `apps/storefront/` | Next.js customer-facing app; a real human/traffic source against the Store API. |
-| Platform dashboard | `apps/platform-dashboard/` | Internal ops view: mined flows, persona breakdown, run results, and the human-in-the-loop (HITL) review surface. |
+| Platform dashboard | `apps/platform-dashboard/` | Internal ops view: mined flows, persona breakdown, run results, and HITL review of the exact generated source, redacted body plan, provenance, and approval hashes. |
 | Traffic generator | `services/traffic-generator/` | **Scaffolding, not a product feature.** Stands in for a production log source we don't have — it manufactures the behavioral input the pipeline would otherwise read from a real system. Drives both deterministic scripted flows and **LLM-varied** narratives (Haiku 4.5); the registered-customer checkout backbone exists *only* in the LLM-varied stream. In a real deployment this component is replaced by a log shipper pointed at production/staging Elasticsearch (see [`limitations.md`](./limitations.md) §1). |
 | Log ingestion | `services/log-ingestion/` | Reads access/application logs from Elasticsearch, reconstructs per-session journeys, and extracts golden candidates. Writes `data/sessions/session-flows-*.json`. |
 | Behavior engine | `services/behavior-engine/` | Mines frequent flows (n-gram / PrefixSpan / Markov), derives personas from attributes, names flows + flags anomalies (LLM), and emits test candidates plus the validation report. |
 | Golden store | `services/golden/` | Builds the OpenAPI-derived golden schemas (the assertion oracle) and the comparison logic. |
-| Script generator | `services/script-generator/` | Turns test candidates into executable Playwright API specs, per persona. |
-| Test runner | `services/test-runner/` | Executes the generated suite against Medusa, compares responses to goldens, and builds `reports/report.{json,html}` with regression attribution. |
+| Script generator | `services/script-generator/` | Turns test candidates into draft Playwright API specs and emits `generated-tests/.artifacts.json` with redacted body plans, provenance, and hashes. |
+| Test runner | `services/test-runner/` | Executes only exact hash-matching approved artifacts by default (`test:drafts` is explicit), compares responses to goldens, and builds `reports/report.{json,html}` with regression attribution. |
 | Regression triage agent | `services/test-runner/src/triage/` | **Advisory only.** Post-run, classifies each failure (real regression / contract drift / test artifact / uncertain) from the report + normalized diff + captured body, writing the sidecar `reports/triage.json` and a verdict chip in the HTML. Offline deterministic heuristic with no key; Sonnet 4.6 (→ Opus 4.8) with one. Never on the oracle/gate path (ADR 0001/0005). |
 
 ## Data contracts (the artifacts between stages)
@@ -149,6 +149,31 @@ neither                         -> guest_shopper
 `has_errors` is an orthogonal edge-case overlay, never a competing persona. Every
 persona is tagged `persona_source: "emergent_attributes"`.
 
+## Request-body synthesis
+
+Request construction is deterministic and schema-first. OpenAPI-required fields
+are always included. The behavior engine also aggregates privacy-safe body
+features from matching supporting requests—field paths, types, masked markers,
+safe enum-like hints, and shape hashes; raw captured values are not propagated.
+
+For a successful step, an OpenAPI-optional field becomes part of the generated
+“typical” request when it is observed at least three times and present in at
+least 80% of matching requests. Masked observations may prove that a field is
+commonly present, but their captured values, value hints, and inferred shapes
+are never used for synthesis. Values instead come from OpenAPI constraints or an
+explicit endpoint profile; a masked credential-like field with no safe source is
+omitted (or fails closed when required). The same rule applies recursively to
+nested objects and array items. Error-path generation does not add learned
+optional fields. Endpoint profiles remain the explicit fallback for undocumented
+business preconditions. The artifact review records the evidence, selected
+optional paths, provenance, and body-plan hash.
+
+Capture masking is field-aware rather than whole-body masking. Sensitive scalar
+keys and primitive leaves below sensitive containers receive type-preserving
+safe replacements, while non-sensitive values and object/array structure remain
+available for feature extraction. `LOG_CAPTURE_RAW_BODIES=true` is the explicit
+local-only escape hatch.
+
 ## The golden oracle
 
 The assertion oracle is the **OpenAPI contract**, not recorded bodies (ADR 0001).
@@ -211,6 +236,9 @@ After `npm run behavior:mine`, the engine writes
   `generated-tests/`, `golden-responses/`, and `reports/`, so stages are
   independently runnable and each has an offline fixture-backed `check:phaseN`
   script.
+- **Artifact approval:** approval binds SHA-256 hashes of both the complete spec
+  source and its redacted request-body plan. Any later change quarantines the
+  artifact from normal runs until it is reviewed again.
 
 ## Architecture decision records (referenced)
 

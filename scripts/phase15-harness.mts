@@ -3,7 +3,7 @@
  *
  * Proves the HITL store contract end to end against the REAL code on both sides:
  *   - the dashboard's write/read/merge logic (apps/platform-dashboard/server/hitl-store.ts)
- *   - the behavior-engine skip-gate reader (services/behavior-engine/src/coverage.ts)
+ *   - the behavior-engine skip-gate reader (services/behavior-engine/src/selection/coverage.ts)
  *
  * Both point at the same repo-root store (data/hitl/approvals.json), which is the
  * one place a human decision crosses back into the pipeline (ADR 0002). The check
@@ -19,7 +19,7 @@ import {
   readDecisions,
   upsertDecision,
 } from "../apps/platform-dashboard/server/hitl-store.js";
-import { buildCoverageManifest } from "../services/behavior-engine/src/coverage.js";
+import { buildCoverageManifest } from "../services/behavior-engine/src/selection/coverage.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, "..");
@@ -50,13 +50,30 @@ if (buildCoverageManifest().fromHitl === 0) ok("missing store -> coverage fromHi
 else fail("missing store should yield fromHitl 0");
 
 // [2] Write two decisions (approve + discard) in the shape coverage.ts parses.
-upsertDecision({ flow_signature: SIG_A, status: "approved", test_path: "generated-tests/x/aa.spec.ts" });
+upsertDecision({
+  flow_signature: SIG_A,
+  status: "approved",
+  test_path: "generated-tests/x/aa.spec.ts",
+  spec_hash: "spec-hash-a",
+  body_plan_hash: "body-plan-hash-a",
+  body_rule_sources: ["openapi"],
+});
 upsertDecision({ flow_signature: SIG_B, status: "discarded" });
 const wrote = JSON.parse(readFileSync(STORE, "utf8"));
 if (Array.isArray(wrote.entries) && wrote.entries.length === 2) {
   ok("store persisted as { entries: [...] } with 2 decisions");
 } else {
   fail("store shape/count", JSON.stringify(wrote).slice(0, 120));
+}
+const approvedA = readDecisions().get(SIG_A);
+if (
+  approvedA?.spec_hash === "spec-hash-a" &&
+  approvedA.body_plan_hash === "body-plan-hash-a" &&
+  approvedA.body_rule_sources?.[0] === "openapi"
+) {
+  ok("approved decision persists exact artifact hashes and provenance");
+} else {
+  fail("approved artifact binding was not persisted");
 }
 
 // [3] Re-decide A: update in place, no duplicate signature.

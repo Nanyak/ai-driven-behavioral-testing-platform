@@ -28,11 +28,34 @@ import { canonicalTokens, flowSignature } from "../signature/signature.js";
 import type { FlowAttributes } from "../classification/attributes.js";
 import type { Persona } from "../classification/persona.js";
 
-/** A step in a mined flow, with the modal expected status from supporting logs. */
+export interface SafeScalarEvidence {
+  type: string;
+  hint: string | boolean | null;
+  count: number;
+}
+
+export interface RequestFieldEvidence {
+  path: string;
+  present_count: number;
+  presence_rate: number;
+  masked: boolean;
+  primitive_types: string[];
+  safe_hints: SafeScalarEvidence[];
+}
+
+export interface RequestBodyEvidence {
+  sample_count: number;
+  body_present_count: number;
+  shape_count: number;
+  fields: RequestFieldEvidence[];
+}
+
+/** A step in a mined flow, with modal status and privacy-safe request-shape evidence. */
 export interface CandidateStep {
   method: string;
   endpoint: string;
   expected_status: number;
+  request_body_evidence?: RequestBodyEvidence;
 }
 
 /** A mined, classified flow before ranking/naming. */

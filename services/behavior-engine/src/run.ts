@@ -33,6 +33,7 @@ import { rankFlows, priorityOf, type ScoredFlow } from "./selection/rank.js";
 import { annotateFlows, llmEnabled, MODEL as NAMING_MODEL } from "./naming/naming.js";
 import { buildValidationReport } from "./validation/validate.js";
 import { PERSONA_SOURCE, PERSONAS, type Persona } from "./classification/persona.js";
+import { aggregateRequestBodyEvidence } from "./body-evidence.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SERVICE_ROOT = resolve(__dirname, "..");
@@ -392,6 +393,23 @@ async function main(): Promise<void> {
 
   const candidates: Candidate[] = kept.map((flow) => {
     const ann = annotations.get(flow.signature)!;
+    const allEvidenceSessions = flow.source_sessions
+      .map((id) => sessionById.get(id))
+      .filter((session): session is SessionFlow => session !== undefined);
+    const personaEvidenceSessions = allEvidenceSessions.filter(
+      (session) => sessionPersona.get(session.session_id) === flow.persona
+    );
+    const evidenceSessions =
+      personaEvidenceSessions.length > 0 ? personaEvidenceSessions : allEvidenceSessions;
+    const steps = flow.steps.map((step) => ({
+      ...step,
+      request_body_evidence: aggregateRequestBodyEvidence(
+        evidenceSessions,
+        step.method,
+        step.endpoint,
+        step.expected_status
+      ),
+    }));
     return {
       flow_name: ann.flow_name,
       persona: flow.persona,
@@ -404,7 +422,7 @@ async function main(): Promise<void> {
       assertion_hints: { fields: ann.assertion_hints.fields, source: ann.assertion_hints.source },
       anomaly_note: ann.anomaly_note,
       source_sessions: flow.source_sessions,
-      steps: flow.steps,
+      steps,
     };
   });
 

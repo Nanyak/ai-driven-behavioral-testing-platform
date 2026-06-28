@@ -37,6 +37,25 @@ export interface ReviewFlow {
   repaired_by_agent: boolean;
   /** Agent repair attempts from the last repair run (null when not repaired). */
   repair_attempts: number | null;
+  spec_hash: string | null;
+  body_plan_hash: string | null;
+  body_rule_sources: string[];
+  artifact_matches_approval: boolean | null;
+}
+
+export interface ArtifactReview {
+  signature: string;
+  test_path: string;
+  source: string;
+  spec_hash: string;
+  generated_spec_hash: string | null;
+  modified_since_generation: boolean;
+  body_plan_hash: string | null;
+  body_rule_sources: string[];
+  body_plan: unknown | null;
+  approved_spec_hash: string | null;
+  approved_body_plan_hash: string | null;
+  matches_approval: boolean | null;
 }
 
 export interface RepairDiff {
@@ -74,6 +93,7 @@ export interface FlowsPayload {
     awaiting_review: number;
     discovered: number;
     conflicts: number;
+    stale_approvals: number;
   };
 }
 
@@ -91,6 +111,14 @@ export async function fetchRepairDiff(signature: string): Promise<RepairDiff | n
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`/api/repair/diff returned ${response.status}`);
   return (await response.json()) as RepairDiff;
+}
+
+/** Fetch the exact source and redacted request-body plan the operator is approving. */
+export async function fetchArtifactReview(signature: string): Promise<ArtifactReview | null> {
+  const response = await fetch(`/api/artifacts/review?signature=${encodeURIComponent(signature)}`);
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`/api/artifacts/review returned ${response.status}`);
+  return (await response.json()) as ArtifactReview;
 }
 
 /**

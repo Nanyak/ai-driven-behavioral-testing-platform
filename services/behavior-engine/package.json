@@ -8,6 +8,7 @@
     "mine": "node --max-old-space-size=2048 --import tsx src/run.ts",
     "test:signature": "tsx src/signature/signature.test.ts",
     "test:coverage": "tsx src/selection/coverage.test.ts",
+    "test:body-evidence": "tsx src/body-evidence.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

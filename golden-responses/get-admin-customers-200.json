@@ -30,8 +30,12 @@
       "format": "email"
     }
   ],
-  "captured_at": "2026-06-26T22:35:07.342Z",
+  "captured_at": "2026-06-27T21:08:25.096Z",
   "source_sessions": [
-    "live-capture-2026-06-26-222655"
+    "sess-adminCatalog-0ea05f5d-b3bf-4bb1-b290-5c3b238b2bd3",
+    "sess-adminCatalog-15e13eef-5813-4a43-a493-6c6bfeef393c",
+    "sess-adminCatalog-61a03261-0a77-4b25-95c0-cfb311757354",
+    "sess-adminCatalog-d62bfea1-d452-4fdd-8bc5-c23d670d5000",
+    "sess-adminSupport-3c477956-91bd-486a-ace1-72224ab2a6f7"
   ]
 }

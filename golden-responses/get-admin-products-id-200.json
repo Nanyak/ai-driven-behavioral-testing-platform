@@ -51,7 +51,7 @@
     "trace_id",
     "session_id"
   ],
-  "schema_source": "openapi",
+  "schema_source": "openapi+observed",
   "oas_operation_id": "GetProductsId",
   "oas_ref": "#/components/schemas/AdminProductResponse",
   "oas_version": "2.15.5",
@@ -77,6 +77,12 @@
       ]
     }
   ],
-  "captured_at": "2026-06-27T03:14:51.846Z",
-  "source_sessions": []
+  "captured_at": "2026-06-27T21:08:25.096Z",
+  "source_sessions": [
+    "sess-adminCatalog-0ea05f5d-b3bf-4bb1-b290-5c3b238b2bd3",
+    "sess-adminCatalog-15e13eef-5813-4a43-a493-6c6bfeef393c",
+    "sess-adminCatalog-2b3b05ce-46af-4b4f-aa7a-26c0653101c7",
+    "sess-adminCatalog-61a03261-0a77-4b25-95c0-cfb311757354",
+    "sess-adminCatalog-d62bfea1-d452-4fdd-8bc5-c23d670d5000"
+  ]
 }

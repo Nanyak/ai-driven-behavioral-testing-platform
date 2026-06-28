@@ -12,7 +12,7 @@
     "x-medusa-upstream-baseline-tag": "v2.15.5",
     "x-medusa-upstream-baseline-commit": "b74b5b19569534412a67835ffae8fb3afbf6f5c5",
     "x-medusa-runtime-corrected": true,
-    "x-medusa-runtime-source": "@medusajs/medusa@2.15.5 query projections, @medusajs/types@2.15.5, and local runtime observations"
+    "x-medusa-runtime-source": "Installed @medusajs/medusa@2.15.5 route/query projections, application middleware contracts, and local runtime observations"
   },
   "servers": [
     {
@@ -49,21 +49,22 @@
           "item_subtotal",
           "item_tax_total",
           "original_total",
-          "original_subtotal",
           "original_tax_total",
           "total",
           "subtotal",
           "tax_total",
           "discount_total",
           "discount_tax_total",
-          "gift_card_total",
-          "gift_card_tax_total",
           "shipping_total",
           "shipping_subtotal",
           "shipping_tax_total",
           "original_shipping_total",
           "original_shipping_subtotal",
-          "original_shipping_tax_total"
+          "original_shipping_tax_total",
+          "credit_line_subtotal",
+          "credit_line_tax_total",
+          "credit_line_total",
+          "credit_lines"
         ],
         "properties": {
           "id": {
@@ -123,6 +124,32 @@
           },
           "payment_collection": {
             "$ref": "#/components/schemas/StorePaymentCollection"
+          },
+          "customer": {
+            "type": "object",
+            "description": "The projected customer associated with the cart.",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string",
+                "format": "email"
+              },
+              "groups": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "credit_lines": {
+            "type": "array",
+            "description": "The cart's credit lines.",
+            "items": {
+              "type": "object"
+            }
           },
           "metadata": {
             "type": "object",
@@ -223,6 +250,21 @@
             "type": "number",
             "title": "gift_card_tax_total",
             "description": "The total taxes applied on the gift card amount."
+          },
+          "credit_line_subtotal": {
+            "type": "number",
+            "title": "credit_line_subtotal",
+            "description": "The cart's credit-line subtotal excluding taxes."
+          },
+          "credit_line_tax_total": {
+            "type": "number",
+            "title": "credit_line_tax_total",
+            "description": "The tax total applied to the cart's credit lines."
+          },
+          "credit_line_total": {
+            "type": "number",
+            "title": "credit_line_total",
+            "description": "The cart's credit-line total including taxes."
           },
           "shipping_total": {
             "type": "number",
@@ -955,6 +997,23 @@
             "title": "credit_line_total",
             "description": "The total amount of credit lines applied to the order, including taxes. Subtracted from the final total."
           },
+          "credit_line_subtotal": {
+            "type": "number",
+            "title": "credit_line_subtotal",
+            "description": "The order's credit-line subtotal excluding taxes."
+          },
+          "credit_line_tax_total": {
+            "type": "number",
+            "title": "credit_line_tax_total",
+            "description": "The tax total applied to the order's credit lines."
+          },
+          "credit_lines": {
+            "type": "array",
+            "description": "The order's credit lines.",
+            "items": {
+              "type": "object"
+            }
+          },
           "item_discount_total": {
             "type": "number",
             "title": "item_discount_total",
@@ -988,11 +1047,9 @@
         "description": "The payment collection's details.",
         "x-schemaName": "StorePaymentCollection",
         "required": [
-          "payment_providers",
           "id",
           "currency_code",
-          "amount",
-          "status"
+          "amount"
         ],
         "properties": {
           "id": {
@@ -19553,11 +19610,9 @@
         "description": "The payment collection's details.",
         "x-schemaName": "StorePaymentCollection",
         "required": [
-          "payment_providers",
           "id",
           "currency_code",
-          "amount",
-          "status"
+          "amount"
         ],
         "properties": {
           "id": {
@@ -19719,21 +19774,22 @@
           "item_subtotal",
           "item_tax_total",
           "original_total",
-          "original_subtotal",
           "original_tax_total",
           "total",
           "subtotal",
           "tax_total",
           "discount_total",
           "discount_tax_total",
-          "gift_card_total",
-          "gift_card_tax_total",
           "shipping_total",
           "shipping_subtotal",
           "shipping_tax_total",
           "original_shipping_total",
           "original_shipping_subtotal",
-          "original_shipping_tax_total"
+          "original_shipping_tax_total",
+          "credit_line_subtotal",
+          "credit_line_tax_total",
+          "credit_line_total",
+          "credit_lines"
         ],
         "properties": {
           "id": {
@@ -19793,6 +19849,32 @@
           },
           "payment_collection": {
             "$ref": "#/components/schemas/StorePaymentCollection"
+          },
+          "customer": {
+            "type": "object",
+            "description": "The projected customer associated with the cart.",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string",
+                "format": "email"
+              },
+              "groups": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "credit_lines": {
+            "type": "array",
+            "description": "The cart's credit lines.",
+            "items": {
+              "type": "object"
+            }
           },
           "metadata": {
             "type": "object",
@@ -19893,6 +19975,21 @@
             "type": "number",
             "title": "gift_card_tax_total",
             "description": "The total taxes applied on the gift card amount."
+          },
+          "credit_line_subtotal": {
+            "type": "number",
+            "title": "credit_line_subtotal",
+            "description": "The cart's credit-line subtotal excluding taxes."
+          },
+          "credit_line_tax_total": {
+            "type": "number",
+            "title": "credit_line_tax_total",
+            "description": "The tax total applied to the cart's credit lines."
+          },
+          "credit_line_total": {
+            "type": "number",
+            "title": "credit_line_total",
+            "description": "The cart's credit-line total including taxes."
           },
           "shipping_total": {
             "type": "number",
@@ -21885,6 +21982,23 @@
             "type": "number",
             "title": "credit_line_total",
             "description": "The total amount of credit lines applied to the order, including taxes. Subtracted from the final total."
+          },
+          "credit_line_subtotal": {
+            "type": "number",
+            "title": "credit_line_subtotal",
+            "description": "The order's credit-line subtotal excluding taxes."
+          },
+          "credit_line_tax_total": {
+            "type": "number",
+            "title": "credit_line_tax_total",
+            "description": "The tax total applied to the order's credit lines."
+          },
+          "credit_lines": {
+            "type": "array",
+            "description": "The order's credit lines.",
+            "items": {
+              "type": "object"
+            }
           },
           "item_discount_total": {
             "type": "number",

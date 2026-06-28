@@ -1,6 +1,6 @@
 // Client bindings for triggering and polling a test run via /api/tests/run.
 
-export type RunTarget = "all" | "guest" | "customer" | "admin" | "happy" | "failure";
+export type RunTarget = "all" | "guest" | "customer" | "admin" | "happy" | "failure" | "drafts";
 
 export const RUN_TARGETS: RunTarget[] = [
   "all",
@@ -9,6 +9,7 @@ export const RUN_TARGETS: RunTarget[] = [
   "admin",
   "happy",
   "failure",
+  "drafts",
 ];
 
 export interface TestRunStatus {

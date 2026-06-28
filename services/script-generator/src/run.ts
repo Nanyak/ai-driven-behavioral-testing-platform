@@ -21,6 +21,7 @@ import { printRepairSummary, runRepair, type EmittedSpec } from "./repair/repair
 import { loadInvariants, verifiedInvariantsByStep } from "./invariants/types.js";
 import { deterministicInvariantsByStep, mergeInvariantMaps } from "./invariants/deterministic.js";
 import { businessInvariantRuntimeSource } from "./invariants/templates.js";
+import { manifestEntry, writeGenerationManifest, type GenerationManifestEntry } from "./artifacts.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SERVICE_ROOT = resolvePath(__dirname, "..");
@@ -552,6 +553,7 @@ function main(): void {
   writeConfigAndFixtures();
 
   const summary: RunSummaryEntry[] = [];
+  const artifactEntries: GenerationManifestEntry[] = [];
   const withheld: Candidate[] = [];
   const perFolderCount: Record<string, number> = Object.fromEntries(REL_DIRS.map((d) => [d, 0]));
 
@@ -584,6 +586,7 @@ function main(): void {
     const { source, fixmeCount } = emitSpec({ candidate, plan: flowPlan, golden, invariantsByStep });
 
     writeFileSync(filePath, source);
+    artifactEntries.push(manifestEntry(candidate.signature, `${relDir}/${filename}`, source, flowPlan));
     perFolderCount[relDir]++;
 
     summary.push({
@@ -596,6 +599,8 @@ function main(): void {
       generationErrors: flowPlan.errors,
     });
   }
+
+  writeGenerationManifest(GENERATED_TESTS_DIR, artifactEntries);
 
   const totalFiles = summary.length;
   const totalFixme = summary.reduce((n, s) => n + s.fixmeCount, 0);

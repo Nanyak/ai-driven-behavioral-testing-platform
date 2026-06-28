@@ -14,6 +14,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
+import { createHash } from "node:crypto";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -55,6 +56,7 @@ const CANDIDATES_DIR = resolve(
 );
 const GENERATED_TESTS_DIR = resolve(REPO_ROOT, "generated-tests");
 const HITL_STORE = resolve(REPO_ROOT, "data", "hitl", "approvals.json");
+const ARTIFACT_MANIFEST = resolve(GENERATED_TESTS_DIR, ".artifacts.json");
 const REPORT_HTML = resolve(REPO_ROOT, "reports", "report.html");
 const REPORT_JSON = resolve(REPO_ROOT, "reports", "report.json");
 const REPORTS_RUNS_DIR = resolve(REPO_ROOT, "reports", "runs");
@@ -191,6 +193,11 @@ export interface DecisionEntry {
   route_key?: string;
   status_signature?: string;
   step_count?: number;
+  /** SHA-256 of the exact on-disk spec source approved by the operator. */
+  spec_hash?: string;
+  /** SHA-256 of the deterministic, redacted request-body plan shown during review. */
+  body_plan_hash?: string;
+  body_rule_sources?: string[];
 }
 
 export interface FlowStep {
@@ -254,6 +261,11 @@ export interface ReviewFlow {
   repaired_by_agent: boolean;
   /** Agent repair attempts from the last repair run (null when not repaired). */
   repair_attempts: number | null;
+  /** Current artifact hashes. Approval is runnable only while both still match. */
+  spec_hash: string | null;
+  body_plan_hash: string | null;
+  body_rule_sources: string[];
+  artifact_matches_approval: boolean | null;
   /**
    * The approved baseline(s) this flow contradicts, carried INLINE (name + blessed
    * outcome). A regression shares its baseline's status-free signature, so the UI
@@ -295,6 +307,7 @@ export interface FlowsPayload {
     awaiting_review: number;
     discovered: number;
     conflicts: number;
+    stale_approvals: number;
   };
 }
 
@@ -337,22 +350,137 @@ interface SpecRef {
   path: string;
   /** True when the on-disk spec currently carries the resolver-agent stamp. */
   repairedByAgent: boolean;
+  source: string;
+  specHash: string;
+  bodyPlanHash: string | null;
+  bodyRuleSources: string[];
+  bodyPlan: unknown | null;
+  generatedSpecHash: string | null;
+}
+
+interface ManifestEntry {
+  flow_signature: string;
+  test_path: string;
+  generated_spec_hash: string;
+  body_plan_hash: string;
+  body_rule_sources?: string[];
+  body_plan?: unknown;
+}
+
+function sha256(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function manifestBySignature(): Map<string, ManifestEntry> {
+  const map = new Map<string, ManifestEntry>();
+  if (!existsSync(ARTIFACT_MANIFEST)) return map;
+  try {
+    const parsed = JSON.parse(readFileSync(ARTIFACT_MANIFEST, "utf8")) as { entries?: ManifestEntry[] };
+    for (const entry of parsed.entries ?? []) {
+      if (typeof entry.flow_signature === "string") {
+        map.set(entry.flow_signature.toLowerCase(), entry);
+      }
+    }
+  } catch {
+    // Missing/malformed review metadata never hides the generated source itself.
+  }
+  return map;
 }
 
 /** Map signature (lowercase 64-hex) -> its on-disk spec (path + agent-repair flag). */
 function specsBySignature(): Map<string, SpecRef> {
   const map = new Map<string, SpecRef>();
+  const manifests = manifestBySignature();
   for (const file of listSpecFiles(GENERATED_TESTS_DIR)) {
     const text = readFileSync(file, "utf8");
     const match = SIGNATURE_STAMP.exec(text);
     if (match) {
-      map.set(match[1].toLowerCase(), {
+      const signature = match[1].toLowerCase();
+      const manifest = manifests.get(signature);
+      const repairedByAgent = text.includes(REPAIR_PROVENANCE);
+      const specHash = sha256(text);
+      const baselineBodyPlan = manifest?.body_plan ?? null;
+      const effectiveBodyPlan =
+        repairedByAgent && baselineBodyPlan !== null
+          ? {
+              baseline: baselineBodyPlan,
+              agent_repair: {
+                source_hash: specHash,
+                authority: "Complete Playwright source is authoritative for repaired request construction.",
+              },
+            }
+          : baselineBodyPlan;
+      map.set(signature, {
         path: file.slice(REPO_ROOT.length + 1),
-        repairedByAgent: text.includes(REPAIR_PROVENANCE),
+        repairedByAgent,
+        source: text,
+        specHash,
+        bodyPlanHash:
+          effectiveBodyPlan === null
+            ? null
+            : repairedByAgent
+              ? sha256(JSON.stringify(effectiveBodyPlan))
+              : manifest?.body_plan_hash ?? null,
+        bodyRuleSources: [
+          ...new Set([
+            ...(manifest?.body_rule_sources ?? []),
+            ...(repairedByAgent ? ["agent-repaired"] : []),
+          ]),
+        ],
+        bodyPlan: effectiveBodyPlan,
+        generatedSpecHash: manifest?.generated_spec_hash ?? null,
       });
     }
   }
   return map;
+}
+
+export interface ArtifactReview {
+  signature: string;
+  test_path: string;
+  source: string;
+  spec_hash: string;
+  generated_spec_hash: string | null;
+  modified_since_generation: boolean;
+  body_plan_hash: string | null;
+  body_rule_sources: string[];
+  body_plan: unknown | null;
+  approved_spec_hash: string | null;
+  approved_body_plan_hash: string | null;
+  matches_approval: boolean | null;
+}
+
+/** Exact executable source + redacted body plan, loaded lazily by the review panel. */
+export function artifactReview(signature: string): ArtifactReview | null {
+  const sig = signature.toLowerCase();
+  const spec = specsBySignature().get(sig);
+  if (!spec) return null;
+  const decision = readDecisions().get(sig);
+  const approved = decision?.status === "approved" ? decision : null;
+  const matches =
+    approved === null
+      ? null
+      : Boolean(
+          approved.spec_hash &&
+            approved.spec_hash === spec.specHash &&
+            approved.body_plan_hash &&
+            approved.body_plan_hash === spec.bodyPlanHash
+        );
+  return {
+    signature: sig,
+    test_path: spec.path,
+    source: spec.source,
+    spec_hash: spec.specHash,
+    generated_spec_hash: spec.generatedSpecHash,
+    modified_since_generation:
+      spec.generatedSpecHash !== null && spec.generatedSpecHash !== spec.specHash,
+    body_plan_hash: spec.bodyPlanHash,
+    body_rule_sources: spec.bodyRuleSources,
+    body_plan: spec.bodyPlan,
+    approved_spec_hash: approved?.spec_hash ?? null,
+    approved_body_plan_hash: approved?.body_plan_hash ?? null,
+    matches_approval: matches,
+  };
 }
 
 /* ---- Resolver-agent repair report (reports/resolver-repair.json) ---- */
@@ -465,6 +593,11 @@ export function readDecisions(): Map<string, DecisionEntry> {
         route_key: str(raw.route_key),
         status_signature: str(raw.status_signature),
         step_count: typeof raw.step_count === "number" ? raw.step_count : undefined,
+        spec_hash: str(raw.spec_hash),
+        body_plan_hash: str(raw.body_plan_hash),
+        body_rule_sources: Array.isArray(raw.body_rule_sources)
+          ? raw.body_rule_sources.filter((v): v is string => typeof v === "string")
+          : undefined,
       });
     }
   }
@@ -486,6 +619,9 @@ export function upsertDecision(input: {
   route_key?: string;
   status_signature?: string;
   step_count?: number;
+  spec_hash?: string;
+  body_plan_hash?: string;
+  body_rule_sources?: string[];
 }): DecisionEntry {
   const sig = input.flow_signature.toLowerCase();
   const decisions = readDecisions();
@@ -500,6 +636,9 @@ export function upsertDecision(input: {
     route_key: input.route_key,
     status_signature: input.status_signature,
     step_count: input.step_count,
+    spec_hash: input.spec_hash,
+    body_plan_hash: input.body_plan_hash,
+    body_rule_sources: input.body_rule_sources,
   };
   decisions.set(sig, entry);
 
@@ -546,6 +685,7 @@ export function loadFlows(): FlowsPayload {
         awaiting_review: 0,
         discovered: 0,
         conflicts: 0,
+        stale_approvals: 0,
       },
     };
   }
@@ -564,7 +704,8 @@ export function loadFlows(): FlowsPayload {
     const specRef = specs.get(sig) ?? null;
     const testPath = specRef?.path ?? null;
     const repair = repairs.get(sig);
-    const decision = decisions.get(sig)?.status ?? null;
+    const decisionEntry = decisions.get(sig);
+    const decision = decisionEntry?.status ?? null;
     const steps = c.steps ?? [];
     return {
       signature: sig,
@@ -593,6 +734,18 @@ export function loadFlows(): FlowsPayload {
       // Badge reflects the live spec on disk; attempts come from the last repair run.
       repaired_by_agent: specRef?.repairedByAgent ?? false,
       repair_attempts: repair?.result === "repaired" ? repair.attempts : null,
+      spec_hash: specRef?.specHash ?? null,
+      body_plan_hash: specRef?.bodyPlanHash ?? null,
+      body_rule_sources: specRef?.bodyRuleSources ?? [],
+      artifact_matches_approval:
+        decision !== "approved"
+          ? null
+          : Boolean(
+              decisionEntry?.spec_hash &&
+                decisionEntry.spec_hash === specRef?.specHash &&
+                decisionEntry.body_plan_hash &&
+                decisionEntry.body_plan_hash === specRef?.bodyPlanHash
+            ),
       conflict_baselines: [],
     };
   });
@@ -664,6 +817,7 @@ export function loadFlows(): FlowsPayload {
     awaiting_review: flows.filter((f) => f.lifecycle === "awaiting_review").length,
     discovered: flows.filter((f) => f.lifecycle === "discovered").length,
     conflicts: flows.filter((f) => f.conflicts_with_approved).length,
+    stale_approvals: flows.filter((f) => f.artifact_matches_approval === false).length,
   };
 
   return {

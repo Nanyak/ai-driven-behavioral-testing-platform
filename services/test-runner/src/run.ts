@@ -6,8 +6,9 @@
  * the same key the rest of the stack uses.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
-import { dirname, resolve as resolvePath } from "node:path";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
+import { dirname, join, resolve as resolvePath, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -23,7 +24,7 @@ export type Project = "guest" | "customer" | "admin";
 // folder (and `happy-path` every happy-path/). They replace the old `edge`
 // project, which the happy-path/failure-path split folded into each persona.
 export type PathFilter = "happy" | "failure";
-export type Target = Project | PathFilter | "all";
+export type Target = Project | PathFilter | "all" | "drafts";
 
 export const PROJECTS: Project[] = ["guest", "customer", "admin"];
 export const PATH_FILTERS: PathFilter[] = ["happy", "failure"];
@@ -32,6 +33,123 @@ const PATH_FILTER_DIR: Record<PathFilter, string> = {
   happy: "happy-path",
   failure: "failure-path",
 };
+
+const HITL_STORE = resolvePath(REPO_ROOT, "data", "hitl", "approvals.json");
+const ARTIFACT_MANIFEST = resolvePath(GENERATED_TESTS_DIR, ".artifacts.json");
+const SIGNATURE_STAMP = /flow_signature["'\s:=]+([0-9a-f]{64})/i;
+
+interface ApprovalEntry {
+  flow_signature?: string;
+  status?: string;
+  spec_hash?: string;
+  body_plan_hash?: string;
+}
+
+interface ArtifactEntry {
+  flow_signature?: string;
+  body_plan_hash?: string;
+  body_plan?: unknown;
+}
+
+export function effectiveBodyPlanHash(source: string, sourceHash: string, manifest?: ArtifactEntry): string | undefined {
+  if (source.includes("// repaired-by: resolver-agent") && manifest?.body_plan !== undefined) {
+    return createHash("sha256")
+      .update(
+        JSON.stringify({
+          baseline: manifest.body_plan,
+          agent_repair: {
+            source_hash: sourceHash,
+            authority: "Complete Playwright source is authoritative for repaired request construction.",
+          },
+        })
+      )
+      .digest("hex");
+  }
+  return manifest?.body_plan_hash;
+}
+
+export function exactApprovalMatches(
+  sourceHash: string,
+  bodyPlanHash: string | undefined,
+  decision?: ApprovalEntry
+): boolean {
+  return Boolean(
+    decision?.status === "approved" &&
+      typeof decision.spec_hash === "string" &&
+      decision.spec_hash === sourceHash &&
+      typeof decision.body_plan_hash === "string" &&
+      decision.body_plan_hash === bodyPlanHash
+  );
+}
+
+function jsonEntries<T>(path: string): T[] {
+  if (!existsSync(path)) return [];
+  try {
+    const parsed = JSON.parse(readFileSync(path, "utf8")) as { entries?: T[] } | T[];
+    return Array.isArray(parsed) ? parsed : Array.isArray(parsed.entries) ? parsed.entries : [];
+  } catch {
+    return [];
+  }
+}
+
+function listSpecFiles(dir: string): string[] {
+  if (!existsSync(dir)) return [];
+  const files: string[] = [];
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) files.push(...listSpecFiles(full));
+    else if (entry.endsWith(".spec.ts")) files.push(full);
+  }
+  return files;
+}
+
+function relativeSpecPath(path: string): string {
+  return path.slice(GENERATED_TESTS_DIR.length + 1).split(sep).join("/");
+}
+
+function targetMatches(path: string, target: Target): boolean {
+  if (target === "all" || target === "drafts") return true;
+  if (target === "happy" || target === "failure") return path.includes(`/${PATH_FILTER_DIR[target]}/`);
+  return path.startsWith(`${target}/`);
+}
+
+/**
+ * Build the exact Playwright allowlist. Normal targets admit only artifacts whose
+ * current source + body-plan hashes match an approved decision. `drafts` is the
+ * explicit quarantine escape hatch and excludes discarded artifacts.
+ */
+export function selectedSpecPaths(target: Target): string[] {
+  const approvals = new Map(
+    jsonEntries<ApprovalEntry>(HITL_STORE)
+      .filter((entry) => typeof entry.flow_signature === "string")
+      .map((entry) => [entry.flow_signature!.toLowerCase(), entry])
+  );
+  const bodyPlans = new Map(
+    jsonEntries<ArtifactEntry>(ARTIFACT_MANIFEST)
+      .filter((entry) => typeof entry.flow_signature === "string")
+      .map((entry) => [entry.flow_signature!.toLowerCase(), entry])
+  );
+
+  const selected: string[] = [];
+  for (const file of listSpecFiles(GENERATED_TESTS_DIR)) {
+    const source = readFileSync(file, "utf8");
+    const signature = SIGNATURE_STAMP.exec(source)?.[1].toLowerCase();
+    if (!signature) continue;
+    const decision = approvals.get(signature);
+    const sourceHash = createHash("sha256").update(source).digest("hex");
+    const manifest = bodyPlans.get(signature);
+    const planHash = effectiveBodyPlanHash(source, sourceHash, manifest);
+    const exactApproved = exactApprovalMatches(sourceHash, planHash, decision);
+    const rel = relativeSpecPath(file);
+
+    if (target === "drafts") {
+      if (!exactApproved && decision?.status !== "discarded") selected.push(rel);
+    } else if (exactApproved && targetMatches(rel, target)) {
+      selected.push(rel);
+    }
+  }
+  return selected.sort();
+}
 
 export interface RunOptions {
   target: Target;
@@ -96,13 +214,18 @@ function runEnv(): NodeJS.ProcessEnv {
  * PLAYWRIGHT_HTML_OUTPUT (set in runEnv()). Overriding with `--reporter json`
  * would drop the configured `outputFile` and stream JSON to stdout instead.
  */
-export function buildArgs(target: Target, extraArgs: string[] = []): string[] {
+export function buildArgs(target: Target, extraArgs: string[] = [], specPaths: string[] = []): string[] {
   const args = ["playwright", "test"];
-  if (target === "happy" || target === "failure") {
+  if (specPaths.length > 0) {
+    args.push(...specPaths);
+    if (target === "guest" || target === "customer" || target === "admin") {
+      args.push("--project", target);
+    }
+  } else if (target === "happy" || target === "failure") {
     // Positional filter -> matches every persona's <happy-path|failure-path>/
     // spec path; no --project so it spans guest/customer/admin.
     args.push(PATH_FILTER_DIR[target]);
-  } else if (target !== "all") {
+  } else if (target !== "all" && target !== "drafts") {
     args.push("--project", target);
   }
   args.push(...extraArgs);
@@ -122,7 +245,19 @@ export function runPlaywright(options: RunOptions): RunResult {
 
   clearPreviousRunArtifacts(jsonReportPath, htmlReportDir);
 
-  const proc = spawnSync("npx", buildArgs(target, extraArgs), {
+  const specPaths = selectedSpecPaths(target);
+  if (specPaths.length === 0) {
+    const mode = target === "drafts" ? "draft" : "hash-matching approved";
+    return {
+      status: 1,
+      jsonReportPath,
+      htmlReportDir,
+      stdout: "",
+      stderr: `No ${mode} specs matched target "${target}".\n`,
+    };
+  }
+
+  const proc = spawnSync("npx", buildArgs(target, extraArgs, specPaths), {
     cwd: GENERATED_TESTS_DIR,
     encoding: "utf8",
     env: runEnv(),

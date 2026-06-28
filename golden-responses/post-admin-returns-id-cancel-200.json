@@ -15,9 +15,9 @@
     "session_id"
   ],
   "schema_source": "observed",
-  "captured_at": "2026-06-26T21:42:43.710Z",
+  "captured_at": "2026-06-27T21:08:25.096Z",
   "source_sessions": [
-    "sess-adminReturnReject-13820868-b3ce-45d8-adc9-dd976bc70e20",
-    "sess-adminReturnReject-48d10f1c-5aa0-489a-87ed-e2bf3a808633"
+    "sess-adminReturnReject-548023be-ea35-4b9c-b498-664374f4b782",
+    "sess-adminReturnReject-9c5d83f7-ec49-48c3-a49c-838080f97db9"
   ]
 }

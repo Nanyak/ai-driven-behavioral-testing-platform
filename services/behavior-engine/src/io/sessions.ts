@@ -25,6 +25,22 @@ const REPO_ROOT = resolve(SERVICE_ROOT, "..", "..");
 /** Repo-root `data/sessions/` — the ingestion output dir (shared, read-only here). */
 export const SESSIONS_DIR = resolve(REPO_ROOT, "data", "sessions");
 
+export interface RequestBodyFeatures {
+  present: boolean;
+  kind: string;
+  field_paths: string[];
+  masked_field_paths: string[];
+  primitive_type_paths: Array<{ path: string; type: string }>;
+  array_lengths: Array<{ path: string; length: number; bucket: string }>;
+  safe_scalar_hints: Array<{
+    path: string;
+    type: string;
+    hint: string | boolean | null;
+  }>;
+  shape_hash: string | null;
+  truncated: boolean;
+}
+
 /** One step of a session-flow record (log-ingestion data contract). */
 export interface FlowStep {
   method: string;
@@ -34,6 +50,7 @@ export interface FlowStep {
   trace_id: string | null;
   timestamp: string;
   request_payload: unknown;
+  request_body_features?: RequestBodyFeatures;
   has_error: boolean;
 }
 

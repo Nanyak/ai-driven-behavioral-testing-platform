@@ -42,6 +42,7 @@
     "test:admin": "npm --prefix services/test-runner run run -- admin",
     "test:happy": "npm --prefix services/test-runner run run -- happy",
     "test:failure": "npm --prefix services/test-runner run run -- failure",
+    "test:drafts": "npm --prefix services/test-runner run run -- drafts",
     "triage": "npm --prefix services/test-runner run triage",
     "compose:up": "docker-compose up -d --build",
     "compose:down": "docker-compose down",

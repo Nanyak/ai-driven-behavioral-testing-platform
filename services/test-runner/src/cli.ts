@@ -7,7 +7,7 @@ import { formatReportSummary } from "./report/summary.js";
 import { writeReports } from "./report/write.js";
 import { PATH_FILTERS, PROJECTS, REPO_REPORTS_DIR, REPORTS_DIR, runPlaywright, type Target } from "./run.js";
 
-const VALID_TARGETS: Target[] = ["all", ...PROJECTS, ...PATH_FILTERS];
+const VALID_TARGETS: Target[] = ["all", ...PROJECTS, ...PATH_FILTERS, "drafts"];
 
 function parseTarget(arg: string | undefined): Target {
   const t = (arg ?? "all").toLowerCase();
