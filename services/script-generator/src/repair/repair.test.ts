@@ -223,6 +223,21 @@ check("buildRepairTask + renderRepairPrompt include live evidence and OAS", () =
   assert.ok(prompt.includes("DO NOT change any assertion"), "prompt carries the hard rules");
   assert.ok(prompt.includes("DO NOT attempt to read files"), "prompt prevents wasted filesystem tool turns");
   assert.ok(prompt.includes("compile under strict TypeScript"), "prompt carries the compile gate");
+  assert.ok(!prompt.includes("Live entity samples"), "no prefetch section when none supplied");
+
+  const withSample = buildRepairTask(
+    "admin/happy-path/aaaaaaaaaaaa.spec.ts",
+    "Admin Order Cancellation Journey",
+    baseSpec,
+    "200,200,200,200",
+    failures,
+    "",
+    specs,
+    [{ endpoint: "/admin/orders", sample: '{"orders":[{"id":"order_01","canceled_at":null}]}' }]
+  );
+  const sampledPrompt = renderRepairPrompt(withSample);
+  assert.ok(sampledPrompt.includes("Live entity samples"), "prompt inlines the prefetched sample");
+  assert.ok(sampledPrompt.includes("order_01"), "prompt carries real prefetched state");
 });
 
 check("repair command fails truthfully for unresolved outcomes", () => {

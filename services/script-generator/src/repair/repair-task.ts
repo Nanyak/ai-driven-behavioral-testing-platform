@@ -35,6 +35,19 @@ export interface SutInfo {
   publishableKey: string;
 }
 
+/**
+ * A live, already-fetched sample of the collection behind a failing step (e.g. the
+ * first few `/admin/orders`). Inlining this lets the agent infer the right filter +
+ * `.find()` predicate from REAL current state instead of curl-paginating to find
+ * it — the runtime query in the emitted spec does the actual selection.
+ */
+export interface PrefetchSample {
+  /** Collection endpoint sampled, e.g. "/admin/orders". */
+  endpoint: string;
+  /** Trimmed JSON of the first rows (real ids + state fields). */
+  sample: string;
+}
+
 export interface RepairTask {
   relPath: string;
   flowName: string;
@@ -43,6 +56,7 @@ export interface RepairTask {
   failures: StepOutcome[];
   stdoutTail: string;
   oasSlices: OasSlice[];
+  prefetch: PrefetchSample[];
   sut?: SutInfo;
 }
 
@@ -87,6 +101,7 @@ export function buildRepairTask(
   failures: StepOutcome[],
   stdoutTail: string,
   specs: OasSpecs,
+  prefetch: PrefetchSample[] = [],
   sut?: SutInfo
 ): RepairTask {
   return {
@@ -97,6 +112,7 @@ export function buildRepairTask(
     failures,
     stdoutTail,
     oasSlices: oasSlicesFor(specSource, specs),
+    prefetch,
     sut,
   };
 }
@@ -109,14 +125,25 @@ Your job: rewrite ONLY setup/arrange code so prerequisites, path/id resolution,
 auth sequencing, and request body construction make the already-asserted behavior
 reproducible.
 
-PREFER selecting an existing entity that is ALREADY in the required state over
-creating one from scratch (creation via the admin API is often multi-step and
-fragile). List with the fields you need to judge state, then pick the first that
-qualifies — fall back to the next page / a broader query if none do. Examples:
-- cancel needs an order that is NOT canceled AND has NO fulfillments: request
-  \`GET /admin/orders?order=-created_at&limit=50&fields=id,status,canceled_at,*fulfillments\`,
-  then \`orders.find(o => !o.canceled_at && (o.fulfillments?.length ?? 0) === 0)\`.
-- assert the picked id is non-null before the act so a bad arrange fails loudly.
+STRATEGY — resolve at run time; do NOT hunt for a specific entity now:
+- You do NOT need to locate the entity yourself. Emit a runtime LIST request with the
+  right filter + a \`.find(predicate)\` over the response, and resolve the id from that.
+  The emitted test re-runs this query LIVE and re-verification confirms the pick, so
+  selection happens at run time — not while you reason. Your job is to write the right
+  query + predicate, not to find today's matching row.
+- A live sample of each relevant collection is inlined below (real ids + state fields).
+  Reason from it + the OAS to choose the filter and predicate. That is normally enough.
+- PREFER selecting an entity ALREADY in the required state over creating one (creation
+  is multi-step and fragile). List with the fields you need to judge state, then pick
+  the first that qualifies; widen the EMITTED query (bigger \`limit\`, broader filter)
+  rather than paging yourself. Examples:
+  - cancel needs an order NOT canceled AND with NO fulfillments: emit
+    \`GET /admin/orders?order=-created_at&limit=50&fields=id,status,canceled_at,*fulfillments\`,
+    then \`orders.find(o => !o.canceled_at && (o.fulfillments?.length ?? 0) === 0)\`.
+  - assert the picked id is non-null before the act so a bad arrange fails loudly.
+- Only if the inlined sample + OAS are genuinely insufficient may you issue at most
+  1–2 read-only \`curl\` GETs. Do NOT paginate or probe repeatedly — every extra turn
+  re-reads the whole context and wastes budget.
 
 HARD RULES (a violation makes your output rejected unread):
 1. DO NOT change any assertion. Every \`expect(resp.status(), "<METHOD> /endpoint>").toBe(N)\`
@@ -142,18 +169,24 @@ unavailable; the caller writes and verifies your returned source. When done expl
 output ONLY the full setup/arrange-repaired spec file as your final message, no markdown fences,
 no commentary.`;
 
-/** A curl-exploration crib so the agent can authenticate + probe the live SUT. */
+/** Inlined live entity samples — the primary state evidence (no curl needed). */
+function prefetchSection(prefetch: PrefetchSample[]): string {
+  if (prefetch.length === 0) return "";
+  const blocks = prefetch
+    .map((p) => `### GET ${p.endpoint} (first rows, live)\n${p.sample}`)
+    .join("\n\n");
+  return `## Live entity samples (already fetched — reason from these; do NOT re-fetch)\n${blocks}`;
+}
+
+/** Fallback curl crib — only used if the inlined samples are insufficient. */
 function explorationSection(sut: NonNullable<RepairTask["sut"]>): string {
-  return `## Live SUT (explore read-only with curl, GET only)
+  return `## Fallback: read-only curl (GET only, at most 1–2 calls — samples above usually suffice)
 Base URL: ${sut.baseUrl}
 Get an admin token:
   curl -s -X POST ${sut.baseUrl}/auth/user/emailpass -H 'content-type: application/json' \\
     -d '{"email":"${sut.adminEmail}","password":"${sut.adminPassword}"}'
   # -> { "token": "<JWT>" }; then pass  -H "Authorization: Bearer <JWT>"  to /admin/* GETs.
-Store publishable key (for /store/* if needed): ${sut.publishableKey || "(unset)"}
-Probe entity state to find one in the REQUIRED condition, then encode that setup
-selection in the spec's arrange code (resolve the id at runtime exactly as you
-discovered it).`;
+Store publishable key (for /store/* if needed): ${sut.publishableKey || "(unset)"}`;
 }
 
 /** Render the task into the prompt fed to the agent. */
@@ -184,6 +217,7 @@ export function renderRepairPrompt(task: RepairTask): string {
     `Expected status sequence (status_signature): ${task.expectedSignature ?? "(unknown)"}`,
     `\n## Failing steps (live evidence)\n${failureLines}`,
     `\n## Playwright output (tail)\n${task.stdoutTail.slice(-2500)}`,
+    task.prefetch.length ? `\n${prefetchSection(task.prefetch)}` : "",
     task.sut ? `\n${explorationSection(task.sut)}` : "",
     `\n## OAS slices for the flow's endpoints\n${oasLines}`,
     `\n## Current spec (rewrite setup/arrange only; leave oracle assertions frozen)\n${task.specSource}`,

@@ -30,6 +30,15 @@ export interface AgentOptions {
    * oracle-guarded before the caller writes it.
    */
   explore?: boolean;
+  /**
+   * Cap the agent's turn budget. Defaults to 1 (tool-less, single completion) or
+   * 16 (explore mode). With a live entity sample inlined into the prompt the agent
+   * should reason + emit in ~2 turns, so callers pass a small bound to stop the
+   * curl-paginate wandering that dominated cost (re-reading the full context every
+   * turn). A bound that's too low surfaces as `error_max_turns` rather than a bad
+   * spec, so the loop reverts safely.
+   */
+  maxTurns?: number;
 }
 
 /**
@@ -49,9 +58,10 @@ export function makeClaudeCliAgent(opts: AgentOptions = {}): RepairAgent {
   return (prompt: string): string => {
     // Explore mode: curl-only Bash + several turns so it can probe→reason→emit.
     // Otherwise: no tools, single turn — a pure text completion.
+    const maxTurns = String(opts.maxTurns ?? (opts.explore ? 16 : 1));
     const args = opts.explore
-      ? ["-p", "--output-format", "json", "--allowedTools", "Bash(curl:*)", "--max-turns", "16"]
-      : ["-p", "--output-format", "json", "--allowedTools", "", "--max-turns", "1"];
+      ? ["-p", "--output-format", "json", "--allowedTools", "Bash(curl:*)", "--max-turns", maxTurns]
+      : ["-p", "--output-format", "json", "--allowedTools", "", "--max-turns", maxTurns];
     if (opts.model) args.push("--model", opts.model);
 
     const ownsScratch = opts.cwd === undefined;

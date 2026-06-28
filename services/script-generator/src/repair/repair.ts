@@ -19,7 +19,7 @@ import { loadAugmentedSpecs } from "../../../golden/src/oas-source.js";
 import type { OasSpecs } from "../resolve.js";
 import { makeClaudeCliAgent, type RepairAgent } from "./agent.js";
 import { checkOracleUnchanged } from "./oracle-guard.js";
-import { buildRepairTask, renderRepairPrompt, type SutInfo } from "./repair-task.js";
+import { buildRepairTask, renderRepairPrompt, type PrefetchSample, type SutInfo } from "./repair-task.js";
 import { verifySpec, type StepOutcome } from "./verify.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -51,6 +51,81 @@ function readSutInfo(): SutInfo {
     adminPassword: get("MEDUSA_ADMIN_PASSWORD", "supersecret"),
     publishableKey: get("MEDUSA_PUBLISHABLE_API_KEY", ""),
   };
+}
+
+/** GET a URL synchronously via curl; null on any non-zero exit (best-effort). */
+function curlGet(url: string, headers: Record<string, string>): string | null {
+  const args = ["-s", "-S", "--max-time", "20", url];
+  for (const [k, v] of Object.entries(headers)) args.push("-H", `${k}: ${v}`);
+  const proc = spawnSync("curl", args, { encoding: "utf8", timeout: 25_000, maxBuffer: 8 * 1024 * 1024 });
+  return proc.status === 0 ? proc.stdout : null;
+}
+
+/** The collection endpoint behind a failing step: "POST /admin/orders/{id}/cancel" -> "/admin/orders". */
+function collectionPath(stepEndpoint: string): string | null {
+  const sp = stepEndpoint.indexOf(" ");
+  const path = sp >= 0 ? stepEndpoint.slice(sp + 1) : stepEndpoint;
+  const brace = path.indexOf("/{");
+  const base = brace >= 0 ? path.slice(0, brace) : path;
+  return base.startsWith("/admin/") || base.startsWith("/store/") ? base : null;
+}
+
+/** Keep only the first few rows of the first array-valued key, capped, so the prompt stays lean. */
+function trimSample(body: string, rows = 3, cap = 2000): string {
+  try {
+    const obj = JSON.parse(body) as Record<string, unknown>;
+    for (const key of Object.keys(obj)) {
+      if (Array.isArray(obj[key])) {
+        return JSON.stringify({ ...obj, [key]: (obj[key] as unknown[]).slice(0, rows) }, null, 1).slice(0, cap);
+      }
+    }
+    return JSON.stringify(obj).slice(0, cap);
+  } catch {
+    return body.slice(0, cap);
+  }
+}
+
+/**
+ * Pre-fetch a small live sample of the collection behind each distinct failing step
+ * so the agent reasons from real current state instead of curl-paginating. Best-effort:
+ * any failure just yields no sample (the agent still has its bounded curl fallback).
+ */
+function prefetchSamples(failures: StepOutcome[], sut: SutInfo): PrefetchSample[] {
+  const out: PrefetchSample[] = [];
+  const seen = new Set<string>();
+  let adminToken: string | null | undefined;
+
+  for (const f of failures) {
+    const coll = collectionPath(f.endpoint);
+    if (!coll || seen.has(coll)) continue;
+    seen.add(coll);
+
+    const headers: Record<string, string> = {};
+    if (coll.startsWith("/admin/")) {
+      if (adminToken === undefined) {
+        const auth = spawnSync(
+          "curl",
+          ["-s", "-S", "--max-time", "20", "-X", "POST", `${sut.baseUrl}/auth/user/emailpass`,
+            "-H", "content-type: application/json",
+            "-d", JSON.stringify({ email: sut.adminEmail, password: sut.adminPassword })],
+          { encoding: "utf8", timeout: 25_000 }
+        );
+        try {
+          adminToken = auth.status === 0 ? ((JSON.parse(auth.stdout) as { token?: string }).token ?? null) : null;
+        } catch {
+          adminToken = null;
+        }
+      }
+      if (!adminToken) continue;
+      headers.Authorization = `Bearer ${adminToken}`;
+    } else if (sut.publishableKey) {
+      headers["x-publishable-api-key"] = sut.publishableKey;
+    }
+
+    const body = curlGet(`${sut.baseUrl}${coll}?limit=5`, headers);
+    if (body) out.push({ endpoint: coll, sample: trimSample(body) });
+  }
+  return out;
 }
 
 export interface EmittedSpec {
@@ -174,6 +249,10 @@ function repairOne(
   }
   if (verdict.matched) return { ...base, result: "already-green", attempts: 0 };
 
+  // Inline a live sample of each failing step's collection so the agent reasons from
+  // real current state in ~2 turns instead of curl-paginating to find it.
+  const prefetch = prefetchSamples(verdict.failures, sut);
+
   const violations: string[] = [];
   let attempts = 0;
   let rejectionFeedback = "";
@@ -189,6 +268,7 @@ function repairOne(
       verdict.failures,
       verdict.stdoutTail,
       specs,
+      prefetch,
       sut
     );
 
@@ -263,9 +343,15 @@ function repairOne(
 export function runRepair(specsToConsider: EmittedSpec[], options: RunRepairOptions = {}): RepairOutcome[] {
   const approved = options.approvedSignatures ?? new Set<string>();
   const maxAttempts = options.maxAttempts ?? 3;
-  // Default agent explores the live SUT read-only (curl) to discover the right
-  // setup/arrange — a tool-less agent can't reliably reproduce a stateful precondition.
-  const agent = options.agent ?? makeClaudeCliAgent({ explore: true });
+  // Default agent reasons from the inlined live samples and resolves state at run time
+  // (the emitted query + re-verify do the selection). maxTurns is a CEILING, not a
+  // budget that gets spent: a converging repair stops as soon as it emits, so a higher
+  // cap never taxes the success path — it only bounds the cost of a non-converging /
+  // unsatisfiable run. 20 gives hard, contended flows (e.g. the return lifecycle) room
+  // to land; lower it per-run via REPAIR_MAX_TURNS if you want cheaper give-ups.
+  const envTurns = Number(process.env.REPAIR_MAX_TURNS);
+  const maxTurns = Number.isInteger(envTurns) && envTurns > 0 ? envTurns : 20;
+  const agent = options.agent ?? makeClaudeCliAgent({ explore: true, maxTurns });
   const oas = options.specs ?? (loadAugmentedSpecs() as OasSpecs);
   const sut = readSutInfo();
 
