@@ -11,7 +11,7 @@
  * dependency bumps, so a clock-based regen wastes agent calls and makes the
  * downstream invariant proposals non-reproducible.
  */
-import { makeClaudeCliAgent } from "../repair/agent.js";
+import { makeClaudeAgent } from "../repair/agent.js";
 import {
   mappedEndpoints,
   readSource,
@@ -30,9 +30,9 @@ function parseTitle(title: string): { method: string; endpoint: string } {
   return { method: title.slice(0, space), endpoint: title.slice(space + 1) };
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const force = process.argv.includes("--force");
-  const agent = makeClaudeCliAgent();
+  const agent = makeClaudeAgent();
 
   let regenerated = 0;
   let skipped = 0;
@@ -52,7 +52,7 @@ function main(): void {
     }
     console.log(`Digesting ${title} (${workflow})…`);
     try {
-      const body = agent(buildDigestPrompt(method, endpoint, source));
+      const body = await agent(buildDigestPrompt(method, endpoint, source));
       const content = renderDigestFile(
         method,
         endpoint,
@@ -74,4 +74,7 @@ function main(): void {
   if (failed > 0) console.log(`  Failed:      ${failed}`);
 }
 
-main();
+main().catch((err) => {
+  console.error(err);
+  process.exitCode = 1;
+});

@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { loadAugmentedSpecs } from "../../../golden/src/oas-source.js";
 import type { OasSpecs } from "../resolve.js";
-import { makeClaudeCliAgent, type RepairAgent } from "./agent.js";
+import { makeClaudeAgent, type RepairAgent } from "./agent.js";
 import { checkOracleUnchanged } from "./oracle-guard.js";
 import { buildRepairTask, renderRepairPrompt, type PrefetchSample, type SutInfo } from "./repair-task.js";
 import { verifySpec, type StepOutcome } from "./verify.js";
@@ -228,13 +228,13 @@ function generatedSuiteTypecheckFailure(): string | null {
 }
 
 /** Repair one spec end-to-end. Mutates the file on disk; restores the original on failure. */
-function repairOne(
+async function repairOne(
   spec: EmittedSpec,
   specs: OasSpecs,
   agent: RepairAgent,
   maxAttempts: number,
   sut: SutInfo
-): RepairOutcome {
+): Promise<RepairOutcome> {
   const absPath = resolvePath(GENERATED_TESTS_DIR, spec.relPath);
   const original = existsSync(absPath) ? readFileSync(absPath, "utf8") : "";
 
@@ -288,7 +288,7 @@ function repairOne(
 
     let candidate: string;
     try {
-      candidate = agent(
+      candidate = await agent(
         `${renderRepairPrompt(task)}${rejectionFeedback
           ? `\n\n## Previous candidate rejection\n${rejectionFeedback}\nReturn a corrected full spec.`
           : ""}`
@@ -354,7 +354,7 @@ function repairOne(
   };
 }
 
-export function runRepair(specsToConsider: EmittedSpec[], options: RunRepairOptions = {}): RepairOutcome[] {
+export async function runRepair(specsToConsider: EmittedSpec[], options: RunRepairOptions = {}): Promise<RepairOutcome[]> {
   const approved = options.approvedSignatures ?? new Set<string>();
   const maxAttempts = options.maxAttempts ?? 3;
   // Default agent reasons from the inlined live samples and resolves state at run time
@@ -365,7 +365,7 @@ export function runRepair(specsToConsider: EmittedSpec[], options: RunRepairOpti
   // to land; lower it per-run via REPAIR_MAX_TURNS if you want cheaper give-ups.
   const envTurns = Number(process.env.REPAIR_MAX_TURNS);
   const maxTurns = Number.isInteger(envTurns) && envTurns > 0 ? envTurns : 20;
-  const agent = options.agent ?? makeClaudeCliAgent({ explore: true, maxTurns });
+  const agent = options.agent ?? makeClaudeAgent({ explore: true, maxTurns });
   const oas = options.specs ?? (loadAugmentedSpecs() as OasSpecs);
   const sut = readSutInfo();
 
@@ -403,7 +403,7 @@ export function runRepair(specsToConsider: EmittedSpec[], options: RunRepairOpti
       });
       continue;
     }
-    outcomes.push(repairOne(spec, oas, agent, maxAttempts, sut));
+    outcomes.push(await repairOne(spec, oas, agent, maxAttempts, sut));
   }
 
   writeRepairReport(outcomes);

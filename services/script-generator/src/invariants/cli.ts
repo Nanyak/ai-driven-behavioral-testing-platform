@@ -30,7 +30,7 @@
 import { readFileSync } from "node:fs";
 import { loadAugmentedSpecs } from "../../../golden/src/oas-source.js";
 import type { OasDocument } from "../../../golden/src/oas-types.js";
-import { makeClaudeCliAgent, type RepairAgent } from "../repair/agent.js";
+import { makeClaudeAgent, type RepairAgent } from "../repair/agent.js";
 import { loadCandidates, type Candidate } from "../load.js";
 import type { OasSpecs } from "../resolve.js";
 import { readGateContract, stepTitle } from "./codebase.js";
@@ -84,16 +84,16 @@ function buildContext(candidate: Candidate): ProposalContext {
   return { gateContract: readGateContract(), digestByStep };
 }
 
-function proposeForFlow(
+async function proposeForFlow(
   candidate: Candidate,
   specs: OasSpecs,
   agent: RepairAgent,
   ctx: ProposalContext
-): Invariant[] {
+): Promise<Invariant[]> {
   const prompt = buildInvariantPrompt(candidate, specs, ctx);
   let response: string;
   try {
-    response = agent(prompt);
+    response = await agent(prompt);
   } catch (err) {
     console.error(`  ! agent failed for [${candidate.flow_name}] — ${(err as Error).message.slice(0, 160)}`);
     return [];
@@ -101,7 +101,7 @@ function proposeForFlow(
   return parseInvariantResponse(response, flowPolarity(candidate));
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const onlyIdx = args.indexOf("--only");
   const only = onlyIdx >= 0 ? args[onlyIdx + 1] : undefined;
@@ -117,7 +117,7 @@ function main(): void {
     return true;
   });
 
-  const agent = makeClaudeCliAgent();
+  const agent = makeClaudeAgent();
   const knownGood = verifyPath ? bodiesFromRun(verifyPath) : null;
 
   const existing = loadInvariants();
@@ -141,7 +141,7 @@ function main(): void {
 
     const polarity = flowPolarity(candidate);
     console.log(`Proposing ${polarity}-path invariants for [${candidate.flow_name}]…`);
-    let invariants = proposeForFlow(candidate, specs, agent, ctx);
+    let invariants = await proposeForFlow(candidate, specs, agent, ctx);
     proposed += invariants.length;
     if (knownGood) {
       const bodies = knownGood.get(candidate.signature) ?? new Map<string, unknown>();
@@ -168,4 +168,7 @@ function main(): void {
   }
 }
 
-main();
+main().catch((err) => {
+  console.error(err);
+  process.exitCode = 1;
+});

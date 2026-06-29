@@ -577,7 +577,7 @@ const REL_DIRS: string[] = PERSONA_FOLDERS.flatMap((persona) =>
   PATH_FOLDERS.map((path) => `${persona}/${path}`)
 );
 
-function main(): void {
+async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const fileArgIndex = args.indexOf("--file");
   const explicitFile = fileArgIndex >= 0 ? args[fileArgIndex + 1] : undefined;
@@ -739,7 +739,7 @@ function main(): void {
       fixme: s.fixmeCount > 0,
     }));
     console.log(`\nResolver-agent repair: verifying ${emitted.length} spec(s) against the live SUT…`);
-    const outcomes = runRepair(emitted, {
+    const outcomes = await runRepair(emitted, {
       approvedSignatures: new Set(approved.keys()),
       only: repairOnly,
       specs,
@@ -753,5 +753,8 @@ function main(): void {
 
 // Run only when invoked directly (`tsx src/run.ts`), not when imported by a test.
 if (process.argv[1] && resolvePath(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main();
+  main().catch((err) => {
+    console.error(err);
+    process.exitCode = 1;
+  });
 }

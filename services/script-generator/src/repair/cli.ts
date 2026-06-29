@@ -119,7 +119,7 @@ function onlyArgs(args: string[]): string[] | undefined {
   return only;
 }
 
-function main(): void {
+async function main(): Promise<void> {
   let only: string[] | undefined;
   try {
     only = onlyArgs(process.argv.slice(2));
@@ -148,7 +148,7 @@ function main(): void {
   console.log(
     `Resolver-agent repair: verifying ${selected.length} existing spec(s) against the live SUT…`
   );
-  const outcomes = runRepair(specs, {
+  const outcomes = await runRepair(specs, {
     approvedSignatures: approvedSignatures(),
     only,
   });
@@ -158,4 +158,7 @@ function main(): void {
   }
 }
 
-main();
+main().catch((err) => {
+  console.error(err);
+  process.exitCode = 1;
+});
