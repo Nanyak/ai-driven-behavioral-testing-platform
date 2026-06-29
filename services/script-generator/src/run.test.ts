@@ -3,9 +3,8 @@
  * `npm run test:run`. Plain assertions, no framework — mirrors the repo style.
  *
  * Covers the two safety guarantees of the regression/conflict handling:
- *   1. an approved spec is PRESERVED across the clean (the blessed oracle survives
- *      a regen and keeps running, so it goes red on drift), while non-approved
- *      specs are removed as before;
+ *   1. approved specs and current undecided drafts are preserved across reruns,
+ *      while stale pending and explicitly discarded/superseded versions retire;
  *   2. the approved outcome is read from the HITL store so the loop can withhold a
  *      drifted candidate instead of codifying it.
  */
@@ -21,6 +20,8 @@ import {
   approvedOutcomes,
   cleanPersonaFolderPreservingApproved,
   ensureGoldenResponses,
+  shouldEmitSelectedCandidate,
+  versionedSpecFilename,
 } from "./run.js";
 
 let passed = 0;
@@ -35,6 +36,13 @@ const SIG_OTHER = "b".repeat(64);
 
 const spec = (sig: string, outcome: string): string =>
   `// flow_signature: ${sig}\n// status_signature: ${outcome}\ntest("x", async () => {});\n`;
+
+check("changed outcomes get a separate deterministic draft filename", () => {
+  assert.equal(versionedSpecFilename(SIG_APPROVED, "200,200,200", false), "aaaaaaaaaaaa.spec.ts");
+  const draft = versionedSpecFilename(SIG_APPROVED, "200,200,500", true);
+  assert.match(draft, /^aaaaaaaaaaaa-[0-9a-f]{8}\.spec\.ts$/);
+  assert.notEqual(draft, "aaaaaaaaaaaa.spec.ts");
+});
 
 // 1. approvedOutcomes reads blessed outcomes (approved only) from the HITL store.
 check("approvedOutcomes reads approved status_signatures from the store", () => {
@@ -54,8 +62,33 @@ check("approvedOutcomes reads approved status_signatures from the store", () => 
   assert.equal(map.has(SIG_OTHER), false, "discarded entries are not blessed baselines");
 });
 
-// 2. The clean PRESERVES a blessed oracle and removes a non-approved one.
-check("clean preserves the blessed oracle, removes the rest", () => {
+check("an existing exact approved artifact is never re-emitted from a stale candidate file", () => {
+  const candidate = {
+    signature: SIG_APPROVED,
+    steps: [
+      { method: "GET", endpoint: "/store/products", expected_status: 200 },
+      { method: "POST", endpoint: "/store/carts", expected_status: 200 },
+    ],
+  };
+  const outcome = "200,200";
+  const approved = new Map([[SIG_APPROVED, new Set([outcome])]]);
+  assert.equal(
+    shouldEmitSelectedCandidate(
+      candidate,
+      approved,
+      new Set([`${SIG_APPROVED}:${outcome}`])
+    ),
+    false
+  );
+  assert.equal(
+    shouldEmitSelectedCandidate(candidate, approved, new Set()),
+    true,
+    "missing approved artifact must be regenerated"
+  );
+});
+
+// 2. The clean preserves both the active oracle and an undecided draft.
+check("clean preserves the blessed oracle and pending draft", () => {
   const dir = mkdtempSync(join(tmpdir(), "gen-"));
   const personaDir = join(dir, "customer");
   mkdirSync(join(personaDir, "happy-path"), { recursive: true });
@@ -66,11 +99,34 @@ check("clean preserves the blessed oracle, removes the rest", () => {
   writeFileSync(stale, spec(SIG_OTHER, "200,401"));
 
   const approved = new Map([[SIG_APPROVED, new Set(["200,200,200"])]]);
-  const preserved = cleanPersonaFolderPreservingApproved(personaDir, approved);
+  const currentId = `${SIG_OTHER}:200,401`;
+  const preserved = cleanPersonaFolderPreservingApproved(
+    personaDir,
+    approved,
+    new Map(),
+    new Set([currentId])
+  );
 
-  assert.equal(preserved, 1);
+  assert.equal(preserved, 2);
   assert.equal(existsSync(oracle), true, "blessed oracle survives the regen");
-  assert.equal(existsSync(stale), false, "non-approved spec is cleaned");
+  assert.equal(existsSync(stale), true, "undecided draft survives until review");
+});
+
+check("clean removes an undecided draft absent from latest selected scenarios", () => {
+  const dir = mkdtempSync(join(tmpdir(), "gen-"));
+  const personaDir = join(dir, "customer");
+  mkdirSync(join(personaDir, "failure-path"), { recursive: true });
+  const stale = join(personaDir, "failure-path", "bbbbbbbbbbbb.spec.ts");
+  writeFileSync(stale, spec(SIG_OTHER, "200,401"));
+
+  const preserved = cleanPersonaFolderPreservingApproved(
+    personaDir,
+    new Map(),
+    new Map(),
+    new Set()
+  );
+  assert.equal(preserved, 0);
+  assert.equal(existsSync(stale), false, "stale pending draft is reconciled away");
 });
 
 // 3. RETIREMENT: once a DIFFERENT outcome is approved for the same journey, the
@@ -84,7 +140,8 @@ check("clean retires a stale oracle whose blessed outcome changed", () => {
 
   // Operator has since approved the drift: the blessed outcome is now 200,200,500.
   const approved = new Map([[SIG_APPROVED, new Set(["200,200,500"])]]);
-  const preserved = cleanPersonaFolderPreservingApproved(personaDir, approved);
+  const decisions = new Map([[`${SIG_APPROVED}:200,200,200`, "superseded"]]);
+  const preserved = cleanPersonaFolderPreservingApproved(personaDir, approved, decisions);
 
   assert.equal(preserved, 0, "stale oracle is not preserved");
   assert.equal(existsSync(staleOracle), false, "old-outcome spec is retired");

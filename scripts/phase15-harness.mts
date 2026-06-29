@@ -10,20 +10,23 @@
  * script backs up and restores any pre-existing store around this run.
  */
 
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
   loadFlows,
+  readDecisionHistory,
   readDecisions,
   upsertDecision,
 } from "../apps/platform-dashboard/server/hitl-store.js";
 import { buildCoverageManifest } from "../services/behavior-engine/src/selection/coverage.js";
+import { selectBusinessScenarios } from "../services/behavior-engine/src/selection/scenarios.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, "..");
 const STORE = resolve(REPO_ROOT, "data", "hitl", "approvals.json");
+const CANDIDATES = resolve(REPO_ROOT, "services", "behavior-engine", "data", "candidates");
 
 let passed = 0;
 let failed = 0;
@@ -39,6 +42,9 @@ function fail(msg: string, detail?: string): void {
 // Two deterministic, valid 64-hex signatures (independent of gitignored candidates).
 const SIG_A = "a".repeat(64);
 const SIG_B = "b".repeat(64);
+const SIG_C = "c".repeat(64);
+const SIG_D = "d".repeat(64);
+const SIG_E = "e".repeat(64);
 
 // Start clean.
 if (existsSync(STORE)) rmSync(STORE);
@@ -86,10 +92,68 @@ if (after.entries.length === 2 && aEntries.length === 1 && aEntries[0].status ==
   fail("re-decide dedup", JSON.stringify(after.entries).slice(0, 160));
 }
 
+// [3b] A changed outcome is a new review version; approving it supersedes the
+// previous baseline without erasing the audit record.
+upsertDecision({
+  flow_signature: SIG_C,
+  status_signature: "200,200",
+  status: "approved",
+});
+upsertDecision({
+  flow_signature: SIG_C,
+  status_signature: "200,500",
+  status: "approved",
+});
+const cHistory = [...readDecisionHistory().values()].filter(
+  (entry) => entry.flow_signature === SIG_C
+);
+if (
+  cHistory.length === 2 &&
+  cHistory.some((entry) => entry.status === "superseded") &&
+  cHistory.some(
+    (entry) => entry.status === "approved" && entry.status_signature === "200,500"
+  )
+) {
+  ok("approving a changed outcome supersedes, rather than overwrites, its baseline");
+} else {
+  fail("outcome-versioned approval history", JSON.stringify(cHistory).slice(0, 240));
+}
+
+upsertDecision({
+  flow_signature: SIG_D,
+  flow_name: "first checkout route",
+  persona: "registered_customer",
+  route_key:
+    "registered_customer|POST /store/carts/{id}/line-items > POST /store/carts/{id}/complete",
+  status_signature: "200,200",
+  status: "approved",
+});
+upsertDecision({
+  flow_signature: SIG_E,
+  flow_name: "replacement checkout route",
+  persona: "registered_customer",
+  route_key:
+    "registered_customer|GET /store/products > POST /store/carts/{id}/line-items > POST /store/carts/{id}/complete",
+  status_signature: "200,200,200",
+  status: "approved",
+});
+const familyHistory = [...readDecisionHistory().values()].filter(
+  (entry) => entry.flow_signature === SIG_D || entry.flow_signature === SIG_E
+);
+if (
+  familyHistory.some((entry) => entry.flow_signature === SIG_D && entry.status === "superseded") &&
+  familyHistory.some((entry) => entry.flow_signature === SIG_E && entry.status === "approved") &&
+  new Set(familyHistory.map((entry) => entry.scenario_key)).size === 1
+) {
+  ok("approving a replacement route supersedes the prior scenario-family baseline");
+} else {
+  fail("scenario-family supersession", JSON.stringify(familyHistory).slice(0, 300));
+}
+
 // [4] Skip gate reads both approved + discarded signatures back.
 const manifest = buildCoverageManifest();
 if (
-  manifest.fromHitl === 2 &&
+  manifest.fromHitl === 5 &&
   manifest.signatures.has(SIG_A) &&
   manifest.signatures.has(SIG_B)
 ) {
@@ -127,9 +191,53 @@ if (payload.flows.length === 0) {
   if (shapeOk) ok(`loadFlows() joined ${payload.flows.length} flows (persona/steps/test/decision/covered)`);
   else fail("loadFlows shape", JSON.stringify(Object.keys(f)));
 
+  const candidateFiles = existsSync(CANDIDATES)
+    ? readdirSync(CANDIDATES)
+        .filter((file) => file.startsWith("test-candidates-") && file.endsWith(".json"))
+        .sort()
+    : [];
+  if (candidateFiles.length > 1) {
+    const latest = JSON.parse(
+      readFileSync(join(CANDIDATES, candidateFiles[candidateFiles.length - 1]), "utf8")
+    ) as { candidates?: unknown[] };
+    const expectedRepresentatives = selectBusinessScenarios(
+      (latest.candidates ?? []) as Parameters<typeof selectBusinessScenarios>[0]
+    ).representatives.length;
+    if (
+      payload.flows.length === expectedRepresentatives &&
+      payload.flows
+        .filter((flow) => flow.decision === null)
+        .every((flow) => flow.seen_in_latest_run)
+    ) {
+      ok("API active queue matches shared latest-mine scenario selection");
+    } else {
+      fail(
+        "active scenario reconciliation",
+        `active=${payload.flows.length}, selected=${expectedRepresentatives}, latest=${latest.candidates?.length ?? 0}`
+      );
+    }
+  }
+
+  if (
+    payload.counts.total === payload.flows.length &&
+    payload.counts.awaiting_review ===
+      payload.flows.filter((flow) => flow.lifecycle === "awaiting_review").length &&
+    payload.flows.every((flow) => flow.variant_count >= 1)
+  ) {
+    ok("active counters and scenario variant metadata match visible representatives");
+  } else {
+    fail("active representative counters/variant metadata");
+  }
+
   // Decision write reflects into the next loadFlows() read.
   const target = payload.flows[0];
-  upsertDecision({ flow_signature: target.signature, status: "approved", test_path: target.test_path });
+  upsertDecision({
+    review_id: target.review_id,
+    flow_signature: target.signature,
+    status_signature: target.status_signature,
+    status: "approved",
+    test_path: target.test_path,
+  });
   const reread = loadFlows().flows.find((x) => x.signature === target.signature);
   if (reread?.decision === "approved" && reread.covered) {
     ok("a written decision is reflected on the next loadFlows() read");

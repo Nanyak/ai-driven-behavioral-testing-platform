@@ -1,8 +1,8 @@
 /**
  * The store contract here is exactly what `services/behavior-engine/src/coverage.ts`
  * parses: `{ entries: [{ flow_signature, status, ... }] }`, status in
- * {approved, discarded}, both feeding the skip gate. A missing/malformed store is
- * treated as empty here too — never fatal.
+ * Active decisions are {approved, discarded}; superseded approvals remain as
+ * audit history. All terminal versions feed the outcome-aware skip gate.
  */
 
 import {
@@ -17,6 +17,7 @@ import {
 import { createHash } from "node:crypto";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { selectBusinessScenarios } from "../../../services/behavior-engine/src/selection/scenarios.js";
 
 /**
  * Locate the repo root by walking up until we find the monorepo markers. This is
@@ -168,6 +169,11 @@ export function readReportSummary(): {
 const SIGNATURE_STAMP = /flow_signature["'\s:=]+([0-9a-f]{64})/i;
 
 export type Decision = "approved" | "discarded";
+export type StoredDecision = Decision | "superseded";
+
+export function reviewId(flowSignature: string, statusSignature: string): string {
+  return `${flowSignature.toLowerCase()}:${statusSignature || "unknown"}`;
+}
 
 /**
  * Where a flow sits in the review pipeline. Independent of the test file, which
@@ -180,8 +186,9 @@ export type Decision = "approved" | "discarded";
 export type Lifecycle = "approved" | "discarded" | "awaiting_review" | "discovered";
 
 export interface DecisionEntry {
+  review_id?: string;
   flow_signature: string;
-  status: Decision;
+  status: StoredDecision;
   test_path?: string;
   decided_by?: string;
   decided_at?: string;
@@ -198,6 +205,10 @@ export interface DecisionEntry {
   /** SHA-256 of the deterministic, redacted request-body plan shown during review. */
   body_plan_hash?: string;
   body_rule_sources?: string[];
+  superseded_at?: string;
+  superseded_by?: string;
+  /** Stable business-scenario family selected by the current mine. */
+  scenario_key?: string;
 }
 
 export interface FlowStep {
@@ -221,6 +232,43 @@ function statusSignature(steps: FlowStep[]): string {
   return steps.map((s) => s.expected_status).join(",");
 }
 
+function inferDecisionScenarioKey(input: {
+  flow_signature: string;
+  flow_name?: string;
+  persona?: string;
+  route_key?: string;
+  status_signature?: string;
+}): string | undefined {
+  if (!input.persona || !input.route_key) return undefined;
+  const route = input.route_key.includes("|")
+    ? input.route_key.slice(input.route_key.indexOf("|") + 1)
+    : input.route_key;
+  const statuses = (input.status_signature ?? "")
+    .split(",")
+    .map((value) => Number(value));
+  const steps = route
+    .split(" > ")
+    .map((token, index) => {
+      const space = token.indexOf(" ");
+      if (space <= 0) return null;
+      return {
+        method: token.slice(0, space),
+        endpoint: token.slice(space + 1),
+        expected_status: Number.isFinite(statuses[index]) ? statuses[index] : 0,
+      };
+    })
+    .filter((step): step is FlowStep => step !== null);
+  if (steps.length === 0) return undefined;
+  return selectBusinessScenarios([
+    {
+      signature: input.flow_signature,
+      flow_name: input.flow_name ?? "Resolved flow",
+      persona: input.persona,
+      steps,
+    },
+  ]).representatives[0]?.family_key;
+}
+
 function lifecycleOf(decision: Decision | null, hasTest: boolean): Lifecycle {
   if (decision === "approved") return "approved";
   if (decision === "discarded") return "discarded";
@@ -228,6 +276,7 @@ function lifecycleOf(decision: Decision | null, hasTest: boolean): Lifecycle {
 }
 
 export interface ReviewFlow {
+  review_id: string;
   signature: string;
   flow_name: string;
   persona: string;
@@ -272,6 +321,43 @@ export interface ReviewFlow {
    * cannot resolve the baseline by signature alone — it is supplied here directly.
    */
   conflict_baselines: Array<{ flow_name: string; status_signature: string }>;
+  /** The currently runnable baseline for this journey, when it differs from this version. */
+  active_baseline: {
+    review_id: string;
+    flow_name: string;
+    status_signature: string;
+    test_path: string | null;
+    decided_at?: string;
+  } | null;
+  first_seen_run: string | null;
+  last_seen_run: string | null;
+  seen_in_latest_run: boolean;
+  version_count: number;
+  versions: Array<{
+    review_id: string;
+    status_signature: string;
+    lifecycle: Lifecycle | "superseded";
+    test_path: string | null;
+    first_seen_run: string | null;
+    last_seen_run: string | null;
+    decided_at?: string;
+  }>;
+  /** Stable persona + business intent + material outcome grouping key. */
+  family_key: string;
+  /** All current route observations represented by this one review row. */
+  variant_count: number;
+  variants: Array<{
+    review_id: string;
+    signature: string;
+    flow_name: string;
+    support: number;
+    score: number;
+    step_count: number;
+    status_signature: string;
+    is_representative: boolean;
+  }>;
+  /** Why a current representative lacks a draft. Null once generation succeeds. */
+  not_generated_reason: "generation_pending" | null;
 }
 
 /**
@@ -280,14 +366,16 @@ export interface ReviewFlow {
  * Carried so the UI can show review history and explain a conflict's other side.
  */
 export interface PriorDecision {
+  review_id: string;
   signature: string;
-  status: Decision;
+  status: StoredDecision;
   flow_name: string;
   persona: string;
   route_key: string;
   status_signature: string;
   step_count: number;
   decided_at?: string;
+  test_path: string | null;
 }
 
 export interface FlowsPayload {
@@ -311,18 +399,20 @@ export interface FlowsPayload {
   };
 }
 
-/** Newest `test-candidates-*.json` by filename (timestamped, lexicographically sortable). */
-function newestCandidatesFile(): string | null {
+/** Candidate snapshots in chronological order (timestamped, lexicographically sortable). */
+function candidateFiles(): string[] {
   if (!existsSync(CANDIDATES_DIR)) {
-    return null;
+    return [];
   }
-  const files = readdirSync(CANDIDATES_DIR)
+  return readdirSync(CANDIDATES_DIR)
     .filter((f) => f.startsWith("test-candidates-") && f.endsWith(".json"))
-    .sort();
-  if (files.length === 0) {
-    return null;
-  }
-  return join(CANDIDATES_DIR, files[files.length - 1]);
+    .sort()
+    .map((file) => join(CANDIDATES_DIR, file));
+}
+
+/** Newest `test-candidates-*.json` by filename. */
+function newestCandidatesFile(): string | null {
+  return candidateFiles().at(-1) ?? null;
 }
 
 /** Recursively list `*.spec.ts` files under a dir; [] if absent. */
@@ -359,7 +449,9 @@ interface SpecRef {
 }
 
 interface ManifestEntry {
+  review_id?: string;
   flow_signature: string;
+  status_signature?: string;
   test_path: string;
   generated_spec_hash: string;
   body_plan_hash: string;
@@ -371,14 +463,20 @@ function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function manifestBySignature(): Map<string, ManifestEntry> {
+function manifestByReview(): Map<string, ManifestEntry> {
   const map = new Map<string, ManifestEntry>();
   if (!existsSync(ARTIFACT_MANIFEST)) return map;
   try {
     const parsed = JSON.parse(readFileSync(ARTIFACT_MANIFEST, "utf8")) as { entries?: ManifestEntry[] };
     for (const entry of parsed.entries ?? []) {
       if (typeof entry.flow_signature === "string") {
-        map.set(entry.flow_signature.toLowerCase(), entry);
+        const id =
+          entry.review_id?.trim() ||
+          reviewId(entry.flow_signature, entry.status_signature ?? "");
+        map.set(id, entry);
+        if (!entry.review_id && !entry.status_signature) {
+          map.set(entry.flow_signature.toLowerCase(), entry);
+        }
       }
     }
   } catch {
@@ -387,16 +485,18 @@ function manifestBySignature(): Map<string, ManifestEntry> {
   return map;
 }
 
-/** Map signature (lowercase 64-hex) -> its on-disk spec (path + agent-repair flag). */
-function specsBySignature(): Map<string, SpecRef> {
+/** Map outcome-aware review id -> its on-disk spec (path + agent-repair flag). */
+function specsByReview(): Map<string, SpecRef> {
   const map = new Map<string, SpecRef>();
-  const manifests = manifestBySignature();
+  const manifests = manifestByReview();
   for (const file of listSpecFiles(GENERATED_TESTS_DIR)) {
     const text = readFileSync(file, "utf8");
     const match = SIGNATURE_STAMP.exec(text);
     if (match) {
       const signature = match[1].toLowerCase();
-      const manifest = manifests.get(signature);
+      const statusSignature = /status_signature["'\s:=]+([\d,]+)/i.exec(text)?.[1] ?? "";
+      const id = reviewId(signature, statusSignature);
+      const manifest = manifests.get(id) ?? manifests.get(signature);
       const repairedByAgent = text.includes(REPAIR_PROVENANCE);
       const specHash = sha256(text);
       const baselineBodyPlan = manifest?.body_plan ?? null;
@@ -410,7 +510,7 @@ function specsBySignature(): Map<string, SpecRef> {
               },
             }
           : baselineBodyPlan;
-      map.set(signature, {
+      map.set(id, {
         path: file.slice(REPO_ROOT.length + 1),
         repairedByAgent,
         source: text,
@@ -436,6 +536,7 @@ function specsBySignature(): Map<string, SpecRef> {
 }
 
 export interface ArtifactReview {
+  review_id: string;
   signature: string;
   test_path: string;
   source: string;
@@ -450,12 +551,18 @@ export interface ArtifactReview {
   matches_approval: boolean | null;
 }
 
-/** Exact executable source + redacted body plan, loaded lazily by the review panel. */
-export function artifactReview(signature: string): ArtifactReview | null {
+/** Exact executable source + redacted body plan, loaded lazily by review version. */
+export function artifactReview(signature: string, statusSignature = ""): ArtifactReview | null {
   const sig = signature.toLowerCase();
-  const spec = specsBySignature().get(sig);
+  const id = reviewId(sig, statusSignature);
+  const specs = specsByReview();
+  const spec =
+    specs.get(id) ??
+    (statusSignature === ""
+      ? [...specs.entries()].find(([key]) => key.startsWith(`${sig}:`))?.[1]
+      : undefined);
   if (!spec) return null;
-  const decision = readDecisions().get(sig);
+  const decision = readDecisionHistory().get(id);
   const approved = decision?.status === "approved" ? decision : null;
   const matches =
     approved === null
@@ -467,6 +574,7 @@ export function artifactReview(signature: string): ArtifactReview | null {
             approved.body_plan_hash === spec.bodyPlanHash
         );
   return {
+    review_id: id,
     signature: sig,
     test_path: spec.path,
     source: spec.source,
@@ -569,8 +677,8 @@ export function deleteTestFile(
   return { deleted: true };
 }
 
-/** Read the approval store as a signature->entry map. Empty if missing/malformed. */
-export function readDecisions(): Map<string, DecisionEntry> {
+/** Read the complete outcome-versioned decision history. */
+export function readDecisionHistory(): Map<string, DecisionEntry> {
   const map = new Map<string, DecisionEntry>();
   if (!existsSync(HITL_STORE)) {
     return map;
@@ -591,11 +699,14 @@ export function readDecisions(): Map<string, DecisionEntry> {
     const status = raw.status;
     if (
       typeof signature === "string" &&
-      (status === "approved" || status === "discarded")
+      (status === "approved" || status === "discarded" || status === "superseded")
     ) {
       const sig = signature.toLowerCase();
       const str = (v: unknown) => (typeof v === "string" ? v : undefined);
-      map.set(sig, {
+      const outcome = str(raw.status_signature) ?? "";
+      const id = str(raw.review_id) ?? reviewId(sig, outcome);
+      const decision: DecisionEntry = {
+        review_id: id,
         flow_signature: sig,
         status,
         test_path: str(raw.test_path),
@@ -604,25 +715,50 @@ export function readDecisions(): Map<string, DecisionEntry> {
         flow_name: str(raw.flow_name),
         persona: str(raw.persona),
         route_key: str(raw.route_key),
-        status_signature: str(raw.status_signature),
+        status_signature: outcome,
         step_count: typeof raw.step_count === "number" ? raw.step_count : undefined,
         spec_hash: str(raw.spec_hash),
         body_plan_hash: str(raw.body_plan_hash),
         body_rule_sources: Array.isArray(raw.body_rule_sources)
           ? raw.body_rule_sources.filter((v): v is string => typeof v === "string")
           : undefined,
-      });
+        superseded_at: str(raw.superseded_at),
+        superseded_by: str(raw.superseded_by),
+        scenario_key: str(raw.scenario_key),
+      };
+      decision.scenario_key ??= inferDecisionScenarioKey(decision);
+      map.set(id, decision);
     }
   }
   return map;
 }
 
 /**
- * Upsert one decision keyed by flow signature — never appends a duplicate.
+ * Compatibility projection used by existing callers: one active decision per
+ * journey. An active approval wins; otherwise the latest discard is returned.
+ */
+export function readDecisions(): Map<string, DecisionEntry> {
+  const projected = new Map<string, DecisionEntry>();
+  const entries = [...readDecisionHistory().values()]
+    .filter((entry) => entry.status !== "superseded")
+    .sort((a, b) => (a.decided_at ?? "").localeCompare(b.decided_at ?? ""));
+  for (const entry of entries) {
+    const prior = projected.get(entry.flow_signature);
+    if (!prior || entry.status === "approved" || prior.status !== "approved") {
+      projected.set(entry.flow_signature, entry);
+    }
+  }
+  return projected;
+}
+
+/**
+ * Upsert one decision keyed by outcome-aware review id. Approving a new outcome
+ * supersedes the previous active baseline without deleting its audit record.
  * Writes the store in the `{ entries: [...] }` shape coverage.ts parses, creating
  * `data/hitl/` if needed.
  */
 export function upsertDecision(input: {
+  review_id?: string;
   flow_signature: string;
   status: Decision;
   test_path?: string | null;
@@ -635,25 +771,57 @@ export function upsertDecision(input: {
   spec_hash?: string;
   body_plan_hash?: string;
   body_rule_sources?: string[];
+  scenario_key?: string;
 }): DecisionEntry {
   const sig = input.flow_signature.toLowerCase();
-  const decisions = readDecisions();
+  const outcome = input.status_signature ?? "";
+  const id = input.review_id ?? reviewId(sig, outcome);
+  const scenarioKey =
+    input.scenario_key ??
+    inferDecisionScenarioKey({
+      flow_signature: sig,
+      flow_name: input.flow_name,
+      persona: input.persona,
+      route_key: input.route_key,
+      status_signature: outcome,
+    });
+  const decisions = readDecisionHistory();
+  const now = new Date().toISOString();
+  if (input.status === "approved") {
+    for (const [priorId, prior] of decisions) {
+      if (
+        priorId !== id &&
+        (prior.flow_signature === sig ||
+          Boolean(scenarioKey && prior.scenario_key === scenarioKey)) &&
+        prior.status === "approved"
+      ) {
+        decisions.set(priorId, {
+          ...prior,
+          status: "superseded",
+          superseded_at: now,
+          superseded_by: id,
+        });
+      }
+    }
+  }
   const entry: DecisionEntry = {
+    review_id: id,
     flow_signature: sig,
     status: input.status,
     test_path: input.test_path ?? undefined,
     decided_by: input.decided_by ?? "operator",
-    decided_at: new Date().toISOString(),
+    decided_at: now,
     flow_name: input.flow_name,
     persona: input.persona,
     route_key: input.route_key,
-    status_signature: input.status_signature,
+    status_signature: outcome,
     step_count: input.step_count,
     spec_hash: input.spec_hash,
     body_plan_hash: input.body_plan_hash,
     body_rule_sources: input.body_rule_sources,
+    scenario_key: scenarioKey,
   };
-  decisions.set(sig, entry);
+  decisions.set(id, entry);
 
   mkdirSync(dirname(HITL_STORE), { recursive: true });
   const entries = [...decisions.values()];
@@ -672,57 +840,138 @@ interface RawCandidate {
   assertion_hints?: { fields?: string[] };
   source_sessions?: string[];
   steps?: FlowStep[];
+  anomaly_note?: string | null;
 }
 
-/** Load discovered flows, joined with their generated test and current decision. */
+interface CandidateObservation {
+  candidate: RawCandidate;
+  firstSeenRun: string | null;
+  lastSeenRun: string | null;
+  order: number;
+  seenInLatest: boolean;
+}
+
+/**
+ * Load the active review queue. The newest mine is authoritative for undecided
+ * work; older candidate files provide first-seen metadata only. Terminal
+ * decisions remain separately available as resolved history.
+ */
 export function loadFlows(): FlowsPayload {
-  const file = newestCandidatesFile();
-  const decisions = readDecisions();
-  if (!file) {
-    // No latest scan, but prior decisions may still exist — surface them so the
-    // history isn't lost (and the counts stay honest).
-    const prior = priorDecisions(decisions, new Set());
-    return {
-      run_id: null,
-      source_candidates: null,
-      generated_at: null,
-      flows: [],
-      prior_decisions: prior,
-      counts: {
-        total: 0,
-        approved: prior.filter((p) => p.status === "approved").length,
-        discarded: prior.filter((p) => p.status === "discarded").length,
-        undecided: 0,
-        with_test: 0,
-        covered: 0,
-        awaiting_review: 0,
-        discovered: 0,
-        conflicts: 0,
-        stale_approvals: 0,
-      },
-    };
+  const files = candidateFiles();
+  const latestFile = files.at(-1) ?? null;
+  const observations = new Map<string, CandidateObservation>();
+  let latestRunId: string | null = null;
+  let latestGeneratedAt: string | null = null;
+  let latestCandidates: RawCandidate[] = [];
+  let order = 0;
+
+  for (const file of files) {
+    let doc: { run_id?: string; generated_at?: string; candidates?: RawCandidate[] };
+    try {
+      doc = JSON.parse(readFileSync(file, "utf8")) as typeof doc;
+    } catch {
+      continue;
+    }
+    const isLatest = file === latestFile;
+    if (isLatest) {
+      latestRunId = doc.run_id ?? null;
+      latestGeneratedAt = doc.generated_at ?? null;
+      latestCandidates = doc.candidates ?? [];
+    }
+    for (const candidate of doc.candidates ?? []) {
+      const sig = candidate.signature.toLowerCase();
+      const id = reviewId(sig, statusSignature(candidate.steps ?? []));
+      const prior = observations.get(id);
+      observations.set(id, {
+        candidate,
+        firstSeenRun: prior?.firstSeenRun ?? doc.run_id ?? null,
+        lastSeenRun: doc.run_id ?? null,
+        order: order++,
+        seenInLatest: isLatest,
+      });
+    }
   }
 
-  const doc = JSON.parse(readFileSync(file, "utf8")) as {
-    run_id?: string;
-    generated_at?: string;
-    candidates?: RawCandidate[];
-  };
-  const specs = specsBySignature();
+  const decisions = readDecisionHistory();
+  const approvedSignatures = new Set(
+    [...decisions.values()]
+      .filter((entry) => entry.status === "approved")
+      .map((entry) => entry.flow_signature)
+  );
+  const selected = selectBusinessScenarios(
+    latestCandidates.map((candidate) => ({ ...candidate, steps: candidate.steps ?? [] })),
+    approvedSignatures
+  );
+  const specs = specsByReview();
   const repairs = repairOutcomesBySignature();
+  const activeReviewIds = new Set<string>();
+  const flows: ReviewFlow[] = [];
 
-  // First pass: build flows with route_key/status_signature/lifecycle.
-  const flows: ReviewFlow[] = (doc.candidates ?? []).map((c) => {
+  for (const family of selected.representatives) {
+    const c = family.candidate;
     const sig = c.signature.toLowerCase();
-    const specRef = specs.get(sig) ?? null;
-    const testPath = specRef?.path ?? null;
-    const repair = repairs.get(sig);
-    const decisionEntry = decisions.get(sig);
-    const decision = decisionEntry?.status ?? null;
     const steps = c.steps ?? [];
-    return {
+    const outcome = statusSignature(steps);
+    const id = reviewId(sig, outcome);
+    activeReviewIds.add(id);
+    const observed = observations.get(id);
+    const exactDecision = decisions.get(id);
+    const publicDecision =
+      exactDecision?.status === "approved" || exactDecision?.status === "discarded"
+        ? exactDecision.status
+        : null;
+    const specRef = specs.get(id) ?? null;
+    const repair = repairs.get(sig);
+    const baseline = [...decisions.values()]
+      .filter(
+        (entry) =>
+          entry.status === "approved" &&
+          (entry.flow_signature === sig || entry.scenario_key === family.family_key)
+      )
+      .sort((a, b) => (b.decided_at ?? "").localeCompare(a.decided_at ?? ""))[0];
+    const baselineId = baseline
+      ? baseline.review_id ?? reviewId(sig, baseline.status_signature ?? "")
+      : null;
+    const baselineSpec = baselineId ? specs.get(baselineId) ?? null : null;
+    const conflicts = Boolean(
+      baseline && baseline.status_signature !== outcome && publicDecision === null
+    );
+
+    const versionIds = new Set<string>([id]);
+    for (const [versionId, decision] of decisions) {
+      if (decision.flow_signature === sig) versionIds.add(versionId);
+    }
+    const versions = [...versionIds].map((versionId) => {
+      const decision = decisions.get(versionId);
+      const versionSpec = specs.get(versionId);
+      const versionObservation = observations.get(versionId);
+      const lifecycle: Lifecycle | "superseded" =
+        decision?.status === "superseded"
+          ? "superseded"
+          : lifecycleOf(
+              decision?.status === "approved" || decision?.status === "discarded"
+                ? decision.status
+                : null,
+              Boolean(versionSpec)
+            );
+      return {
+        review_id: versionId,
+        status_signature:
+          statusSignature(versionObservation?.candidate.steps ?? []) ||
+          decision?.status_signature ||
+          "",
+        lifecycle,
+        test_path: versionSpec?.path ?? null,
+        first_seen_run: versionObservation?.firstSeenRun ?? null,
+        last_seen_run: versionObservation?.lastSeenRun ?? null,
+        decided_at: decision?.decided_at,
+      };
+    });
+
+    flows.push({
+      review_id: id,
       signature: sig,
-      flow_name: c.flow_name,
+      flow_name: family.scenario_name,
       persona: c.persona,
       attributes: {
         requires_auth: Boolean(c.attributes?.requires_auth),
@@ -736,134 +985,106 @@ export function loadFlows(): FlowsPayload {
       steps,
       assertion_fields: c.assertion_hints?.fields ?? [],
       source_sessions: c.source_sessions ?? [],
-      test_path: testPath,
-      decision,
-      covered: Boolean(testPath) || decision !== null,
+      test_path: specRef?.path ?? null,
+      decision: publicDecision,
+      covered: Boolean(specRef) || publicDecision !== null,
       route_key: routeKey(c.persona, steps),
-      status_signature: statusSignature(steps),
-      lifecycle: lifecycleOf(decision, Boolean(testPath)),
-      conflicts_with_approved: false,
-      conflict_signatures: [],
-      // Badge reflects the live spec on disk; attempts come from the last repair run.
+      status_signature: outcome,
+      lifecycle: lifecycleOf(publicDecision, Boolean(specRef)),
+      conflicts_with_approved: conflicts,
+      conflict_signatures: conflicts ? [sig] : [],
       repaired_by_agent: specRef?.repairedByAgent ?? false,
       repair_attempts: repair?.result === "repaired" ? repair.attempts : null,
       spec_hash: specRef?.specHash ?? null,
       body_plan_hash: specRef?.bodyPlanHash ?? null,
       body_rule_sources: specRef?.bodyRuleSources ?? [],
       artifact_matches_approval:
-        decision !== "approved"
+        publicDecision !== "approved"
           ? null
           : Boolean(
-              decisionEntry?.spec_hash &&
-                decisionEntry.spec_hash === specRef?.specHash &&
-                decisionEntry.body_plan_hash &&
-                decisionEntry.body_plan_hash === specRef?.bodyPlanHash
+              exactDecision?.spec_hash &&
+                exactDecision.spec_hash === specRef?.specHash &&
+                exactDecision.body_plan_hash &&
+                exactDecision.body_plan_hash === specRef?.bodyPlanHash
             ),
-      conflict_baselines: [],
-    };
-  });
-
-  // Second pass: map every approved route_key (journey) -> its blessed outcomes,
-  // from BOTH the current scan and the prior-decision store, so a flow is flagged
-  // when it runs an approved journey but expects a DIFFERENT outcome (drift). The
-  // comparison is on status_signature (the outcome half), NOT signature: a
-  // regression shares its baseline's status-free signature, so a signature diff
-  // would never fire.
-  interface Baseline {
-    signature: string;
-    status_signature: string;
-    flow_name: string;
-  }
-  const approvedByRoute = new Map<string, Baseline[]>();
-  const addApproved = (rk: string | undefined, base: Baseline) => {
-    if (!rk || !base.status_signature) return;
-    const list = approvedByRoute.get(rk) ?? [];
-    if (!list.some((b) => b.status_signature === base.status_signature)) {
-      list.push(base);
-    }
-    approvedByRoute.set(rk, list);
-  };
-  for (const f of flows) {
-    if (f.lifecycle === "approved") {
-      addApproved(f.route_key, {
-        signature: f.signature,
-        status_signature: f.status_signature,
-        flow_name: f.flow_name,
-      });
-    }
-  }
-  for (const d of decisions.values()) {
-    if (d.status === "approved") {
-      addApproved(d.route_key, {
-        signature: d.flow_signature,
-        status_signature: d.status_signature ?? "",
-        flow_name: d.flow_name ?? d.flow_signature.slice(0, 12),
-      });
-    }
+      conflict_baselines:
+        conflicts && baseline
+          ? [{
+              flow_name: baseline.flow_name ?? family.scenario_name,
+              status_signature: baseline.status_signature ?? "",
+            }]
+          : [],
+      active_baseline:
+        baseline && baselineId && baselineId !== id
+          ? {
+              review_id: baselineId,
+              flow_name: baseline.flow_name ?? family.scenario_name,
+              status_signature: baseline.status_signature ?? "",
+              test_path: baselineSpec?.path ?? null,
+              decided_at: baseline.decided_at,
+            }
+          : null,
+      first_seen_run: observed?.firstSeenRun ?? latestRunId,
+      last_seen_run: latestRunId,
+      seen_in_latest_run: true,
+      version_count: versions.length,
+      versions,
+      family_key: family.family_key,
+      variant_count: family.variants.length,
+      variants: family.variants.map((variant) => {
+        const variantOutcome = statusSignature(variant.steps ?? []);
+        return {
+          review_id: reviewId(variant.signature, variantOutcome),
+          signature: variant.signature.toLowerCase(),
+          flow_name: variant.flow_name,
+          support: variant.support ?? 0,
+          score: variant.score ?? 0,
+          step_count: variant.steps.length,
+          status_signature: variantOutcome,
+          is_representative: variant.signature.toLowerCase() === sig && variantOutcome === outcome,
+        };
+      }),
+      not_generated_reason: specRef ? null : "generation_pending",
+    });
   }
 
-  for (const f of flows) {
-    if (f.lifecycle === "approved") continue;
-    const baselines = approvedByRoute.get(f.route_key);
-    if (!baselines) continue;
-    const differing = baselines.filter((b) => b.status_signature !== f.status_signature);
-    if (differing.length > 0) {
-      f.conflicts_with_approved = true;
-      f.conflict_signatures = differing.map((b) => b.signature);
-      f.conflict_baselines = differing.map((b) => ({
-        flow_name: b.flow_name,
-        status_signature: b.status_signature,
-      }));
-    }
-  }
-
-  const currentSigs = new Set(flows.map((f) => f.signature));
-  const prior = priorDecisions(decisions, currentSigs);
+  const priorDecisions: PriorDecision[] = [...decisions.entries()]
+    .filter(([id]) => !activeReviewIds.has(id))
+    .map(([id, decision]) => ({
+      review_id: id,
+      signature: decision.flow_signature,
+      status: decision.status,
+      flow_name: decision.flow_name ?? "Resolved flow",
+      persona: decision.persona ?? "unknown",
+      route_key: decision.route_key ?? "",
+      status_signature: decision.status_signature ?? "",
+      step_count: decision.step_count ?? 0,
+      decided_at: decision.decided_at,
+      test_path: specs.get(id)?.path ?? decision.test_path ?? null,
+    }))
+    .sort((a, b) => (b.decided_at ?? "").localeCompare(a.decided_at ?? ""));
 
   const counts = {
     total: flows.length,
-    approved: flows.filter((f) => f.lifecycle === "approved").length,
-    discarded: flows.filter((f) => f.lifecycle === "discarded").length,
-    undecided: flows.filter((f) => f.decision === null).length,
-    with_test: flows.filter((f) => f.test_path !== null).length,
-    covered: flows.filter((f) => f.covered).length,
-    awaiting_review: flows.filter((f) => f.lifecycle === "awaiting_review").length,
-    discovered: flows.filter((f) => f.lifecycle === "discovered").length,
-    conflicts: flows.filter((f) => f.conflicts_with_approved).length,
-    stale_approvals: flows.filter((f) => f.artifact_matches_approval === false).length,
+    approved: flows.filter(
+      (flow) => flow.lifecycle === "approved" || flow.active_baseline !== null
+    ).length,
+    discarded: flows.filter((flow) => flow.lifecycle === "discarded").length,
+    undecided: flows.filter((flow) => flow.decision === null).length,
+    with_test: flows.filter((flow) => flow.test_path !== null).length,
+    covered: flows.filter((flow) => flow.covered).length,
+    awaiting_review: flows.filter((flow) => flow.lifecycle === "awaiting_review").length,
+    discovered: flows.filter((flow) => flow.lifecycle === "discovered").length,
+    conflicts: flows.filter((flow) => flow.conflicts_with_approved).length,
+    stale_approvals: flows.filter((flow) => flow.artifact_matches_approval === false).length,
   };
 
   return {
-    run_id: doc.run_id ?? null,
-    source_candidates: file.slice(REPO_ROOT.length + 1),
-    generated_at: doc.generated_at ?? null,
+    run_id: latestRunId,
+    source_candidates: latestFile ? latestFile.slice(REPO_ROOT.length + 1) : null,
+    generated_at: latestGeneratedAt,
     flows,
-    prior_decisions: prior,
+    prior_decisions: priorDecisions,
     counts,
   };
-}
-
-/** Decisions whose flow isn't in the latest scan, with enough metadata to show. */
-function priorDecisions(
-  decisions: Map<string, DecisionEntry>,
-  currentSigs: Set<string>
-): PriorDecision[] {
-  const out: PriorDecision[] = [];
-  for (const d of decisions.values()) {
-    if (currentSigs.has(d.flow_signature)) continue;
-    // Pre-enrichment entries lack route_key/persona; they still gate the skip
-    // list but can't be rendered as history, so skip them here.
-    if (!d.route_key || !d.persona) continue;
-    out.push({
-      signature: d.flow_signature,
-      status: d.status,
-      flow_name: d.flow_name ?? d.flow_signature.slice(0, 12),
-      persona: d.persona,
-      route_key: d.route_key,
-      status_signature: d.status_signature ?? "",
-      step_count: d.step_count ?? 0,
-      decided_at: d.decided_at,
-    });
-  }
-  return out;
 }

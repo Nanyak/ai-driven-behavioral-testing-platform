@@ -93,19 +93,22 @@ interface HitlCoverage {
    * stores) contribute no outcome, so they fall back to shape-level skip.
    */
   approvedOutcomes: Map<string, Set<string>>;
+  /** Every terminally reviewed outcome, including discarded and superseded versions. */
+  decidedOutcomes: Map<string, Set<string>>;
 }
 
 function fromHitlStore(path: string): HitlCoverage {
   const sigs = new Set<string>();
   const approvedOutcomes = new Map<string, Set<string>>();
+  const decidedOutcomes = new Map<string, Set<string>>();
   if (!existsSync(path)) {
-    return { sigs, approvedOutcomes };
+    return { sigs, approvedOutcomes, decidedOutcomes };
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(readFileSync(path, "utf8"));
   } catch {
-    return { sigs, approvedOutcomes }; // a malformed store is treated as empty, never fatal.
+    return { sigs, approvedOutcomes, decidedOutcomes }; // malformed -> empty
   }
   const entries = Array.isArray(parsed)
     ? parsed
@@ -117,10 +120,15 @@ function fromHitlStore(path: string): HitlCoverage {
     const signature = entry.flow_signature ?? entry.signature;
     if (
       typeof signature === "string" &&
-      (status === "approved" || status === "discarded")
+      (status === "approved" || status === "discarded" || status === "superseded")
     ) {
       const sig = signature.toLowerCase();
       sigs.add(sig);
+      if (typeof entry.status_signature === "string") {
+        const decided = decidedOutcomes.get(sig) ?? new Set<string>();
+        decided.add(entry.status_signature);
+        decidedOutcomes.set(sig, decided);
+      }
       if (status === "approved" && typeof entry.status_signature === "string") {
         const set = approvedOutcomes.get(sig) ?? new Set<string>();
         set.add(entry.status_signature);
@@ -128,13 +136,14 @@ function fromHitlStore(path: string): HitlCoverage {
       }
     }
   }
-  return { sigs, approvedOutcomes };
+  return { sigs, approvedOutcomes, decidedOutcomes };
 }
 
 export interface CoverageManifest {
   signatures: Set<string>;
   /** Approved shape -> blessed outcome(s); drives the outcome-aware skip gate. */
   approvedOutcomes: Map<string, Set<string>>;
+  decidedOutcomes: Map<string, Set<string>>;
   /** Shape -> outcome(s) an ACTUAL spec already asserts. Lets the gate keep a
    * blessed outcome that has no oracle yet (so it gets generated) instead of
    * skipping it — the drift-retirement ordering fix. */
@@ -155,6 +164,7 @@ export function buildCoverageManifest(sources: CoverageSources = {}): CoverageMa
   return {
     signatures,
     approvedOutcomes: hitl.approvedOutcomes,
+    decidedOutcomes: hitl.decidedOutcomes,
     specOutcomes: tests.outcomes,
     fromTests: tests.sigs.size,
     fromHitl: hitl.sigs.size,
@@ -202,11 +212,15 @@ export function applySkipGate<T extends MinedFlow>(
   const kept: T[] = [];
   const skipped: T[] = [];
   for (const flow of rankedFlows) {
+    const outcome = outcomeOf(flow);
     const approved = manifest.approvedOutcomes.get(flow.signature);
     if (approved) {
-      const outcome = outcomeOf(flow);
       if (!approved.has(outcome)) {
-        kept.push(flow); // blessed journey, different outcome -> regression/drift
+        if (manifest.decidedOutcomes.get(flow.signature)?.has(outcome)) {
+          skipped.push(flow); // already rejected/superseded outcome
+        } else {
+          kept.push(flow); // blessed journey, genuinely new outcome -> drift
+        }
         continue;
       }
       const specced = manifest.specOutcomes.get(flow.signature);
@@ -217,8 +231,16 @@ export function applySkipGate<T extends MinedFlow>(
       }
       continue;
     }
-    // No approved baseline: fall back to shape-level coverage (unchanged behavior).
-    if (manifest.signatures.has(flow.signature)) {
+    // No approved baseline: an exact reviewed/generated outcome is covered, but a
+    // different outcome is a new review version of the same journey.
+    const decided = manifest.decidedOutcomes.get(flow.signature);
+    const specced = manifest.specOutcomes.get(flow.signature);
+    const hasOutcomeData = Boolean(decided?.size || specced?.size);
+    if (
+      decided?.has(outcome) ||
+      specced?.has(outcome) ||
+      (!hasOutcomeData && manifest.signatures.has(flow.signature))
+    ) {
       skipped.push(flow);
     } else {
       kept.push(flow);

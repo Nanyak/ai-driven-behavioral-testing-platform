@@ -56,6 +56,7 @@ const checkoutSteps = (completeStatus: number): CandidateStep[] => [
 const manifest = (): CoverageManifest => ({
   signatures: new Set([SIG]),
   approvedOutcomes: new Map([[SIG, new Set(["200,200,200"])]]),
+  decidedOutcomes: new Map([[SIG, new Set(["200,200,200"])]]),
   specOutcomes: new Map([[SIG, new Set(["200,200,200"])]]),
   fromTests: 1,
   fromHitl: 1,
@@ -82,6 +83,28 @@ check("drifted outcome is kept (regression surfaces)", () => {
   assert.equal(skipped.length, 0);
 });
 
+check("a previously discarded drift outcome stays skipped", () => {
+  const m = manifest();
+  m.decidedOutcomes.get(SIG)?.add("200,200,500");
+  const { kept, skipped } = applySkipGate([flow(SIG, checkoutSteps(500))], m);
+  assert.equal(kept.length, 0);
+  assert.equal(skipped.length, 1);
+});
+
+check("a different outcome after a discard becomes a new review version", () => {
+  const m: CoverageManifest = {
+    signatures: new Set([SIG]),
+    approvedOutcomes: new Map(),
+    decidedOutcomes: new Map([[SIG, new Set(["200,200,400"])]]),
+    specOutcomes: new Map(),
+    fromTests: 0,
+    fromHitl: 1,
+  };
+  const { kept, skipped } = applySkipGate([flow(SIG, checkoutSteps(500))], m);
+  assert.equal(kept.length, 1);
+  assert.equal(skipped.length, 0);
+});
+
 // 4. THE ORDERING FIX: an outcome that is now BLESSED but whose oracle has not been
 //    generated yet (no spec asserts it) is KEPT — even after a re-mine — so the
 //    generator can still emit the new oracle. Here 500 was just approved but the
@@ -90,6 +113,7 @@ check("blessed outcome with no oracle yet is kept (ordering gap closed)", () => 
   const m: CoverageManifest = {
     signatures: new Set([SIG]),
     approvedOutcomes: new Map([[SIG, new Set(["200,200,500"])]]),
+    decidedOutcomes: new Map([[SIG, new Set(["200,200,500"])]]),
     specOutcomes: new Map([[SIG, new Set(["200,200,200"])]]), // stale oracle only
     fromTests: 1,
     fromHitl: 1,
@@ -105,6 +129,7 @@ check("covered shape with no approved baseline is skipped (shape-level)", () => 
   const m: CoverageManifest = {
     signatures: new Set([SIG]),
     approvedOutcomes: new Map(),
+    decidedOutcomes: new Map(),
     specOutcomes: new Map(),
     fromTests: 1,
     fromHitl: 0,

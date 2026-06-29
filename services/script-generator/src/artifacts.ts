@@ -32,7 +32,9 @@ export interface BodyPlanReview {
 }
 
 export interface GenerationManifestEntry {
+  review_id: string;
   flow_signature: string;
+  status_signature: string;
   test_path: string;
   generated_spec_hash: string;
   body_plan_hash: string;
@@ -134,8 +136,11 @@ export function manifestEntry(
 ): GenerationManifestEntry {
   const review = bodyPlanReview(plan);
   const sources = [...new Set(review.steps.map((step) => step.source))];
+  const statusSignature = plan.steps.map((step) => step.step.expected_status).join(",");
   return {
+    review_id: `${flowSignature.toLowerCase()}:${statusSignature || "unknown"}`,
     flow_signature: flowSignature.toLowerCase(),
+    status_signature: statusSignature,
     test_path: testPath,
     generated_spec_hash: sha256(source),
     body_plan_hash: sha256(JSON.stringify(review)),
@@ -160,21 +165,36 @@ export function writeGenerationManifest(
 ): void {
   const path = resolvePath(generatedTestsDir, ".artifacts.json");
   const prior = readManifest(path)?.entries ?? [];
-  const bySignature = new Map<string, GenerationManifestEntry>();
+  const byReview = new Map<string, GenerationManifestEntry>();
 
   for (const entry of prior) {
     if (existsSync(resolvePath(generatedTestsDir, entry.test_path))) {
-      bySignature.set(entry.flow_signature, entry);
+      const source = readFileSync(resolvePath(generatedTestsDir, entry.test_path), "utf8");
+      const inferredStatus =
+        entry.status_signature ||
+        /status_signature["'\s:=]+([\d,]+)/i.exec(source)?.[1] ||
+        "";
+      const inferredReviewId =
+        entry.review_id?.trim() ||
+        `${entry.flow_signature}:${inferredStatus || "unknown"}`;
+      byReview.set(
+        inferredReviewId,
+        {
+          ...entry,
+          review_id: inferredReviewId,
+          status_signature: inferredStatus,
+        }
+      );
     }
   }
   for (const entry of newEntries) {
-    bySignature.set(entry.flow_signature, entry);
+    byReview.set(entry.review_id, entry);
   }
 
   const manifest: GenerationManifest = {
     version: 1,
     generated_at: new Date().toISOString(),
-    entries: [...bySignature.values()].sort((a, b) => a.test_path.localeCompare(b.test_path)),
+    entries: [...byReview.values()].sort((a, b) => a.test_path.localeCompare(b.test_path)),
   };
   writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 }

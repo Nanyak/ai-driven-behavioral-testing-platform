@@ -37,16 +37,21 @@ const PATH_FILTER_DIR: Record<PathFilter, string> = {
 const HITL_STORE = resolvePath(REPO_ROOT, "data", "hitl", "approvals.json");
 const ARTIFACT_MANIFEST = resolvePath(GENERATED_TESTS_DIR, ".artifacts.json");
 const SIGNATURE_STAMP = /flow_signature["'\s:=]+([0-9a-f]{64})/i;
+const STATUS_SIGNATURE_STAMP = /status_signature["'\s:=]+([\d,]+)/i;
 
 interface ApprovalEntry {
+  review_id?: string;
   flow_signature?: string;
+  status_signature?: string;
   status?: string;
   spec_hash?: string;
   body_plan_hash?: string;
 }
 
 interface ArtifactEntry {
+  review_id?: string;
   flow_signature?: string;
+  status_signature?: string;
   body_plan_hash?: string;
   body_plan?: unknown;
 }
@@ -122,12 +127,24 @@ export function selectedSpecPaths(target: Target): string[] {
   const approvals = new Map(
     jsonEntries<ApprovalEntry>(HITL_STORE)
       .filter((entry) => typeof entry.flow_signature === "string")
-      .map((entry) => [entry.flow_signature!.toLowerCase(), entry])
+      .map((entry) => [
+        entry.review_id ??
+          (entry.status_signature
+            ? `${entry.flow_signature!.toLowerCase()}:${entry.status_signature}`
+            : entry.flow_signature!.toLowerCase()),
+        entry,
+      ])
   );
   const bodyPlans = new Map(
     jsonEntries<ArtifactEntry>(ARTIFACT_MANIFEST)
       .filter((entry) => typeof entry.flow_signature === "string")
-      .map((entry) => [entry.flow_signature!.toLowerCase(), entry])
+      .map((entry) => [
+        entry.review_id ??
+          (entry.status_signature
+            ? `${entry.flow_signature!.toLowerCase()}:${entry.status_signature}`
+            : entry.flow_signature!.toLowerCase()),
+        entry,
+      ])
   );
 
   const selected: string[] = [];
@@ -135,9 +152,11 @@ export function selectedSpecPaths(target: Target): string[] {
     const source = readFileSync(file, "utf8");
     const signature = SIGNATURE_STAMP.exec(source)?.[1].toLowerCase();
     if (!signature) continue;
-    const decision = approvals.get(signature);
+    const outcome = STATUS_SIGNATURE_STAMP.exec(source)?.[1] ?? "unknown";
+    const id = `${signature}:${outcome}`;
+    const decision = approvals.get(id) ?? approvals.get(signature);
     const sourceHash = createHash("sha256").update(source).digest("hex");
-    const manifest = bodyPlans.get(signature);
+    const manifest = bodyPlans.get(id) ?? bodyPlans.get(signature);
     const planHash = effectiveBodyPlanHash(source, sourceHash, manifest);
     const exactApproved = exactApprovalMatches(sourceHash, planHash, decision);
     const rel = relativeSpecPath(file);

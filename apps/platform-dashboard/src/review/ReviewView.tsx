@@ -64,10 +64,10 @@ const LIFECYCLE_META: Record<
     hint: "A test was generated for this flow but no one has decided yet — this is what's new to review.",
   },
   discovered: {
-    label: "Discovered",
+    label: "Generation pending",
     icon: CircleDashed,
     cls: "discovered",
-    hint: "Mined as a candidate but no test was generated (e.g. capped out at 10/persona).",
+    hint: "Selected from the latest mine, but its draft has not been generated yet.",
   },
   approved: {
     label: "Approved",
@@ -282,7 +282,7 @@ function ArtifactReview({ flow }: { flow: ReviewFlow }) {
     if (next && artifact === null && loadState === "idle") {
       setLoadState("loading");
       try {
-        const payload = await fetchArtifactReview(flow.signature);
+        const payload = await fetchArtifactReview(flow.signature, flow.status_signature);
         if (payload) {
           setArtifact(payload);
           setLoadState("idle");
@@ -409,7 +409,8 @@ function HowItWorks() {
             </li>
             <li>
               <strong>Approve</strong> = bind the exact spec and body-plan hashes as the runnable baseline.{" "}
-              <strong>Discard</strong> = reject the flow. Both record your decision and stop
+              For an updated outcome, approval promotes the draft and marks the previous baseline
+              superseded. <strong>Discard</strong> rejects and removes only the draft. Both stop
               the flow from re-surfacing as a new candidate on the next{" "}
               <code>behavior:mine</code> (the skip gate).
             </li>
@@ -582,6 +583,73 @@ function DetailPanel({
         </div>
       ) : null}
 
+      {flow.active_baseline ? (
+        <section className="version-history" aria-label="Active baseline">
+          <h3>Active baseline</h3>
+          <div className="version-row active">
+            <LifecycleBadge lifecycle="approved" />
+            <code>{flow.active_baseline.status_signature || "—"}</code>
+            <span className="muted">
+              Remains runnable until this draft is approved
+            </span>
+          </div>
+        </section>
+      ) : null}
+
+      {flow.version_count > 1 ? (
+        <section className="version-history" aria-label="Review history">
+          <h3>Review history ({flow.version_count})</h3>
+          {flow.versions
+            .slice()
+            .reverse()
+            .map((version) => (
+              <div
+                key={version.review_id}
+                className={`version-row ${version.review_id === flow.review_id ? "current" : ""}`}
+              >
+                {version.lifecycle === "superseded" ? (
+                  <span className="lifecycle-badge superseded">Superseded</span>
+                ) : (
+                  <LifecycleBadge lifecycle={version.lifecycle} />
+                )}
+                <code>{version.status_signature || "—"}</code>
+                <span className="muted">
+                  {version.review_id === flow.review_id ? "current observation" : "earlier outcome"}
+                </span>
+              </div>
+            ))}
+        </section>
+      ) : null}
+
+      {flow.variant_count > 1 ? (
+        <details className="scenario-variants">
+          <summary>
+            <ListTree size={14} aria-hidden="true" />
+            {flow.variant_count} route observations grouped into this scenario
+          </summary>
+          <p className="muted">
+            Only the most complete, impactful current observation generates a test. Related route
+            shapes remain here as evidence, not duplicate review work.
+          </p>
+          <ul>
+            {flow.variants.map((variant) => (
+              <li key={variant.review_id}>
+                <div>
+                  <strong>{variant.flow_name}</strong>
+                  {variant.is_representative ? (
+                    <span className="variant-representative">representative</span>
+                  ) : null}
+                </div>
+                <span className="muted">
+                  support {variant.support} · {variant.step_count} steps · expected{" "}
+                  {variant.status_signature || "—"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+
       <section>
         <h3>Steps ({flow.step_count})</h3>
         <ol className="review-steps">
@@ -618,7 +686,9 @@ function DetailPanel({
               <FileCode2 size={13} aria-hidden="true" /> {flow.test_path}
             </span>
           ) : (
-            <span className="muted">no generated test (nothing to run for this flow)</span>
+            <span className="generation-pending">
+              Draft pending generation for this current representative
+            </span>
           )}
         </p>
         <code className="signature">{flow.signature}</code>
@@ -690,7 +760,8 @@ function DetailPanel({
       </footer>
       <p className="review-note">
         <strong>Approve</strong> stores the exact spec/body-plan hashes and admits that artifact to
-        normal runs. <strong>Discard</strong> rejects it and keeps it out of normal runs.{" "}
+        normal runs; a prior baseline becomes superseded. <strong>Discard</strong> rejects and
+        removes the draft while leaving any active baseline intact.{" "}
         <strong>Delete test</strong> removes the draft file but records no decision.
       </p>
     </aside>
@@ -706,16 +777,18 @@ function PriorDecisions({ prior }: { prior: PriorDecision[] }) {
     <div className={`prior-decisions ${open ? "open" : ""}`}>
       <button type="button" className="prior-toggle" onClick={() => setOpen((v) => !v)}>
         <History size={14} aria-hidden="true" />
-        <span>Earlier decisions not in this scan ({prior.length})</span>
+        <span>Resolved history ({prior.length})</span>
         <span className="how-caret">{open ? "▲" : "▼"}</span>
       </button>
       {open ? (
         <ul className="prior-list">
           {prior.map((p) => (
-            <li key={p.signature}>
+            <li key={p.review_id}>
               <span className={`lifecycle-badge ${p.status}`}>
                 {p.status === "approved" ? (
                   <CheckCircle2 size={12} aria-hidden="true" />
+                ) : p.status === "superseded" ? (
+                  <History size={12} aria-hidden="true" />
                 ) : (
                   <XCircle size={12} aria-hidden="true" />
                 )}{" "}
@@ -768,8 +841,15 @@ export function ReviewView() {
         return false;
       }
       if (status === "awaiting_review" && flow.lifecycle !== "awaiting_review") return false;
-      if (status === "approved" && flow.lifecycle !== "approved") return false;
-      if (status === "discarded" && flow.lifecycle !== "discarded") return false;
+      if (
+        status === "approved" &&
+        flow.lifecycle !== "approved" &&
+        flow.active_baseline === null
+      ) return false;
+      if (
+        status === "discarded" &&
+        flow.lifecycle !== "discarded"
+      ) return false;
       return true;
     });
     return filtered.sort((a, b) => {
@@ -784,7 +864,7 @@ export function ReviewView() {
   }, [flows, persona, status, errorsOnly]);
 
   const selectedFlow =
-    visible.find((flow) => flow.signature === selected) ?? visible[0] ?? null;
+    visible.find((flow) => flow.review_id === selected) ?? visible[0] ?? null;
 
   async function handleDecide(flow: ReviewFlow, decision: Decision) {
     setPending(true);
@@ -928,8 +1008,8 @@ export function ReviewView() {
         <div className="review-counts">
           {c ? (
             <span>
-              {c.conflicts} conflicts · {c.stale_approvals} changed · {c.awaiting_review} awaiting · {c.approved} approved ·{" "}
-              {c.discarded} discarded · {c.covered}/{c.total} covered
+              {c.total} active scenarios · {c.awaiting_review} awaiting review ·{" "}
+              {c.discovered} pending generation · {c.with_test} with drafts · {c.conflicts} conflicts
             </span>
           ) : null}
           <button type="button" onClick={reload} title="Reload flows">
@@ -944,13 +1024,13 @@ export function ReviewView() {
         <div className="review-list-wrap">
           <ul className="review-list">
             {visible.map((flow) => (
-              <li key={flow.signature}>
+              <li key={flow.review_id}>
                 <button
                   type="button"
                   className={`review-row ${
-                    selectedFlow?.signature === flow.signature ? "selected" : ""
+                    selectedFlow?.review_id === flow.review_id ? "selected" : ""
                   } ${flow.conflicts_with_approved ? "conflict" : ""}`}
-                  onClick={() => setSelected(flow.signature)}
+                  onClick={() => setSelected(flow.review_id)}
                 >
                   <span className="review-row-name">{flow.flow_name}</span>
                   <span className="review-row-meta">
@@ -959,6 +1039,11 @@ export function ReviewView() {
                     </span>
                     <span className="muted">support {flow.support}</span>
                     <span className="muted">{flow.step_count} steps</span>
+                    {flow.variant_count > 1 ? (
+                      <span className="variant-count">
+                        <ListTree size={12} aria-hidden="true" /> {flow.variant_count} variants
+                      </span>
+                    ) : null}
                     {flow.test_path ? (
                       <span className="muted">
                         <FileCode2 size={12} aria-hidden="true" /> test
@@ -970,6 +1055,10 @@ export function ReviewView() {
                       </span>
                     ) : null}
                     {flow.conflicts_with_approved ? <ConflictChip /> : null}
+                    {flow.active_baseline ? (
+                      <span className="lifecycle-badge approved">approved baseline</span>
+                    ) : null}
+                    <span className="muted">latest mine</span>
                     {flow.artifact_matches_approval === false ? <ArtifactMismatchChip /> : null}
                     {flow.repaired_by_agent ? <AgentBadge attempts={flow.repair_attempts} /> : null}
                     <LifecycleBadge lifecycle={flow.lifecycle} />

@@ -7,6 +7,7 @@
 // There is no `edge` persona and no `edge/` folder — error flows live in their
 // own persona's failure-path/.
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, cpSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { dirname, join, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadAugmentedSpecs, resolveOperation } from "../../golden/src/oas-source.js";
@@ -78,6 +79,36 @@ export function approvedOutcomes(path: string = HITL_STORE): Map<string, Set<str
   return out;
 }
 
+export function reviewDecisions(path: string = HITL_STORE): Map<string, string> {
+  const out = new Map<string, string>();
+  if (!existsSync(path)) return out;
+  try {
+    const parsed = JSON.parse(readFileSync(path, "utf8")) as {
+      entries?: Array<Record<string, unknown>>;
+    };
+    for (const raw of parsed.entries ?? []) {
+      const signature = raw.flow_signature;
+      const outcome = raw.status_signature;
+      const status = raw.status;
+      if (
+        typeof signature === "string" &&
+        typeof outcome === "string" &&
+        typeof status === "string"
+      ) {
+        out.set(
+          typeof raw.review_id === "string"
+            ? raw.review_id
+            : `${signature.toLowerCase()}:${outcome || "unknown"}`,
+          status
+        );
+      }
+    }
+  } catch {
+    // malformed store -> no decisions, never fatal
+  }
+  return out;
+}
+
 /** The {flow_signature, status_signature} a generated spec stamped (either may be
  * null if unreadable/unstamped — an older spec predating the status stamp). */
 function specStamps(file: string): { signature: string | null; outcome: string | null } {
@@ -90,6 +121,21 @@ function specStamps(file: string): { signature: string | null; outcome: string |
   } catch {
     return { signature: null, outcome: null };
   }
+}
+
+export function existingGeneratedReviewIds(dir: string = GENERATED_TESTS_DIR): Set<string> {
+  const ids = new Set<string>();
+  if (!existsSync(dir)) return ids;
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) {
+      for (const id of existingGeneratedReviewIds(full)) ids.add(id);
+    } else if (entry.endsWith(".spec.ts")) {
+      const { signature, outcome } = specStamps(full);
+      if (signature) ids.add(`${signature}:${outcome || "unknown"}`);
+    }
+  }
+  return ids;
 }
 
 /**
@@ -105,21 +151,35 @@ function specStamps(file: string): { signature: string | null; outcome: string |
  */
 export function cleanPersonaFolderPreservingApproved(
   folder: string,
-  approvedOutcomes: Map<string, Set<string>>
+  approvedOutcomes: Map<string, Set<string>>,
+  decisions: Map<string, string> = new Map(),
+  activeReviewIds: ReadonlySet<string> | null = null
 ): number {
   if (!existsSync(folder)) return 0;
   let preserved = 0;
   for (const entry of readdirSync(folder)) {
     const full = join(folder, entry);
     if (statSync(full).isDirectory()) {
-      preserved += cleanPersonaFolderPreservingApproved(full, approvedOutcomes);
+      preserved += cleanPersonaFolderPreservingApproved(
+        full,
+        approvedOutcomes,
+        decisions,
+        activeReviewIds
+      );
     } else if (entry.endsWith(".spec.ts")) {
       const { signature, outcome } = specStamps(full);
       const blessed = signature ? approvedOutcomes.get(signature) : undefined;
+      const id = signature ? `${signature}:${outcome || "unknown"}` : "";
+      const decision = decisions.get(id);
       // Preserve only a still-blessed oracle; outcome === null is a pre-stamp spec
       // we cannot date, so fall back to signature-level preservation.
       const isBlessedOracle = !!blessed && (outcome === null || blessed.has(outcome));
-      if (isBlessedOracle) {
+      // The latest mine is authoritative for undecided work. A pending draft is
+      // retained only when it is still a selected current scenario; stale and
+      // de-selected variant drafts are removed during reconciliation.
+      const isPendingDraft =
+        decision === undefined && (activeReviewIds === null || activeReviewIds.has(id));
+      if (isBlessedOracle || isPendingDraft) {
         preserved++;
       } else {
         rmSync(full, { force: true });
@@ -166,6 +226,25 @@ function shortHash(signature: string): string {
  * outcome compares equal to a re-mined one. */
 function outcomeOf(candidate: Candidate): string {
   return candidate.steps.map((s) => s.expected_status).join(",");
+}
+
+export function shouldEmitSelectedCandidate(
+  candidate: Pick<Candidate, "signature" | "steps">,
+  approved: Map<string, Set<string>>,
+  existingReviewIds: ReadonlySet<string>
+): boolean {
+  const outcome = candidate.steps.map((step) => step.expected_status).join(",");
+  const isBlessed = approved.get(candidate.signature)?.has(outcome) ?? false;
+  return !isBlessed || !existingReviewIds.has(`${candidate.signature.toLowerCase()}:${outcome}`);
+}
+
+export function versionedSpecFilename(
+  signature: string,
+  statusSignature: string,
+  hasActiveBaseline: boolean
+): string {
+  const outcomeHash = createHash("sha256").update(statusSignature).digest("hex").slice(0, 8);
+  return `${shortHash(signature)}${hasActiveBaseline ? `-${outcomeHash}` : ""}.spec.ts`;
 }
 
 function goldenResponseFileName(endpoint: string, status: number): string {
@@ -510,7 +589,8 @@ function main(): void {
   const repairOnly = onlyArgIndex >= 0 ? args[onlyArgIndex + 1]?.split(",").filter(Boolean) : undefined;
 
   const candidateFile = loadCandidates(explicitFile);
-  const dedupResult = dedup(candidateFile.candidates);
+  const approved = approvedOutcomes();
+  const dedupResult = dedup(candidateFile.candidates, new Set(approved.keys()));
 
   const specs: OasSpecs = loadAugmentedSpecs() as { store: OasDocument; admin: OasDocument };
 
@@ -523,11 +603,20 @@ function main(): void {
 
   // The blessed outcome(s) per approved journey — drives BOTH spec preservation
   // (a still-blessed oracle survives a regen) and conflict withholding below.
-  const approved = approvedOutcomes();
-  const candidatesToEmit = dedupResult.candidates.filter((candidate) => {
-    const blessed = approved.get(candidate.signature);
-    return !(blessed && !blessed.has(outcomeOf(candidate)));
+  const decisions = reviewDecisions();
+  const selectedCandidates = dedupResult.candidates;
+  const existingReviewIds = existingGeneratedReviewIds();
+  // A stale/explicit candidate artifact can still contain an exact approved
+  // outcome even though normal mining skip-gates it. Never rewrite that blessed
+  // source; emit only when its executable artifact is actually missing.
+  const candidatesToEmit = selectedCandidates.filter((candidate) => {
+    return shouldEmitSelectedCandidate(candidate, approved, existingReviewIds);
   });
+  const activeReviewIds = new Set(
+    selectedCandidates.map(
+      (candidate) => `${candidate.signature.toLowerCase()}:${outcomeOf(candidate) || "unknown"}`
+    )
+  );
 
   // Fail before cleaning existing specs if any emitted happy path cannot be
   // backed by either OpenAPI or an observed response schema.
@@ -541,11 +630,13 @@ function main(): void {
   // so it goes red on drift), while dropping an oracle whose blessed outcome has
   // since changed. `_golden/` and `fixtures/` are siblings of the persona folders,
   // untouched. The legacy flat `edge/` folder is dropped.
-  let preservedApproved = 0;
+  let preservedSelected = 0;
   for (const persona of PERSONA_FOLDERS) {
-    preservedApproved += cleanPersonaFolderPreservingApproved(
+    preservedSelected += cleanPersonaFolderPreservingApproved(
       resolvePath(GENERATED_TESTS_DIR, persona),
-      approved
+      approved,
+      decisions,
+      activeReviewIds
     );
   }
   rmSync(resolvePath(GENERATED_TESTS_DIR, "edge"), { recursive: true, force: true });
@@ -559,26 +650,18 @@ function main(): void {
 
   const summary: RunSummaryEntry[] = [];
   const artifactEntries: GenerationManifestEntry[] = [];
-  const withheld: Candidate[] = [];
   const perFolderCount: Record<string, number> = Object.fromEntries(REL_DIRS.map((d) => [d, 0]));
 
-  for (const candidate of dedupResult.candidates) {
-    // Withhold a candidate that DRIFTS from a blessed baseline: its journey
-    // (status-free signature) is approved, but it now expects a different outcome.
-    // Emitting it would auto-codify the regression as a green test. The preserved
-    // oracle stays the source of truth (and goes red); the dashboard flags this as
-    // conflicts_with_approved for review. A candidate whose outcome MATCHES the
-    // approved one is NOT withheld — that is how a freshly-approved drift gets its
-    // new oracle regenerated (retirement: old-outcome spec was cleaned above).
+  for (const candidate of candidatesToEmit) {
+    // A changed outcome is emitted as a quarantined, outcome-versioned draft.
+    // The approved oracle remains untouched and is the only version admitted by
+    // normal runner targets until the operator promotes this draft.
     const blessed = approved.get(candidate.signature);
-    if (blessed && !blessed.has(outcomeOf(candidate))) {
-      withheld.push(candidate);
-      continue;
-    }
+    const drift = Boolean(blessed && !blessed.has(outcomeOf(candidate)));
 
     const route = routeFor(candidate);
     const relDir = `${route.persona}/${route.path}`;
-    const filename = `${shortHash(candidate.signature)}.spec.ts`;
+    const filename = versionedSpecFilename(candidate.signature, outcomeOf(candidate), drift);
     const filePath = resolvePath(GENERATED_TESTS_DIR, route.persona, route.path, filename);
 
     const flowPlan = buildFlowPlan(candidate.steps, specs, candidate.attributes.requires_auth);
@@ -614,18 +697,20 @@ function main(): void {
   console.log("Script Generator run summary");
   console.log(`  Candidates loaded:        ${candidateFile.candidates.length}`);
   console.log(
-    `  Defensive dedup:          -${dedupResult.collapsedIdentical} identical, -${dedupResult.clusteredPrefix} prefix-clustered, -${dedupResult.cappedOut} capped`
+    `  Scenario selection:       -${dedupResult.collapsedIdentical} identical, -${dedupResult.clusteredPrefix} related variants, -${dedupResult.cappedOut} capped`
   );
   console.log(`  Specs emitted:            ${totalFiles}`);
   for (const relDir of REL_DIRS) {
     console.log(`    ${relDir.padEnd(22)} ${perFolderCount[relDir]}`);
   }
-  console.log(`  Approved specs preserved: ${preservedApproved}`);
-  console.log(`  Withheld (conflicts):     ${withheld.length}`);
-  for (const c of withheld) {
-    const blessed = [...(approved.get(c.signature) ?? [])].join(" | ");
-    console.log(`    [${c.flow_name}] now ${outcomeOf(c)} vs approved ${blessed || "—"}`);
-  }
+  console.log(`  Selected specs preserved: ${preservedSelected}`);
+  console.log(
+    `  Approved specs unchanged: ${selectedCandidates.length - candidatesToEmit.length}`
+  );
+  console.log(`  Drafted conflicts:        ${candidatesToEmit.filter((c) => {
+    const blessed = approved.get(c.signature);
+    return Boolean(blessed && !blessed.has(outcomeOf(c)));
+  }).length}`);
   console.log(`  test.fixme blocks:        ${totalFixme}`);
   console.log(`  generation errors:        ${totalErrors}`);
   if (totalErrors > 0) {
@@ -644,7 +729,7 @@ function main(): void {
   console.log(`  Output dir:               ${GENERATED_TESTS_DIR}`);
 
   if (repairEnabled) {
-    // Hand the emitted (non-withheld) specs to the agent escalation. Approved
+    // Hand the emitted draft specs to the agent escalation. Approved
     // flows are skipped — their blessed oracle is the source of truth, never
     // auto-repaired. Runs against the live SUT, so the SUT must be up.
     const emitted: EmittedSpec[] = summary.map((s) => ({

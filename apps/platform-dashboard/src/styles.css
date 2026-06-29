@@ -672,6 +672,17 @@ select:focus-visible {
   gap: 8px;
 }
 
+.variant-count {
+  align-items: center;
+  background: var(--code-bg);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  display: inline-flex;
+  font-size: 11px;
+  gap: 4px;
+  padding: 2px 8px;
+}
+
 .persona-tag {
   border-radius: 999px;
   font-size: 11px;
@@ -741,6 +752,85 @@ select:focus-visible {
 .lifecycle-badge.discovered {
   background: var(--code-bg);
   color: var(--text-muted);
+}
+
+.lifecycle-badge.superseded {
+  background: var(--code-bg);
+  color: var(--text-secondary);
+  text-decoration: line-through;
+}
+
+.version-history {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.version-row {
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 8px 10px;
+}
+
+.version-row.active,
+.version-row.current {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+
+.scenario-variants {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 11px;
+}
+
+.scenario-variants summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 6px;
+}
+
+.scenario-variants ul {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+
+.scenario-variants li {
+  background: var(--surface-2);
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.scenario-variants li > div {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.variant-representative {
+  background: var(--success-bg);
+  border-radius: 999px;
+  color: var(--success);
+  font-size: 10px;
+  padding: 2px 6px;
+}
+
+.generation-pending {
+  color: var(--warn);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .lifecycle-badge.conflict {

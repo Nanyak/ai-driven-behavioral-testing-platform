@@ -1,9 +1,6 @@
 export type Decision = "approved" | "discarded";
 
-/**
- * The test file is generated BEFORE review by the script-generator — approve/discard never
- * create or delete it.
- */
+/** The test file is generated before review; promotion retires the prior active version. */
 export type Lifecycle = "approved" | "discarded" | "awaiting_review" | "discovered";
 
 export interface FlowStep {
@@ -13,6 +10,7 @@ export interface FlowStep {
 }
 
 export interface ReviewFlow {
+  review_id: string;
   signature: string;
   flow_name: string;
   persona: string;
@@ -41,9 +39,43 @@ export interface ReviewFlow {
   body_plan_hash: string | null;
   body_rule_sources: string[];
   artifact_matches_approval: boolean | null;
+  active_baseline: {
+    review_id: string;
+    flow_name: string;
+    status_signature: string;
+    test_path: string | null;
+    decided_at?: string;
+  } | null;
+  first_seen_run: string | null;
+  last_seen_run: string | null;
+  seen_in_latest_run: boolean;
+  version_count: number;
+  versions: Array<{
+    review_id: string;
+    status_signature: string;
+    lifecycle: Lifecycle | "superseded";
+    test_path: string | null;
+    first_seen_run: string | null;
+    last_seen_run: string | null;
+    decided_at?: string;
+  }>;
+  family_key: string;
+  variant_count: number;
+  variants: Array<{
+    review_id: string;
+    signature: string;
+    flow_name: string;
+    support: number;
+    score: number;
+    step_count: number;
+    status_signature: string;
+    is_representative: boolean;
+  }>;
+  not_generated_reason: "generation_pending" | null;
 }
 
 export interface ArtifactReview {
+  review_id: string;
   signature: string;
   test_path: string;
   source: string;
@@ -67,14 +99,16 @@ export interface RepairDiff {
 }
 
 export interface PriorDecision {
+  review_id: string;
   signature: string;
-  status: Decision;
+  status: Decision | "superseded";
   flow_name: string;
   persona: string;
   route_key: string;
   status_signature: string;
   step_count: number;
   decided_at?: string;
+  test_path: string | null;
 }
 
 export interface FlowsPayload {
@@ -114,8 +148,13 @@ export async function fetchRepairDiff(signature: string): Promise<RepairDiff | n
 }
 
 /** Fetch the exact source and redacted request-body plan the operator is approving. */
-export async function fetchArtifactReview(signature: string): Promise<ArtifactReview | null> {
-  const response = await fetch(`/api/artifacts/review?signature=${encodeURIComponent(signature)}`);
+export async function fetchArtifactReview(
+  signature: string,
+  statusSignature: string
+): Promise<ArtifactReview | null> {
+  const response = await fetch(
+    `/api/artifacts/review?signature=${encodeURIComponent(signature)}&status_signature=${encodeURIComponent(statusSignature)}`
+  );
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`/api/artifacts/review returned ${response.status}`);
   return (await response.json()) as ArtifactReview;
@@ -131,6 +170,7 @@ export async function postDecision(flow: ReviewFlow, status: Decision): Promise<
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       flow_signature: flow.signature,
+      review_id: flow.review_id,
       status,
       test_path: flow.test_path,
       flow_name: flow.flow_name,
@@ -138,6 +178,7 @@ export async function postDecision(flow: ReviewFlow, status: Decision): Promise<
       route_key: flow.route_key,
       status_signature: flow.status_signature,
       step_count: flow.step_count,
+      scenario_key: flow.family_key,
     }),
   });
   if (!response.ok) {

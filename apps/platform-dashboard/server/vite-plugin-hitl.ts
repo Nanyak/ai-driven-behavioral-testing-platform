@@ -4,6 +4,7 @@ import {
   deleteTestFile,
   listReports,
   loadFlows,
+  readDecisionHistory,
   readReportHtml,
   readReportHtmlById,
   readReportSummary,
@@ -56,11 +57,13 @@ export function hitlApiPlugin(): Plugin {
           return;
         }
         const signature = new URL(req.url ?? "", "http://localhost").searchParams.get("signature");
+        const statusSignature =
+          new URL(req.url ?? "", "http://localhost").searchParams.get("status_signature") ?? "";
         if (!signature) {
           sendJson(res, 400, { error: "signature query param is required" });
           return;
         }
-        const artifact = artifactReview(signature);
+        const artifact = artifactReview(signature, statusSignature);
         if (!artifact) {
           sendJson(res, 404, { error: "generated artifact not found for this flow" });
           return;
@@ -159,6 +162,7 @@ export function hitlApiPlugin(): Plugin {
           try {
             const body = (await readBody(req)) as {
               flow_signature?: string;
+              review_id?: string;
               status?: string;
               test_path?: string | null;
               flow_name?: string;
@@ -166,6 +170,7 @@ export function hitlApiPlugin(): Plugin {
               route_key?: string;
               status_signature?: string;
               step_count?: number;
+              scenario_key?: string;
             };
             const signature = body.flow_signature;
             const status = body.status as Decision | undefined;
@@ -175,7 +180,8 @@ export function hitlApiPlugin(): Plugin {
               });
               return;
             }
-            const artifact = artifactReview(signature);
+            const outcome = body.status_signature ?? "";
+            const artifact = artifactReview(signature, outcome);
             if (status === "approved" && (!artifact || !artifact.body_plan_hash)) {
               sendJson(res, 409, {
                 error:
@@ -183,7 +189,15 @@ export function hitlApiPlugin(): Plugin {
               });
               return;
             }
+            const previousActive = [...readDecisionHistory().values()].filter(
+              (decision) =>
+                (decision.flow_signature === signature.toLowerCase() ||
+                  Boolean(body.scenario_key && decision.scenario_key === body.scenario_key)) &&
+                decision.status === "approved" &&
+                decision.review_id !== body.review_id
+            );
             const entry = upsertDecision({
+              review_id: body.review_id,
               flow_signature: signature,
               status,
               test_path: artifact?.test_path ?? body.test_path ?? null,
@@ -195,7 +209,20 @@ export function hitlApiPlugin(): Plugin {
               spec_hash: status === "approved" ? artifact?.spec_hash : undefined,
               body_plan_hash: status === "approved" ? artifact?.body_plan_hash ?? undefined : undefined,
               body_rule_sources: status === "approved" ? artifact?.body_rule_sources : undefined,
+              scenario_key: body.scenario_key,
             });
+            if (status === "approved") {
+              // Promotion is deliberate: only after the new artifact is bound to
+              // the approval do we retire the superseded runnable source.
+              for (const previous of previousActive) {
+                if (previous.test_path && previous.test_path !== artifact?.test_path) {
+                  deleteTestFile(previous.test_path);
+                }
+              }
+            } else if (artifact?.test_path) {
+              // A rejected draft must not linger as an executable draft.
+              deleteTestFile(artifact.test_path);
+            }
             sendJson(res, 200, { entry });
           } catch (error) {
             sendJson(res, 500, { error: error instanceof Error ? error.message : "write failed" });
