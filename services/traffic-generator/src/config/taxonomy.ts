@@ -27,6 +27,7 @@ export const SESSION_TYPES: SessionType[] = [
   "adminCancel",
   "adminSupport",
   "edge",
+  "invalidCartCreate",
 ];
 
 export type Identity = "guest" | "returning" | "new";
@@ -48,6 +49,7 @@ export const STAGE_OF: Record<SessionType, 1 | 2> = {
   profileMgmt: 1,
   adminCatalog: 1,
   edge: 1,
+  invalidCartCreate: 1,
   // Stage 2 needs prior orders/accounts populated by Stage 1.
   orderStatus: 2,
   repeatOrderCheck: 2,
@@ -119,6 +121,7 @@ export function identityFor(type: SessionType): Identity {
     case "repeatOrderCheck":
     case "profileMgmt":
     case "returns":
+    case "invalidCartCreate":
       return "returning";
     case "newCheckout":
       return "new";

@@ -438,6 +438,7 @@ export function emitSpec({ candidate, plan, golden, invariantsByStep }: EmitOpti
   ].join("\n");
 
   const source = [
+    `// flow_name: ${candidate.flow_name}`,
     `// flow_signature: ${candidate.signature}`,
     `// status_signature: ${statusSignature}`,
     `// persona: ${candidate.persona} | priority: ${candidate.priority} | support: ${candidate.support}`,

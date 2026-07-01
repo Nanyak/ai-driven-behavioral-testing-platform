@@ -79,6 +79,7 @@ export interface Weights {
   adminCancel: number; // cancel + refund an unfulfilled order
   adminSupport: number;
   edge: number;
+  invalidCartCreate: number; // negative probe: invalid promo at cart-create (false-red demo)
 }
 
 export interface EventProbs {
@@ -150,6 +151,7 @@ const REALISTIC_WEIGHTS: Weights = {
   adminCancel: 2,
   adminSupport: 0.5,
   edge: 2,
+  invalidCartCreate: 6, // false-red demo probe — ~10 sessions at 300 total, clears the support floor of 3
 };
 
 /** Signal-rich: purchase/return/refund leaves boosted for behavioural mining. */

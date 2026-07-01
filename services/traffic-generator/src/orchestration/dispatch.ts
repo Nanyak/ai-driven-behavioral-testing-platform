@@ -26,6 +26,7 @@ import {
 } from "../flows/admin.js";
 import type { PromoConfig } from "../flows/promo.js";
 import { runEdgeFlow } from "../flows/edge.js";
+import { runInvalidCartCreate } from "../flows/invalid-cart-create.js";
 import { runCustomerCheckout } from "../personas/customer-llm.js";
 import { LIGHT_NOISE } from "../http/noise.js";
 
@@ -223,6 +224,16 @@ export async function dispatch(
 
     case "edge":
       return runEdgeFlow(client);
+
+    case "invalidCartCreate": {
+      // False-red demo: returning customer creates a cart with an invalid promo
+      // code -> 400 on POST /store/carts (no negativeInputBody template). Needs a
+      // real pooled account to sign in; degrade to a guest browse if the pool is
+      // empty (Stage 0 always seeds it, so this is just a safety net).
+      const acct = state.drawAccount();
+      if (!acct) return guestDegrade(client);
+      return (await runInvalidCartCreate(client, acct, cfg.invalidPromoCode)).steps;
+    }
 
     case "orderStatus": {
       const order = drawReturningOrder(state, false);
