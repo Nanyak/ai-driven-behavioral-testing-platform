@@ -22,8 +22,10 @@ import {
   placeholderIdFor,
   expectsCustomerAuthRejection,
   mirrorFailureCandidatesFor,
+  mintedFailureCandidates,
   CUSTOMER_AUTHENTICATED,
   CUSTOMER_AUTH_REJECTION_STATUS,
+  BUSINESS_RULE_MINT_SOURCE,
   BUSINESS_RULES,
   type SkillKey,
 } from "./business-rules.js";
@@ -122,8 +124,33 @@ check("unsatisfiableReasonFor sources the drop reason for gated mutations", () =
   assert.equal(unsatisfiableReasonFor("GET", "/store/products"), null);
 });
 
-check("mirrorFailureCandidatesFor is the phase-C seam and returns []", () => {
-  assert.deepEqual(mirrorFailureCandidatesFor(BUSINESS_RULES[0]), []);
+check("mirrorFailureCandidatesFor mints one guest negative per failureMint", () => {
+  const gate = BUSINESS_RULES.find((r) => r.id === "customer-auth-gate")!;
+  const minted = mirrorFailureCandidatesFor(gate);
+  assert.equal(minted.length, gate.failureMints!.length);
+  for (const c of minted) {
+    assert.equal(c.persona, "guest_shopper");
+    assert.equal(c.persona_source, BUSINESS_RULE_MINT_SOURCE);
+    assert.equal(c.attributes.has_errors, true);
+    assert.equal(c.attributes.requires_auth, false);
+    assert.equal(c.steps.length, 1);
+    // The asserted status is the gate rejection, sourced from gate-contract.ts.
+    assert.equal(c.steps[0].expected_status, CUSTOMER_AUTH_REJECTION_STATUS);
+  }
+  // Signatures are stable and distinct (they become the spec filenames).
+  const sigs = new Set(minted.map((c) => c.signature));
+  assert.equal(sigs.size, minted.length);
+});
+
+check("a rule with no expectedRejection or no failureMints mints nothing", () => {
+  const admin = BUSINESS_RULES.find((r) => r.id === "admin-token")!;
+  assert.deepEqual(mirrorFailureCandidatesFor(admin), []);
+});
+
+check("mintedFailureCandidates aggregates across the table", () => {
+  const all = mintedFailureCandidates();
+  assert.ok(all.length >= 3, "expected at least the three customer-auth-gate mints");
+  assert.ok(all.every((c) => c.persona_source === BUSINESS_RULE_MINT_SOURCE));
 });
 
 console.log(`\n${passed} business-rules checks passed`);

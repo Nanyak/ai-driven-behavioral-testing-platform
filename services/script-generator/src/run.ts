@@ -18,6 +18,7 @@ import { dedup } from "./dedup.js";
 import { emitSpec } from "./emit.js";
 import { loadCandidates, type Candidate } from "./load.js";
 import { buildFlowPlan, type OasSpecs } from "./resolve.js";
+import { mintedFailureCandidates } from "./rules/business-rules.js";
 import {
   hasBlockingRepairOutcomes,
   printRepairSummary,
@@ -621,6 +622,24 @@ async function main(): Promise<void> {
   // Fail before cleaning existing specs if any emitted happy path cannot be
   // backed by either OpenAPI or an observed response schema.
   const goldenSync = ensureGoldenResponses(candidatesToEmit, specs);
+
+  // Phase-C failure-path minting: append business-rule negatives (a guest hitting
+  // a gated mutation → the gate's declared rejection). Appended AFTER goldenSync —
+  // mints are failure-path and need no golden. Skip a mint that a mined candidate
+  // already covers (same terminal method+endpoint+status) so no negative spec is
+  // duplicated; the rest emit as fully-asserted (status + gate body) guest specs.
+  const mintedFailures = mintedFailureCandidates().filter((mint) => {
+    const target = mint.steps[mint.steps.length - 1];
+    return !candidatesToEmit.some((existing) => {
+      const last = existing.steps[existing.steps.length - 1];
+      return (
+        last.method === target.method &&
+        last.endpoint === target.endpoint &&
+        last.expected_status === target.expected_status
+      );
+    });
+  });
+  candidatesToEmit.push(...mintedFailures);
 
   // Clean stale specs so a structural change (the happy-path/failure-path split,
   // a renamed flow, or a candidate that no longer routes here) never leaves an

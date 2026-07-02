@@ -6,6 +6,11 @@
  */
 import type { Candidate, CandidateStep } from "../load.js";
 import type { ApprovedTemplateName, FieldInvariant, Invariant, TemplateInvariant } from "./types.js";
+import { BUSINESS_RULE_MINT_SOURCE } from "../rules/business-rules.js";
+import {
+  GATE_UNAUTHORIZED_STATUS,
+  GATE_UNAUTHORIZED_BODY,
+} from "../../../../apps/medusa/apps/backend/src/api/gate-contract.js";
 
 const CUSTOMER_LOGIN = "POST /auth/customer/emailpass";
 const ADMIN_LOGIN = "POST /auth/user/emailpass";
@@ -66,6 +71,30 @@ function hasInvalidPromoCode(payload: unknown): boolean {
 
 function deterministicInvariantsForStep(candidate: Candidate, step: CandidateStep): Invariant[] {
   const stepTitle = title(step);
+
+  // A minted customer-auth-gate negative (see mirrorFailureCandidatesFor): the
+  // guest step must be blocked for the RIGHT reason. Assert the exact gate
+  // envelope from gate-contract.ts, so the test proves the requireCustomerAuth
+  // gate fired — not some incidental 401. Guarded on the synthetic mint source so
+  // no mined spec's assertions change.
+  if (candidate.persona_source === BUSINESS_RULE_MINT_SOURCE && step.expected_status === GATE_UNAUTHORIZED_STATUS) {
+    return [
+      inv(stepTitle, {
+        path: "type",
+        matcher: "toBe",
+        expected: GATE_UNAUTHORIZED_BODY.type,
+        rationale: "the customer-auth gate rejects with the unauthorized envelope, not an incidental 401",
+        polarity: "error",
+      }),
+      inv(stepTitle, {
+        path: "message",
+        matcher: "toBe",
+        expected: GATE_UNAUTHORIZED_BODY.message,
+        rationale: "the gate returns its own contract message (gate-contract.ts), proving the right guard fired",
+        polarity: "error",
+      }),
+    ];
+  }
 
   if ((stepTitle === CUSTOMER_LOGIN || stepTitle === ADMIN_LOGIN) && isSuccess(step)) {
     return [

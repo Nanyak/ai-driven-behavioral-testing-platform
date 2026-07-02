@@ -20,11 +20,15 @@
  *      is a THIRD reader of those constants. Nothing here hardcodes `401` or the
  *      unauthorized envelope.
  *
- * Failure-path MINTING is deferred: this table describes the rejection side, but
- * the generator does NOT yet auto-mint brand-new negative test candidates from
- * it. `mirrorFailureCandidatesFor` is the seam for that future work (phase-C);
- * today it returns `[]`.
+ * Failure-path MINTING (phase-C): for a rule that carries an `expectedRejection`
+ * AND concrete `failureMints`, `mirrorFailureCandidatesFor` synthesizes brand-new
+ * negative test candidates — a guest hitting a gated mutation without the
+ * precondition — asserting the rule's declared rejection (status from
+ * gate-contract.ts, body via the deterministic gate invariant). One violation per
+ * minted test: the candidate omits exactly the auth precondition, so the 4xx it
+ * asserts is unambiguously attributable to that rule.
  */
+import { createHash } from "node:crypto";
 import {
   GATE_MATCHERS,
   GATE_METHODS,
@@ -32,8 +36,14 @@ import {
   GATE_UNAUTHORIZED_BODY,
 } from "../../../../apps/medusa/apps/backend/src/api/gate-contract.js";
 import type { AuthRequirement, SkillKey } from "../skill/registry.js";
+import type { Candidate, Persona } from "../load.js";
 
 export type { SkillKey };
+
+/** Marks a candidate synthesized by `mirrorFailureCandidatesFor` (not mined from
+ * traffic). The deterministic invariant layer keys the gate-body assertion on it,
+ * and it is the `persona_source` audit trail on the emitted spec. */
+export const BUSINESS_RULE_MINT_SOURCE = "business-rule-mint";
 
 /**
  * A precondition is an entity@state identity (`SkillKey`-shaped). Three of them
@@ -80,6 +90,11 @@ export interface BusinessRule {
    * (e.g. a guest can never mutate a cart). Sourced here so the drop reason lives
    * with the rule, not inline in the planner. */
   unsatisfiableReason?: (method: string, endpoint: string) => string;
+  /** Concrete negative targets to MINT from this rule's rejection column. Each is
+   * a representative gated endpoint a guest hits WITHOUT the precondition, proving
+   * the rejection fires. Prefix patterns (`/store/carts*`) can't enumerate
+   * themselves, so the representatives are named explicitly. */
+  failureMints?: readonly { method: string; endpoint: string; description: string }[];
 }
 
 /** Express-glob match, mirroring gate-contract semantics (see build-oas.ts#matchesGate). */
@@ -125,6 +140,13 @@ export const BUSINESS_RULES: readonly BusinessRule[] = [
     expectedRejection: GATE_REJECTION,
     unsatisfiableReason: (method, endpoint) =>
       `${method} ${endpoint}: requires an authenticated customer (requireCustomerAuth gate, gate-contract.ts); no skill can arrange a customer session for an unauthenticated context`,
+    // One representative per gate matcher: a param-less create, a param-bearing
+    // sub-resource mutation, and the second (payment-collections) matcher.
+    failureMints: [
+      { method: "POST", endpoint: "/store/carts", description: "guest cannot create a cart" },
+      { method: "POST", endpoint: "/store/carts/{id}/line-items", description: "guest cannot add a line item to a cart" },
+      { method: "POST", endpoint: "/store/payment-collections", description: "guest cannot open a payment collection" },
+    ],
   },
   // Checkout completion additionally needs a checkout-ready cart (a shipping
   // method selected AND a payment session created — appendCheckoutReadyResolvers).
@@ -272,17 +294,45 @@ export function expectsCustomerAuthRejection(auth: AuthRequirement, expectedStat
 }
 
 // ---------------------------------------------------------------------------
-// Phase-C seam.
+// Failure-path minting (phase-C).
 // ---------------------------------------------------------------------------
 
+/** A stable, filename-safe signature for a minted candidate. Mirrors the mined
+ * signatures' hex shape (run.ts#shortHash takes the first 12 chars), derived from
+ * the rule + target so a given mint is byte-stable across regens. */
+function mintSignature(ruleId: string, method: string, endpoint: string): string {
+  return createHash("sha256").update(`${BUSINESS_RULE_MINT_SOURCE}:${ruleId}:${method}:${endpoint}`).digest("hex");
+}
+
 /**
- * TODO(phase-C): systematic failure-path minting. Given a rule, this will one day
- * return brand-new negative test candidates that exercise its expected-rejection
- * column (a guest hitting a gated mutation, an admin call with no token, …).
- * Deferred deliberately: minting new candidates is a separate, larger design step
- * than centralizing the precondition knowledge. Returns `[]` for now so the seam
- * exists without changing any emitted spec.
+ * Synthesize the negative test candidates for a rule's `failureMints`. Each is a
+ * single-step guest flow that hits a gated endpoint WITHOUT the precondition and
+ * asserts the rule's rejection status (the body is asserted by the deterministic
+ * gate invariant, keyed on `persona_source === BUSINESS_RULE_MINT_SOURCE`). A rule
+ * with no `expectedRejection` or no `failureMints` yields nothing.
  */
-export function mirrorFailureCandidatesFor(_rule: BusinessRule): never[] {
-  return [];
+export function mirrorFailureCandidatesFor(rule: BusinessRule): Candidate[] {
+  if (!rule.expectedRejection || !rule.failureMints) return [];
+  const status = rule.expectedRejection.status;
+  const persona: Persona = "guest_shopper";
+  return rule.failureMints.map((mint) => ({
+    flow_name: `${rule.id}: ${mint.description} (${status})`,
+    persona,
+    persona_source: BUSINESS_RULE_MINT_SOURCE,
+    attributes: { requires_auth: false, is_admin: false, has_errors: true },
+    priority: "normal",
+    support: 0,
+    score: 0,
+    signature: mintSignature(rule.id, mint.method, mint.endpoint),
+    assertion_hints: { fields: [], source: BUSINESS_RULE_MINT_SOURCE },
+    anomaly_note: null,
+    source_sessions: [],
+    steps: [{ method: mint.method, endpoint: mint.endpoint, expected_status: status }],
+  }));
+}
+
+/** Every minted negative candidate across the rules table (the generator appends
+ * these to the mined candidates it emits). */
+export function mintedFailureCandidates(): Candidate[] {
+  return BUSINESS_RULES.flatMap((rule) => mirrorFailureCandidatesFor(rule));
 }
