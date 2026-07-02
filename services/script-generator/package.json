@@ -8,12 +8,14 @@
     "generate": "tsx src/run.ts",
     "repair": "tsx src/repair/cli.ts",
     "invariants": "tsx src/invariants/cli.ts",
+    "skills": "tsx src/skill/cli.ts",
     "digest": "tsx src/invariants/digest-cli.ts",
     "test:run": "tsx src/run.test.ts",
     "test:repair": "tsx src/repair/repair.test.ts",
     "test:repair-guard": "tsx src/repair/repair.test.ts",
     "test:invariants": "tsx src/invariants/invariants.test.ts",
     "test:rules": "tsx src/rules/business-rules.test.ts",
+    "test:skills": "tsx src/skill/skill.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
