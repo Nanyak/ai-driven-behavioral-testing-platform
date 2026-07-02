@@ -201,6 +201,32 @@ function briefFailures(failures: StepOutcome[]): RepairOutcome["finalFailures"] 
   return failures.map((f) => ({ endpoint: f.endpoint, expected: f.expected, actual: f.actual }));
 }
 
+/**
+ * Reflection carried forward after a candidate ran live but failed to reproduce the
+ * status_signature. The raw per-step diff already reappears in the next task's
+ * "Failing steps" section; this adds the meta-signal that is the useful kernel of
+ * Reflexion here — the arrange compiled AND left the frozen oracle intact yet the
+ * behavior still drifted, so the entity-selection / precondition logic itself is
+ * wrong (not syntax) and must genuinely change. Without it the agent tends to
+ * resubmit a near-identical arrange. Setting this also clears any stale oracle/
+ * syntax feedback left over from an earlier attempt.
+ */
+function reflectOnReverifyFailure(failures: StepOutcome[]): string {
+  const steps = failures.length
+    ? failures.map((f) => `- ${f.endpoint}: still expected ${f.expected}, got ${f.actual}`).join("\n")
+    : "- (no per-step diff captured; see the Playwright tail)";
+  return [
+    "Your previous arrange edit compiled and left the frozen oracle intact, but the spec",
+    "STILL did not reproduce the expected status_signature when re-run live:",
+    steps,
+    "So the problem is the arrange itself — the entity you selected was not in the required",
+    "state, the filter/`.find()` predicate matched no qualifying row, or a prerequisite step",
+    "was missing/misordered. Do NOT resubmit the same approach: correct or widen the runtime",
+    "query + predicate (or establish the precondition a different way) so a genuinely",
+    "qualifying entity is chosen.",
+  ].join("\n");
+}
+
 /** Reject malformed model output before it can replace a runnable spec on disk. */
 export function typescriptSyntaxViolations(source: string, fileName = "repaired.spec.ts"): string[] {
   const result = ts.transpileModule(source, {
@@ -290,7 +316,7 @@ async function repairOne(
     try {
       candidate = await agent(
         `${renderRepairPrompt(task)}${rejectionFeedback
-          ? `\n\n## Previous candidate rejection\n${rejectionFeedback}\nReturn a corrected full spec.`
+          ? `\n\n## Previous attempt feedback\n${rejectionFeedback}\nReturn a corrected full spec.`
           : ""}`
       );
     } catch (err) {
@@ -340,6 +366,11 @@ async function repairOne(
         afterSource: stamped,
       };
     }
+    // Candidate was applied (file on disk is now this attempt's spec) but re-verify
+    // shows it still doesn't reproduce the signature — the arrange-didn't-work case.
+    // Reflect on WHY forward so the next attempt rethinks its entity selection rather
+    // than resubmitting a near-identical candidate.
+    rejectionFeedback = reflectOnReverifyFailure(verdict.failures);
   }
 
   // Never went green (or every candidate was rejected) — restore the deterministic spec.
