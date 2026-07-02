@@ -4,6 +4,14 @@
 import type { OasDocument, OasMethod, OasSchema } from "../../golden/src/oas-types.js";
 import { isRefSchema } from "../../golden/src/oas-types.js";
 import type { CandidateStep, RequestBodyEvidence } from "./load.js";
+import { resolveSkillForVar } from "./skill/registry.js";
+import {
+  requiresAdminAuth,
+  requiresCheckoutReadyCart,
+  isAuthGatedResourceVar,
+  placeholderIdFor,
+  expectsCustomerAuthRejection,
+} from "./rules/business-rules.js";
 
 export interface OasSpecs {
   store: OasDocument;
@@ -93,8 +101,8 @@ const CUSTOMER = "customer-token" as const;
 const ADMIN = "admin-token" as const;
 const NONE = "none" as const;
 
-function authFor(endpoint: string, requiresAuth: boolean): AuthRequirement {
-  if (endpoint.startsWith("/admin/")) return ADMIN;
+function authFor(method: string, endpoint: string, requiresAuth: boolean): AuthRequirement {
+  if (requiresAdminAuth(method, endpoint)) return ADMIN;
   if (endpoint.startsWith("/auth/")) return NONE;
   return requiresAuth ? CUSTOMER : PUBLISHABLE;
 }
@@ -162,7 +170,7 @@ function scopeVarForParam(param: string, endpoint: string, occurrence: number): 
   return param;
 }
 
-type ResolveStep = {
+export type ResolveStep = {
   bindTo: string;
   method: string;
   endpoint: string;
@@ -174,213 +182,16 @@ type ResolveStep = {
   bestEffort?: boolean;
 };
 
-/** Scope vars whose standalone resolver must MUTATE an auth-gated resource (a
- * cart or payment collection — both behind the requireCustomerAuth gate). They
- * are unreachable in an unauthenticated context, so a negative (4xx) guest step
- * binds a placeholder id instead of resolving them. */
-const AUTH_GATED_RESOURCE_VARS = new Set(["cartId", "paymentCollectionId"]);
+// The scope vars whose standalone resolver must MUTATE an auth-gated resource (a
+// cart or payment collection — both behind the requireCustomerAuth gate), and the
+// placeholder ids an unauthenticated negative step binds instead of resolving
+// them, now live in the business-rules table (isAuthGatedResourceVar /
+// placeholderIdFor), derived from gate-contract.ts.
 
-function placeholderIdFor(varName: string): string {
-  if (varName === "cartId") return "cart_unauthorized";
-  if (varName === "paymentCollectionId") return "paycol_unauthorized";
-  return `${varName}_unauthorized`;
-}
-
-// Most scope variables resolve via a single GET; `cartId` is a short bootstrap
-// chain (`GET /store/regions` -> `POST /store/carts`) since a cart is a
-// runtime-created resource, never a literal/seeded id (CLAUDE.md §5).
-// A pending admin order WITH its line items inlined — `fields=*items` so the
-// list response carries `items[].id` (the default list omits them). Used by the
-// return-lifecycle bootstrap to read a line-item id without a second round-trip.
-const ADMIN_PENDING_ORDERS_WITH_ITEMS = "/admin/orders?status[]=pending&order=-created_at&fields=*items";
-
-function standaloneResolverFor(
-  varName: string,
-  auth: AuthRequirement,
-  fulfilledOrder = false,
-  // When the consuming flow CANCELS the order, pick from the OLD end of the
-  // cancelable set. Cancel and fulfillment both want a pending, uncanceled,
-  // unfulfilled order, but only the newest orders still hold a stock
-  // reservation (fulfillment 400s "No stock reservation found" without one). So
-  // fulfillment keeps the newest match and cancel yields it, taking the oldest —
-  // cancel has no reservation requirement, so an older order cancels fine.
-  cancelFlow = false
-): ResolveStep[] | null {
-  switch (varName) {
-    case "regionId":
-      return [{ bindTo: varName, method: "GET", endpoint: "/store/regions", extract: "regions[0].id" }];
-    case "productId":
-      // Admin and store both list products under a `products` envelope, but the
-      // admin step carries an admin token (and the store list rejects it), so the
-      // resolver must follow the step's auth context — same pattern as orderId.
-      return auth === ADMIN
-        ? [{ bindTo: varName, method: "GET", endpoint: "/admin/products", extract: "products[0].id" }]
-        : [{ bindTo: varName, method: "GET", endpoint: "/store/products", extract: "products[0].id" }];
-    case "variantId":
-      return [{ bindTo: varName, method: "GET", endpoint: "/store/products", extract: "products[0].variants[0].id" }];
-    case "inventoryItemId":
-      // Admin-only resource (no store analog). Order by NEWEST: the only consumer,
-      // `POST …/location-levels`, runs in a flow that just created a product, whose
-      // inventory item is UNSTOCKED (location_levels: []). An arbitrary
-      // `inventory_items[0]` is often an already-stocked seed item → the create
-      // 400s ("Inventory level … already exists"). The newest item is the one the
-      // product-create step just made — unstocked, so the level create succeeds.
-      // VERIFY: list is non-empty in the seeded backend.
-      return [{ bindTo: varName, method: "GET", endpoint: "/admin/inventory-items?order=-created_at", extract: "inventory_items[0].id" }];
-    case "returnId":
-      // Admin-only resource. // VERIFY: a return must already exist in the seeded
-      // backend for the lifecycle steps to bind a real id.
-      return [{ bindTo: varName, method: "GET", endpoint: "/admin/returns", extract: "returns[0].id" }];
-    case "stockLocationId":
-      // The `location_id` required by fulfillment/inventory bodies is a stock
-      // location id; list them admin-side. // VERIFY: list is non-empty (the seed
-      // creates at least one stock location).
-      return [{ bindTo: varName, method: "GET", endpoint: "/admin/stock-locations", extract: "stock_locations[0].id" }];
-    case "shippingProfileId":
-      // `POST /admin/products` requires a shipping profile. // VERIFY: the seed creates one.
-      return [{ bindTo: varName, method: "GET", endpoint: "/admin/shipping-profiles", extract: "shipping_profiles[0].id" }];
-    case "salesChannelId":
-      // `POST /admin/products` links a sales channel so the variant is purchasable
-      // in /store. // VERIFY: the seed has a "Default Sales Channel".
-      return [{ bindTo: varName, method: "GET", endpoint: "/admin/sales-channels", extract: "sales_channels[0].id" }];
-    case "orderId":
-      if (auth === ADMIN && fulfilledOrder) {
-        // Return-lifecycle bootstrap: a return requires a FULFILLED order
-        // ("Cannot request to return more items than what was fulfilled"), but
-        // every seeded pending order is `not_fulfilled`. So pick an order, read
-        // its line item, and fulfill it before the return begins. Two details:
-        //  • Use `orders[1]`, NOT `orders[0]`: the cancel and fulfillment flows
-        //    both claim `orders[0]`, and fulfilling it here would make cancel 400
-        //    ("All fulfillments must be canceled first"). A distinct order keeps
-        //    those flows undisturbed.
-        //  • The fulfillment is bestEffort: another flow (or a prior run) may have
-        //    already fulfilled this order — that 400 is fine; the post-condition
-        //    (order is fulfilled) is what the return needs, not this call's status.
-        return [
-          { bindTo: "orderId", method: "GET", endpoint: ADMIN_PENDING_ORDERS_WITH_ITEMS, extract: "orders[1].id" },
-          { bindTo: "lineItemId", method: "GET", endpoint: ADMIN_PENDING_ORDERS_WITH_ITEMS, extract: "orders[1].items[0].id" },
-          { bindTo: "stockLocationId", method: "GET", endpoint: "/admin/stock-locations", extract: "stock_locations[0].id" },
-          {
-            bindTo: "fulfillmentSeed",
-            method: "POST",
-            endpoint: "/admin/orders/{orderId}/fulfillments",
-            extract: "",
-            bestEffort: true,
-            body: {
-              items: { kind: "raw", expr: "[{ id: scope.lineItemId, quantity: 1 }]" },
-              location_id: { kind: "runtime", ref: "stockLocationId" },
-            },
-          },
-        ];
-      }
-      // ADMIN: pick a genuinely CANCELABLE order. Filtering to `status[]=pending`
-      // is not enough — a pending order can carry a partial fulfillment, and
-      // `POST /admin/orders/{id}/cancel` 400s ("All fulfillments must be canceled
-      // first") on those, exactly the residual the resolver-agent repair couldn't
-      // land deterministically (see memory resolver-agent-repair). So request the
-      // state fields and SELECT the first order that is not canceled AND has no
-      // fulfillments. `fields=*fulfillments` inlines the relation on the list
-      // response; the predicate runs client-side because Medusa has no
-      // server-side "uncancelable" filter. This bakes the fix the AI agent would
-      // have authored into the deterministic emit (no agent needed next run).
-      return auth === ADMIN
-        ? [{
-            bindTo: varName,
-            method: "GET",
-            endpoint: "/admin/orders?status[]=pending&order=-created_at&fields=id,status,canceled_at,*fulfillments",
-            extract: "",
-            select: {
-              collection: "orders",
-              predicate: "!it.canceled_at && (it.fulfillments?.length ?? 0) === 0",
-              field: "id",
-              fromEnd: cancelFlow,
-            },
-          }]
-        : [{ bindTo: varName, method: "GET", endpoint: "/store/orders", extract: "orders[0].id" }];
-    case "cartId":
-      // A bootstrapped cart must be NON-EMPTY: a mined checkout flow frequently
-      // drops the `POST line-items` step (PrefixSpan keeps the frequent backbone),
-      // so the cart this resolver creates would otherwise reach `shipping-methods`
-      // / `complete` empty -> 400 ("Cannot complete a cart with no items"). Seed a
-      // single in-stock line item here so every resolved cart is completable. The
-      // line-items POST is path-templated on the just-created cart id (emit
-      // substitutes `{cartId}` from scope); its `cart.id` rebind is a harmless
-      // throwaway var (rebinding `cartId` would be skipped as already-in-scope).
-      return [
-        { bindTo: "regionId", method: "GET", endpoint: "/store/regions", extract: "regions[0].id" },
-        {
-          bindTo: varName,
-          method: "POST",
-          endpoint: "/store/carts",
-          extract: "cart.id",
-          body: { region_id: { kind: "runtime", ref: "regionId" } },
-        },
-        { bindTo: "variantId", method: "GET", endpoint: "/store/products", extract: "products[0].variants[0].id" },
-        {
-          bindTo: "cartSeed",
-          method: "POST",
-          endpoint: "/store/carts/{cartId}/line-items",
-          extract: "", // side-effecting seed: add an item, bind nothing
-          body: {
-            variant_id: { kind: "runtime", ref: "variantId" },
-            quantity: { kind: "literal", value: 1 },
-          },
-        },
-      ];
-    case "lineItemId":
-      // A cart line-item update needs a line item id even when no prior add step
-      // captured one. Bootstrap a cart (the cartId chain seeds one
-      // in-stock line item), then read it back off the cart. The cart chain's
-      // bindTos are skipped by `ensure` if cartId was already resolved earlier.
-      return [
-        ...standaloneResolverFor("cartId", auth)!,
-        { bindTo: varName, method: "GET", endpoint: "/store/carts/{cartId}", extract: "cart.items[0].id" },
-      ];
-    case "paymentCollectionId":
-      // The cart need only exist (no line items required to open a payment
-      // collection), so the standard `regions -> carts` bootstrap suffices.
-      return [
-        ...standaloneResolverFor("cartId", auth)!,
-        {
-          bindTo: varName,
-          method: "POST",
-          endpoint: "/store/payment-collections",
-          extract: "payment_collection.id",
-          body: { cart_id: { kind: "runtime", ref: "cartId" } },
-        },
-      ];
-    case "paymentProviderId":
-      // Payment providers are scoped to a region; the listing endpoint requires
-      // `region_id` as a query param.
-      return [
-        { bindTo: "regionId", method: "GET", endpoint: "/store/regions", extract: "regions[0].id" },
-        {
-          bindTo: varName,
-          method: "GET",
-          endpoint: "/store/payment-providers",
-          extract: "payment_providers[0].id",
-          query: { region_id: { kind: "runtime", ref: "regionId" } },
-        },
-      ];
-    case "shippingOptionId":
-      // Shipping options are computed per cart; the listing requires `cart_id`.
-      // // VERIFY: an item-less cart may return no options (shipping_options[0]
-      // undefined) — a shipping-methods step that needs this id then fails its own
-      // status assertion cleanly rather than skipping.
-      return [
-        ...standaloneResolverFor("cartId", auth)!,
-        {
-          bindTo: varName,
-          method: "GET",
-          endpoint: "/store/shipping-options",
-          extract: "shipping_options[0].id",
-          query: { cart_id: { kind: "runtime", ref: "cartId" } },
-        },
-      ];
-    default:
-      return null;
-  }
-}
+// The scope-variable resolvers formerly implemented as the `standaloneResolverFor`
+// switch now live in the keyed, oracle-verified skill registry (skill/registry.ts).
+// `resolveSkillForVar` reproduces the old `(varName, auth, fulfilledOrder,
+// cancelFlow)` -> ResolveStep[] behavior 1:1.
 
 // The log-ingestion normalizer collapses EVERY id-like segment to `{id}`, so the
 // cart line-item update mines as `/store/carts/{id}/line-items/{id}` — but the
@@ -1022,29 +833,30 @@ export function buildFlowPlan(
   const errors: string[] = [];
 
   // A flow that exercises any return endpoint needs its admin order to be
-  // FULFILLED before the return begins (see standaloneResolverFor orderId). The
+  // FULFILLED before the return begins (see the order@fulfilled skill). The
   // signal is flow-wide because the order is resolved at the first GET
   // /admin/orders/{id} step, before the /admin/returns step is reached.
   const flowIsReturnLifecycle = steps.some((s) => s.endpoint.startsWith("/admin/returns"));
 
   // A cancel flow takes the OLDEST cancelable order so it doesn't strip the
-  // newest (reservation-bearing) one the fulfillment flow needs — see
-  // standaloneResolverFor's `cancelFlow` param.
+  // newest (reservation-bearing) one the fulfillment flow needs — see the
+  // order@cancelable skill (resolveSkillForVar's `cancelFlow` param).
   const flowIsCancel = steps.some(
     (s) => s.method === "POST" && /^\/admin\/orders\/\{[^}]+\}\/cancel$/.test(s.endpoint)
   );
 
   for (const step of steps) {
-    let auth = authFor(step.endpoint, flowRequiresAuth);
-    // Negative-auth downgrade: a step asserting 401 on a customer-gated
-    // endpoint must reach the `requireCustomerAuth` gate WITHOUT a valid session
-    // token, or the always-on setup handshake (emit.ts autoRegister) makes it
-    // 200. Strip the customer token (drop to publishable-key only) for that one
-    // step so the gate produces the asserted 401. The mechanism differs from the
-    // mined broken-token cause (no-token vs broken-token), but the status-only
-    // regression assertion holds. Guarded narrowly (customer auth + expected 401)
-    // so other steps in the same flow keep the established token.
-    if (auth === CUSTOMER && step.expected_status === 401) {
+    let auth = authFor(step.method, step.endpoint, flowRequiresAuth);
+    // Negative-auth downgrade: a step asserting the customer-auth rejection status
+    // must reach the `requireCustomerAuth` gate WITHOUT a valid session token, or
+    // the always-on setup handshake (emit.ts autoRegister) makes it 200. Strip the
+    // customer token (drop to publishable-key only) for that one step so the gate
+    // produces the asserted status. The mechanism differs from the mined
+    // broken-token cause (no-token vs broken-token), but the status-only
+    // regression assertion holds. The rejection status is sourced from
+    // gate-contract.ts via expectsCustomerAuthRejection, not hardcoded. Guarded
+    // narrowly so other steps in the same flow keep the established token.
+    if (expectsCustomerAuthRejection(auth, step.expected_status)) {
       auth = PUBLISHABLE;
     }
     const resolveCalls: ResolveCall[] = [];
@@ -1062,7 +874,7 @@ export function buildFlowPlan(
       // resolve chain. A 2xx-asserting guest flow never reaches here: a successful
       // auth-dependent read reclassifies the whole flow as a customer (ADR 0006).
       const unauthenticated = auth === PUBLISHABLE || auth === NONE;
-      if (unauthenticated && AUTH_GATED_RESOURCE_VARS.has(varName) && step.expected_status >= 400) {
+      if (unauthenticated && isAuthGatedResourceVar(varName) && step.expected_status >= 400) {
         resolveCalls.push({
           bindTo: varName,
           literal: placeholderIdFor(varName),
@@ -1074,7 +886,7 @@ export function buildFlowPlan(
         scope.add(varName);
         return true;
       }
-      const chain = standaloneResolverFor(varName, auth, flowIsReturnLifecycle, flowIsCancel);
+      const chain = resolveSkillForVar(varName, auth, flowIsReturnLifecycle, flowIsCancel);
       if (!chain) return false;
       for (const call of chain) {
         if (scope.has(call.bindTo)) continue; // a chained prerequisite already resolved earlier in this flow
@@ -1130,11 +942,7 @@ export function buildFlowPlan(
     // payment-session prep the mined flow dropped (runs on the cartId just
     // ensured above). Only for a success-expecting complete — a negative one
     // asserts the gate/empty-cart 4xx and must not be made to succeed.
-    if (
-      step.method === "POST" &&
-      step.endpoint === "/store/carts/{id}/complete" &&
-      step.expected_status < 400
-    ) {
+    if (requiresCheckoutReadyCart(step.method, step.endpoint) && step.expected_status < 400) {
       appendCheckoutReadyResolvers(resolveCalls, scope, auth);
     }
 

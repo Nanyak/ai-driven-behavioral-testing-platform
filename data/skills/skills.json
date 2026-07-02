@@ -1,0 +1,242 @@
+{
+  "generated_at": "2026-07-02T22:25:34.214Z",
+  "skills": {
+    "region@any#any": {
+      "entity": "region",
+      "state": "any",
+      "auth": "any",
+      "provenance": "deterministic",
+      "oracle": {
+        "endpoint": "/store/regions",
+        "path": "regions[0].id",
+        "matcher": "toBeDefined",
+        "rationale": "at least one region exists in the seeded backend"
+      },
+      "verified": false
+    },
+    "product@any#admin-token": {
+      "entity": "product",
+      "state": "any",
+      "auth": "admin-token",
+      "provenance": "deterministic",
+      "oracle": {
+        "endpoint": "/admin/products",
+        "path": "products[0].id",
+        "matcher": "toBeDefined",
+        "rationale": "the admin product list is non-empty in the seeded backend"
+      },
+      "verified": false
+    },
+    "product@any#any": {
+      "entity": "product",
+      "state": "any",
+      "auth": "any",
+      "provenance": "deterministic",
+      "oracle": {
+        "endpoint": "/store/products",
+        "path": "products[0].id",
+        "matcher": "toBeDefined",
+        "rationale": "the store product list is non-empty in the seeded backend"
+      },
+      "verified": false
+    },
+    "variant@any#any": {
+      "entity": "variant",
+      "state": "any",
+      "auth": "any",
+      "provenance": "deterministic",
+      "oracle": {
+        "endpoint": "/store/products",
+        "path": "products[0].variants[0].id",
+        "matcher": "toBeDefined",
+        "rationale": "the first store product has at least one purchasable variant"
+      },
+      "verified": false
+    },
+    "inventoryItem@unstocked#admin-token": {
+      "entity": "inventoryItem",
+      "state": "unstocked",
+      "auth": "admin-token",
+      "provenance": "deterministic",
+      "oracle": {
+        "endpoint": "/admin/inventory-items?order=-created_at",
+        "path": "inventory_items[0].id",
+        "matcher": "toBeDefined",
+        "rationale": "list is non-empty in the seeded backend"
+      },
+      "verified": false
+    },
+    "return@any#admin-token": {
+      "entity": "return",
+      "state": "any",
+      "auth": "admin-token",
+      "provenance": "deterministic",
+      "oracle": {
+        "endpoint": "/admin/returns",
+        "path": "returns[0].id",
+        "matcher": "toBeDefined",
+        "rationale": "a return must already exist in the seeded backend for the lifecycle steps to bind a real id"
+      },
+      "verified": false
+    },
+    "stockLocation@any#admin-token": {
+      "entity": "stockLocation",
+      "state": "any",
+      "auth": "admin-token",
+      "provenance": "deterministic",
+      "oracle": {
+        "endpoint": "/admin/stock-locations",
+        "path": "stock_locations[0].id",
+        "matcher": "toBeDefined",
+        "rationale": "list is non-empty (the seed creates at least one stock location)"
+      },
+      "verified": false
+    },
+    "shippingProfile@any#admin-token": {
+      "entity": "shippingProfile",
+      "state": "any",
+      "auth": "admin-token",
+      "provenance": "deterministic",
+      "oracle": {
+        "endpoint": "/admin/shipping-profiles",
+        "path": "shipping_profiles[0].id",
+        "matcher": "toBeDefined",
+        "rationale": "the seed creates one"
+      },
+      "verified": false
+    },
+    "salesChannel@any#admin-token": {
+      "entity": "salesChannel",
+      "state": "any",
+      "auth": "admin-token",
+      "provenance": "deterministic",
+      "oracle": {
+        "endpoint": "/admin/sales-channels",
+        "path": "sales_channels[0].id",
+        "matcher": "toBeDefined",
+        "rationale": "the seed has a \"Default Sales Channel\""
+      },
+      "verified": false
+    },
+    "order@fulfilled#admin-token": {
+      "entity": "order",
+      "state": "fulfilled",
+      "auth": "admin-token",
+      "provenance": "deterministic",
+      "oracle": {
+        "endpoint": "/admin/orders?status[]=pending&order=-created_at&fields=*items",
+        "path": "orders[1].id",
+        "matcher": "toBeDefined",
+        "rationale": "a distinct (orders[1]) pending order with line items exists to fulfill before the return begins"
+      },
+      "verified": false
+    },
+    "order@cancelable#admin-token": {
+      "entity": "order",
+      "state": "cancelable",
+      "auth": "admin-token",
+      "provenance": "deterministic",
+      "oracle": {
+        "endpoint": "/admin/orders?status[]=pending&order=-created_at&fields=id,status,canceled_at,*fulfillments",
+        "path": "orders.length",
+        "matcher": "toBeGreaterThan",
+        "expected": 0,
+        "rationale": "at least one uncanceled, unfulfilled pending order exists to cancel (oldest, to keep the reservation-bearing newest for fulfillment)"
+      },
+      "verified": false
+    },
+    "order@cancelable-newest#admin-token": {
+      "entity": "order",
+      "state": "cancelable-newest",
+      "auth": "admin-token",
+      "provenance": "deterministic",
+      "oracle": {
+        "endpoint": "/admin/orders?status[]=pending&order=-created_at&fields=id,status,canceled_at,*fulfillments",
+        "path": "orders.length",
+        "matcher": "toBeGreaterThan",
+        "expected": 0,
+        "rationale": "at least one uncanceled, unfulfilled pending order exists (newest kept, as it still holds a stock reservation fulfillment needs)"
+      },
+      "verified": false
+    },
+    "order@any#any": {
+      "entity": "order",
+      "state": "any",
+      "auth": "any",
+      "provenance": "deterministic",
+      "oracle": {
+        "endpoint": "/store/orders",
+        "path": "orders[0].id",
+        "matcher": "toBeDefined",
+        "rationale": "the authenticated customer has at least one order"
+      },
+      "verified": false
+    },
+    "cart@seeded#any": {
+      "entity": "cart",
+      "state": "seeded",
+      "auth": "any",
+      "provenance": "deterministic",
+      "oracle": {
+        "endpoint": "/store/carts/{cartId}/line-items",
+        "path": "cart.items.length",
+        "matcher": "toBeGreaterThan",
+        "expected": 0,
+        "rationale": "the bootstrapped cart is non-empty (one in-stock line item seeded) so it is completable"
+      },
+      "verified": false
+    },
+    "lineItem@any#any": {
+      "entity": "lineItem",
+      "state": "any",
+      "auth": "any",
+      "provenance": "deterministic",
+      "oracle": {
+        "endpoint": "/store/carts/{cartId}",
+        "path": "cart.items[0].id",
+        "matcher": "toBeDefined",
+        "rationale": "the seeded cart exposes a readable line item id"
+      },
+      "verified": false
+    },
+    "paymentCollection@any#any": {
+      "entity": "paymentCollection",
+      "state": "any",
+      "auth": "any",
+      "provenance": "deterministic",
+      "oracle": {
+        "endpoint": "/store/payment-collections",
+        "path": "payment_collection.id",
+        "matcher": "toBeDefined",
+        "rationale": "a payment collection opens on the bootstrapped cart"
+      },
+      "verified": false
+    },
+    "paymentProvider@any#any": {
+      "entity": "paymentProvider",
+      "state": "any",
+      "auth": "any",
+      "provenance": "deterministic",
+      "oracle": {
+        "endpoint": "/store/payment-providers",
+        "path": "payment_providers[0].id",
+        "matcher": "toBeDefined",
+        "rationale": "the region exposes at least one payment provider"
+      },
+      "verified": false
+    },
+    "shippingOption@any#any": {
+      "entity": "shippingOption",
+      "state": "any",
+      "auth": "any",
+      "provenance": "deterministic",
+      "oracle": {
+        "endpoint": "/store/shipping-options",
+        "path": "shipping_options[0].id",
+        "matcher": "toBeDefined",
+        "rationale": "an item-less cart may return no options — the consuming shipping-methods step then fails its own status assertion cleanly rather than skipping"
+      },
+      "verified": false
+    }
+  }
+}
