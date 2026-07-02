@@ -17,21 +17,21 @@
     "session_id"
   ],
   "schema_source": "observed",
-  "captured_at": "2026-06-27T21:08:25.096Z",
+  "captured_at": "2026-07-02T23:00:12.078Z",
   "source_sessions": [
-    "sess-edge-857d5ac7-121a-4cb9-9997-942e34cbe537",
-    "sess-edge-b52dc6ec-b3fd-403b-928a-7e3cb02ab778",
-    "sess-edge-b834950e-c20b-4ad0-8005-9ddb1c359fa6",
-    "sess-edge-c2b6bd05-d3a5-4c77-b043-921d8998e773",
-    "sess-signup-0d23f98e-8b9e-4f07-a877-46a6559f715e",
-    "sess-signup-34b7775b-b165-4458-9987-6fd0b87bdb81",
-    "sess-signup-38c81c42-0d16-4474-b4c8-550573b753ca",
-    "sess-signup-7788d3c8-b916-42c5-a288-910a81c7ef84",
-    "sess-signup-7af46d28-e9fd-44c1-819c-0abac5b643fb",
-    "sess-signup-970f0033-08a2-4eba-8e7c-de85b9ec1e94",
-    "sess-signup-a6ac1d67-79dc-4aa1-840c-4b7cd8e3d058",
-    "sess-signup-c8f6c1d6-b745-40cb-b1fe-fdd9b2b0862d",
-    "sess-signup-d0bb6696-54e6-4f1c-ba4b-bdcdb3f3ce28",
-    "sess-signup-fa7e320b-f551-4279-b952-f7a77a4ba155"
+    "sess-edge-816346a0-a2a7-4511-acdf-783a896d1fce",
+    "sess-edge-839067da-7e40-4864-98b5-aaa6d26028f3",
+    "sess-edge-92741015-d2b0-4760-b0b2-503e8b25ce67",
+    "sess-signup-05b8cdff-7dd1-4f97-9c0d-4d5933321dcb",
+    "sess-signup-39e9b1ea-cc9d-4d1c-a98a-91e4c72e6463",
+    "sess-signup-548b39f4-f276-4042-b4c9-cea16f3d84c0",
+    "sess-signup-63a875b0-b627-4fd7-93b8-f217961f5b61",
+    "sess-signup-8a64401a-b716-40d8-b4a4-8eb93d7cb5c1",
+    "sess-signup-9010028a-997a-4abb-9629-76ac921c6485",
+    "sess-signup-a8080063-a517-4010-8313-470659d95d63",
+    "sess-signup-c0eb01d9-f03c-424b-bed4-24b7d4c21a4e",
+    "sess-signup-c890856e-5123-4172-914f-3a9fdf35eb4d",
+    "sess-signup-caeb47eb-89e5-4a4b-b45e-f85633336795",
+    "sess-signup-e68043b7-19c8-4988-a435-524354bd8a64"
   ]
 }

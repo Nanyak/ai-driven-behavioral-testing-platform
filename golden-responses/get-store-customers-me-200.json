@@ -3,18 +3,18 @@
   "expected_status": 200,
   "expected_schema": {
     "customer": {
-      "first_name": "string",
-      "email": "string",
-      "last_name": "string",
-      "addresses": "string",
-      "phone": "null",
-      "has_account": "string",
-      "company_name": "null",
-      "created_at": "ignored",
-      "id": "ignored",
+      "updated_at": "ignored",
       "metadata": "ignored",
+      "company_name": "null",
       "deleted_at": "ignored",
-      "updated_at": "ignored"
+      "email": "string",
+      "first_name": "string",
+      "id": "ignored",
+      "created_at": "ignored",
+      "has_account": "boolean",
+      "last_name": "string",
+      "phone": "null",
+      "addresses": "array"
     }
   },
   "ignore_fields": [
@@ -30,20 +30,20 @@
     "session_id"
   ],
   "schema_source": "observed",
-  "captured_at": "2026-06-27T21:08:25.096Z",
+  "captured_at": "2026-07-02T23:00:12.078Z",
   "source_sessions": [
-    "sess-newCheckout-0b480d03-ca41-46a6-832b-f5dbedb18b6d",
-    "sess-newCheckout-370c48dd-399c-49b0-8f4e-f9dc778288e2",
-    "sess-newCheckout-712ad107-3e18-42d1-9c0d-d855af7e550d",
-    "sess-newCheckout-b279bca9-8c77-46e1-a053-36e519f4adde",
-    "sess-newCheckout-b3d4e8f3-fe9d-40ce-a4ac-cfa5d8ee2b2b",
-    "sess-newCheckout-d594040b-76a6-41fd-84b9-e6a59cf07d48",
-    "sess-profileMgmt-47cc0f45-cb2b-409b-8b8e-bb5234385a39",
-    "sess-profileMgmt-482757bf-c0e2-4372-af2a-f6ee9b96f359",
-    "sess-profileMgmt-654fd443-06d3-478a-908e-ec60e9639ac1",
-    "sess-profileMgmt-9de00dc1-e101-4ac7-970e-500bbabf8138",
-    "sess-profileMgmt-ab59df51-1c08-4a57-93a7-d37e2d457114",
-    "sess-profileMgmt-ac9a0396-a7cf-45d6-8da9-a58f83c4e969",
-    "sess-profileMgmt-eefabe42-a96f-49c0-9d4b-bbb82e3ae02b"
+    "sess-newCheckout-0a39495e-a7ee-4f78-9936-1fe1d4fa1542",
+    "sess-newCheckout-16c06cf1-aa10-4a3b-89b8-6e76862977a3",
+    "sess-newCheckout-975360fd-eb9f-4993-94f3-6d8f44bad2f0",
+    "sess-newCheckout-9bc18100-46c1-4568-b264-8984cc753252",
+    "sess-newCheckout-a48eb5d3-8c90-4bfa-b010-febbbd297178",
+    "sess-newCheckout-ad5ecdf8-dcde-4c97-8208-d7b3bf9098d9",
+    "sess-profileMgmt-03b3575a-acf1-4e9a-88fc-d5630528bcb6",
+    "sess-profileMgmt-0a193995-8e2f-4e55-9b56-bbe5a59339ac",
+    "sess-profileMgmt-6de28284-e803-4b6b-80d8-b865cb7fe512",
+    "sess-profileMgmt-776159fe-e1c1-460c-b9da-46c9bd5f7e23",
+    "sess-profileMgmt-98130ff3-3833-4a66-9535-465e081c5fa7",
+    "sess-profileMgmt-b7e716dc-6cd7-4e88-8258-c1ed42ebd7f1",
+    "sess-profileMgmt-ce0aafcf-7e48-41ea-9088-a979bcf0565f"
   ]
 }

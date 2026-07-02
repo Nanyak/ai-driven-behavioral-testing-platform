@@ -18,12 +18,11 @@
     "session_id"
   ],
   "schema_source": "observed",
-  "captured_at": "2026-06-27T21:08:25.096Z",
+  "captured_at": "2026-07-02T23:00:12.078Z",
   "source_sessions": [
-    "sess-edge-64ce0211-c1f8-49c2-b8f3-ae6dd40d857f",
-    "sess-edge-857d5ac7-121a-4cb9-9997-942e34cbe537",
-    "sess-edge-b52dc6ec-b3fd-403b-928a-7e3cb02ab778",
-    "sess-edge-b834950e-c20b-4ad0-8005-9ddb1c359fa6",
-    "sess-edge-c2b6bd05-d3a5-4c77-b043-921d8998e773"
+    "sess-edge-0787c36d-f9e7-4835-952e-b386eacb6400",
+    "sess-edge-816346a0-a2a7-4511-acdf-783a896d1fce",
+    "sess-edge-839067da-7e40-4864-98b5-aaa6d26028f3",
+    "sess-edge-92741015-d2b0-4760-b0b2-503e8b25ce67"
   ]
 }

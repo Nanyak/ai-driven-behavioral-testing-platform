@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Why PrefixSpan · Sequential Pattern Mining Choice</title>
+<style>
+  :root {
+    --bg: #0b0f17;
+    --panel: #121826;
+    --panel-2: #0f1420;
+    --border: #1f2940;
+    --text: #e6ecf5;
+    --muted: #97a3b8;
+    --faint: #5f6b80;
+    --accent: #5b9dff;
+    --accent-2: #7c5cff;
+    --green: #3fb950;
+    --red: #f85149;
+    --amber: #d29922;
+    --teal: #2bd4bd;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: radial-gradient(1400px 800px at 80% -10%, #16203a 0%, var(--bg) 55%);
+    color: var(--text); font-family: var(--sans); line-height: 1.6; font-size: 20px;
+    overflow: hidden;
+  }
+  code { font-family: var(--mono); font-size: .82em; background: rgba(124,92,255,.12);
+         border: 1px solid var(--border); padding: 1px 6px; border-radius: 5px; color: #cfd8ea; }
+  strong { color: #fff; }
+  a { color: var(--accent); }
+
+  /* ---- slide mechanics ---- */
+  .deck { height: 100vh; width: 100vw; }
+  .slide {
+    position: absolute; inset: 0; display: none;
+    padding: 6vh 7vw; flex-direction: column; justify-content: center;
+    animation: fade .35s ease;
+  }
+  .slide.active { display: flex; }
+  @keyframes fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  .kicker { display: inline-block; font-size: 13px; letter-spacing: .16em; text-transform: uppercase;
+            color: var(--accent); border: 1px solid var(--border); padding: 5px 12px; border-radius: 999px;
+            background: var(--panel); margin-bottom: 20px; align-self: flex-start; }
+  h1 { font-size: 52px; line-height: 1.1; margin: 0 0 16px; letter-spacing: -0.02em; }
+  h2 { font-size: 36px; line-height: 1.15; margin: 0 0 22px; letter-spacing: -0.015em; }
+  .lead { font-size: 24px; color: var(--muted); max-width: 60ch; }
+  p { color: #d2dae8; margin: 8px 0; }
+  ul { color: #d2dae8; padding-left: 26px; margin: 8px 0; }
+  li { margin: 10px 0; }
+  .muted { color: var(--muted); }
+  .accent { color: var(--accent); } .accent2 { color: var(--accent-2); }
+  .green { color: var(--green); } .red { color: var(--red); } .amber { color: var(--amber); } .teal { color: var(--teal); }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .grid4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; }
+  .card h3 { margin: 0 0 8px; font-size: 19px; color: #fff; }
+  .card p, .card li { font-size: 16.5px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 17px; margin: 8px 0; }
+  th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; }
+  tbody tr.me { background: rgba(63,185,80,.08); }
+  tbody tr.me td:first-child { color: var(--green); font-weight: 700; }
+  .verdict-bad { color: var(--red); font-family: var(--mono); font-size: 13px; }
+  .verdict-ok  { color: var(--green); font-family: var(--mono); font-size: 13px; }
+
+  .pill { display:inline-block; font-size: 13px; padding: 3px 11px; border-radius: 999px; border:1px solid var(--border);
+          background: var(--panel-2); color: var(--muted); margin: 0 6px 6px 0; font-family: var(--mono); }
+  .pill.green{ color:var(--green); border-color: rgba(63,185,80,.35);}
+  .pill.blue{ color:var(--accent); border-color: rgba(91,157,255,.35);}
+
+  .note { border-left: 3px solid var(--accent); background: rgba(91,157,255,.07); padding: 14px 18px; border-radius: 0 10px 10px 0; margin: 14px 0; font-size: 18px; }
+  .good { border-left: 3px solid var(--green); background: rgba(63,185,80,.07); padding: 14px 18px; border-radius: 0 10px 10px 0; margin: 14px 0; font-size: 18px; }
+  .warn { border-left: 3px solid var(--amber); background: rgba(210,153,34,.07); padding: 14px 18px; border-radius: 0 10px 10px 0; margin: 14px 0; font-size: 18px; }
+
+  .map { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px 18px; align-items: center; font-size: 17px; }
+  .map .req { background: var(--panel); border:1px solid var(--border); border-radius: 10px; padding: 12px 16px; }
+  .map .req b { color: #fff; }
+  .map .to { color: var(--faint); font-size: 22px; text-align: center; }
+  .map .mech { background: var(--panel-2); border:1px solid var(--border); border-radius: 10px; padding: 12px 16px; font-family: var(--mono); font-size: 14px; color: #cdd6e6; }
+  .map .mech .loc { color: var(--accent-2); }
+
+  .quote { font-size: 27px; line-height: 1.45; max-width: 30ch; color: #fff; font-weight: 500; }
+  .quote .accent { color: var(--accent); }
+
+  /* ---- chrome ---- */
+  .hud { position: fixed; bottom: 18px; right: 24px; font-family: var(--mono); font-size: 13px; color: var(--faint); z-index: 10; }
+  .hint { position: fixed; bottom: 18px; left: 24px; font-family: var(--mono); font-size: 12px; color: var(--faint); z-index: 10; }
+  .progress { position: fixed; top: 0; left: 0; height: 3px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); z-index: 10; transition: width .3s ease; }
+  .footer-brand { position: fixed; top: 16px; right: 24px; font-size: 12px; color: var(--faint); letter-spacing: .04em; z-index: 10; }
+
+  @media print {
+    body { overflow: visible; height: auto; }
+    .slide { display: flex !important; position: relative; inset: auto; height: 100vh; page-break-after: always; border-bottom: 1px solid var(--border); }
+    .hud, .hint, .progress, .footer-brand { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="progress" id="progress"></div>
+<div class="footer-brand">AI-Driven Behavioral Testing Platform</div>
+<div class="deck" id="deck">
+
+  <!-- 1. Title -->
+  <section class="slide active">
+    <span class="kicker">Design Decision · Behavior Engine</span>
+    <h1>Why <span class="accent">PrefixSpan</span>?</h1>
+    <p class="lead">Choosing a sequential pattern mining algorithm to recover user journeys from API traffic — and why not GSP, SPADE, or SPAM.</p>
+  </section>
+
+  <!-- 2. What we mine -->
+  <section class="slide">
+    <span class="kicker">The task</span>
+    <h2>What we're actually mining</h2>
+    <div class="grid2">
+      <div class="card">
+        <h3>Input</h3>
+        <p>API traffic grouped into <strong>sessions</strong> → canonical token sequences (<code>METHOD endpoint</code>), consecutive dups collapsed.</p>
+      </div>
+      <div class="card">
+        <h3>Goal</h3>
+        <p>Recover variable-length <strong>frequent sub-journeys</strong> (order-preserving, gaps allowed) — e.g. the registered-customer checkout backbone, despite browsing noise interleaved around it.</p>
+      </div>
+    </div>
+    <div class="note">The requirement is not raw throughput. It is <strong>constrained, closed, fairness-budgeted, deterministic</strong> mining. That framing decides the algorithm.</div>
+  </section>
+
+  <!-- 3. Not plain PrefixSpan -->
+  <section class="slide">
+    <span class="kicker">Context</span>
+    <h2>We don't run "textbook" PrefixSpan</h2>
+    <p class="lead" style="margin-bottom:18px">Our miner is a hardened variant. Each extension is <span class="accent">native to pattern-growth</span> — and this is the whole argument.</p>
+    <div class="grid4">
+      <div class="card"><h3 class="green">Closed</h3><p>Emit only closed patterns — drop the sub-pattern explosion.</p></div>
+      <div class="card"><h3 class="green">Gap-bounded</h3><p><code>maxGap</code> collapses spurious long-distance patterns.</p></div>
+      <div class="card"><h3 class="green">Fair per-root</h3><p>Each starting item gets its own budget — rare personas survive.</p></div>
+      <div class="card"><h3 class="green">Deterministic</h3><p>Pinned ordering: same input → same output, always.</p></div>
+    </div>
+  </section>
+
+  <!-- 4. The comparison table -->
+  <section class="slide">
+    <span class="kicker">The candidates</span>
+    <h2>Four algorithms, one fit</h2>
+    <table>
+      <thead>
+        <tr><th>Algorithm</th><th>Paradigm</th><th>Why it's wrong for us</th><th>Verdict</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>GSP</td>
+          <td>Apriori / breadth-first</td>
+          <td>Candidate-generate-and-test + one DB scan per length. Shared checkout backbone → candidate blow-up.</td>
+          <td class="verdict-bad">dominated</td>
+        </tr>
+        <tr>
+          <td>SPADE</td>
+          <td>Vertical (id-lists)</td>
+          <td>Id-lists blow up when high-support tokens co-occur — exactly our case. Constraints don't graft on cleanly.</td>
+          <td class="verdict-bad">memory + rigid</td>
+        </tr>
+        <tr>
+          <td>SPAM</td>
+          <td>Vertical (bitmaps)</td>
+          <td>Fastest on dense/long sequences, but bitmaps sized to total DB length — wasteful for sparse sessions.</td>
+          <td class="verdict-bad">wrong tradeoff</td>
+        </tr>
+        <tr class="me">
+          <td>PrefixSpan</td>
+          <td>Pattern-growth</td>
+          <td>Projected databases, no candidate generation — and the projection IS our extension point.</td>
+          <td class="verdict-ok">✓ fit</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 5. The core argument -->
+  <section class="slide">
+    <span class="kicker">The core argument</span>
+    <h2>The projected database <span class="accent">is</span> the extension point</h2>
+    <div class="map">
+      <div class="req"><b>Gap constraint</b><br><span class="muted">real journeys are near-contiguous</span></div>
+      <div class="to">→</div>
+      <div class="mech">cap the scan window on each projection<br><span class="loc">prefixspan.ts:123</span></div>
+
+      <div class="req"><b>Per-root fairness</b><br><span class="muted">rare personas mustn't starve</span></div>
+      <div class="to">→</div>
+      <div class="mech">mine each root's projected DB under its own budget<br><span class="loc">prefixspan.ts:161–198</span></div>
+
+      <div class="req"><b>Closed mining</b><br><span class="muted">kill the sub-pattern explosion</span></div>
+      <div class="to">→</div>
+      <div class="mech">compare projection support to its extensions inline<br><span class="loc">prefixspan.ts:175</span></div>
+
+      <div class="req"><b>Determinism</b><br><span class="muted">reproducible candidate sets</span></div>
+      <div class="to">→</div>
+      <div class="mech">ordered depth-first growth + pinned sort<br><span class="loc">prefixspan.ts:202</span></div>
+    </div>
+    <div class="good">Every one of these is trivial in pattern-growth and <strong>awkward-to-impossible</strong> in id-list / bitmap formats.</div>
+  </section>
+
+  <!-- 6. Memory + scale -->
+  <section class="slide">
+    <span class="kicker">Why not the vertical algorithms</span>
+    <h2>Speed we don't need, cost we can't avoid</h2>
+    <div class="grid2">
+      <div class="card">
+        <h3 class="amber">SPADE / SPAM strengths</h3>
+        <ul>
+          <li>Fewer DB scans; bitwise/id-list joins</li>
+          <li>Win on <strong>dense, long-sequence</strong> benchmarks</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 class="green">Our reality</h3>
+        <ul>
+          <li>Sparse, moderate-N session traffic</li>
+          <li><code>minSupport = 3</code>, gap-bounded, closed → mining is <strong>not the bottleneck</strong></li>
+          <li>Projected pointers stay lean; bitmaps/id-lists scale with total DB size regardless of sparsity</li>
+        </ul>
+      </div>
+    </div>
+    <div class="note">Choosing SPAM optimizes a dimension that doesn't bind (speed) at the cost of the one that does (extensibility).</div>
+  </section>
+
+  <!-- 7. Honest caveat -->
+  <section class="slide">
+    <span class="kicker">Intellectual honesty</span>
+    <h2>The claim we <span class="red">don't</span> make</h2>
+    <div class="warn">PrefixSpan is <strong>not</strong> universally fastest — SPAM typically beats it on dense, long-sequence benchmarks.</div>
+    <p class="lead">Our defense is <span class="accent">fit and extensibility</span>, not benchmark speed. That is a stronger and more truthful position — and it's the one our requirements actually demand.</p>
+  </section>
+
+  <!-- 8. Takeaway -->
+  <section class="slide">
+    <span class="kicker">Takeaway</span>
+    <p class="quote">We chose <span class="accent">PrefixSpan</span> because our requirements are constrained, closed, fairness-budgeted, and deterministic mining — and the pattern-growth projected-database model hosts all four <span class="accent">natively</span>, whereas GSP is dominated by candidate blow-up and the vertical algorithms trade memory for a speed advantage our data never needs.</p>
+    <div style="margin-top:24px">
+      <span class="pill blue">no candidate generation</span>
+      <span class="pill green">closed</span>
+      <span class="pill green">gap-bounded</span>
+      <span class="pill green">fair per-root</span>
+      <span class="pill green">deterministic</span>
+    </div>
+  </section>
+
+</div>
+
+<div class="hud" id="hud">1 / 8</div>
+<div class="hint">← → / Space navigate · F fullscreen · P print</div>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const hud = document.getElementById('hud');
+  const progress = document.getElementById('progress');
+  let i = 0;
+  function show(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, k) => s.classList.toggle('active', k === i));
+    hud.textContent = (i + 1) + ' / ' + slides.length;
+    progress.style.width = ((i + 1) / slides.length * 100) + '%';
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { show(i + 1); e.preventDefault(); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { show(i - 1); e.preventDefault(); }
+    else if (e.key === 'Home') show(0);
+    else if (e.key === 'End') show(slides.length - 1);
+    else if (e.key.toLowerCase() === 'f') { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); }
+    else if (e.key.toLowerCase() === 'p') window.print();
+  });
+  document.getElementById('deck').addEventListener('click', (e) => {
+    // click right half → next, left half → prev
+    if (e.clientX > window.innerWidth / 2) show(i + 1); else show(i - 1);
+  });
+  show(0);
+</script>
+</body>
+</html>

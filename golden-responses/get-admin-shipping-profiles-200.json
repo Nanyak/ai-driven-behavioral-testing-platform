@@ -2,10 +2,10 @@
   "endpoint": "GET /admin/shipping-profiles",
   "expected_status": 200,
   "expected_schema": {
-    "shipping_profiles": "array",
-    "offset": "number",
     "count": "number",
-    "limit": "number"
+    "limit": "number",
+    "offset": "number",
+    "shipping_profiles": "array"
   },
   "ignore_fields": [
     "id",
@@ -19,10 +19,15 @@
     "trace_id",
     "session_id"
   ],
-  "schema_source": "observed",
-  "captured_at": "2026-06-27T21:08:25.096Z",
+  "schema_source": "openapi+observed",
+  "oas_operation_id": "GetShippingProfiles",
+  "oas_ref": null,
+  "oas_version": "2.15.5",
+  "value_rules": [],
+  "captured_at": "2026-07-02T23:00:12.078Z",
   "source_sessions": [
-    "sess-adminCatalog-d62bfea1-d452-4fdd-8bc5-c23d670d5000",
-    "sess-seed-admin-edbcfa4a-5505-46a5-9bef-bb842db32b50"
+    "sess-adminCatalog-0d102910-1c40-4ccf-ab99-050b89b09c87",
+    "sess-adminCatalog-d9f53cca-d0dc-401a-b268-9975ee1240c6",
+    "sess-seed-admin-e4562877-93f8-4ff2-9ab5-9a809b8ec337"
   ]
 }

@@ -28,7 +28,6 @@ import type { PromoConfig } from "../flows/promo.js";
 import { runEdgeFlow } from "../flows/edge.js";
 import { runInvalidCartCreate } from "../flows/invalid-cart-create.js";
 import { runCustomerCheckout } from "../personas/customer-llm.js";
-import { LIGHT_NOISE } from "../http/noise.js";
 
 function synthAccount(): PoolAccount {
   return { email: newCustomerEmail(), password: DEFAULT_PASSWORD };
@@ -66,7 +65,7 @@ function poolOrder(state: RunState, s: StoreSession, ownerEmail: string, token?:
 // post-purchase types fall back to a guest browse.
 
 async function adminDegrade(client: MedusaClient, cfg: TrafficConfig): Promise<StepResult[]> {
-  return (await runAdminFlow(client, cfg.adminEmail, cfg.adminPassword, LIGHT_NOISE)).steps;
+  return (await runAdminFlow(client, cfg.adminEmail, cfg.adminPassword)).steps;
 }
 
 async function guestDegrade(client: MedusaClient): Promise<StepResult[]> {
@@ -220,7 +219,7 @@ export async function dispatch(
     }
 
     case "adminCatalog":
-      return (await runAdminFlow(client, cfg.adminEmail, cfg.adminPassword, LIGHT_NOISE)).steps;
+      return (await runAdminFlow(client, cfg.adminEmail, cfg.adminPassword)).steps;
 
     case "edge":
       return runEdgeFlow(client);

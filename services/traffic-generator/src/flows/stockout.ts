@@ -33,7 +33,10 @@ export async function runStockOutCheckout(
     await session.viewProductById(target.productId);
   }
 
-  await session.createCart();
+  const cart = await session.createCart();
+  if (!cart.ok || !session.cartId) {
+    return session;
+  }
   await session.addItem(target.variantId, target.stock + 1);
 
   if (chance(0.4)) {

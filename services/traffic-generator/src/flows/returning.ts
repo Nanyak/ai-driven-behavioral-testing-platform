@@ -60,7 +60,10 @@ export async function runReturningFlow(
     return session;
   }
 
-  await session.createCart();
+  const cart = await session.createCart();
+  if (!cart.ok || !session.cartId) {
+    return session;
+  }
   await session.addItem();
 
   if (intent === "reviseAbandon") {

@@ -1,6 +1,5 @@
 /**
- * Single source of truth for randomness — previously copy-pasted across
- * actions.ts, sampling.ts, noise.ts and state.ts.
+ * Single source of truth for intentional traffic variation.
  */
 
 export function pick<T>(items: T[]): T | undefined {

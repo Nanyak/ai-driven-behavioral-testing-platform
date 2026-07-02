@@ -14,8 +14,8 @@ interface RequestOptions {
 }
 
 /**
- * Surfaces 4xx/5xx as values instead of throwing so the noise/retry logic can
- * react to failures.
+ * Surfaces 4xx/5xx as values instead of throwing so each deliberate flow can
+ * stop, recover, or record the observed failure explicitly.
  *
  * It deliberately attaches NO persona or role header — role is established by
  * which auth endpoints a session hits, recorded by the Medusa logging

@@ -1,0 +1,38 @@
+{
+  "endpoint": "POST /store/carts",
+  "expected_status": 400,
+  "expected_schema": {
+    "message": "string",
+    "type": "string"
+  },
+  "ignore_fields": [
+    "id",
+    "created_at",
+    "updated_at",
+    "deleted_at",
+    "metadata",
+    "token",
+    "cart_id",
+    "order_id",
+    "trace_id",
+    "session_id"
+  ],
+  "schema_source": "observed",
+  "captured_at": "2026-07-02T23:00:12.078Z",
+  "source_sessions": [
+    "sess-invalidCartCreate-07bfe377-1d3d-4acd-a68c-682285f7395f",
+    "sess-invalidCartCreate-1b82da01-eec8-4b00-b04d-c468dd236635",
+    "sess-invalidCartCreate-51849714-a49a-425a-8414-5d07de2c5c5c",
+    "sess-invalidCartCreate-5e6bf252-499d-4e9e-8438-a42281f5d257",
+    "sess-invalidCartCreate-6351e23a-a063-4702-a48f-6b7e39388f28",
+    "sess-invalidCartCreate-65b0ae1a-78e4-435c-b83a-3a09bcea5e6e",
+    "sess-invalidCartCreate-756c5c93-a300-4748-a8d1-cb3387f186d5",
+    "sess-invalidCartCreate-7619521c-2105-4e28-ad57-eeb81d2cf876",
+    "sess-invalidCartCreate-7cb6028c-b609-4694-8bf4-5b7831b834b5",
+    "sess-invalidCartCreate-96b143ee-ef8d-483b-b2f6-e582f9e84175",
+    "sess-invalidCartCreate-a6d74eab-c4c4-47a6-96ae-573102103c47",
+    "sess-invalidCartCreate-b26ccdda-9197-4f2e-960b-e46efa94ca47",
+    "sess-invalidCartCreate-dafb6c9d-6e82-42fc-b804-3b2388aecdba",
+    "sess-invalidCartCreate-f706783c-856b-4a8d-83e3-4a7cdd279dd8"
+  ]
+}

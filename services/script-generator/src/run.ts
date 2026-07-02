@@ -139,21 +139,20 @@ export function existingGeneratedReviewIds(dir: string = GENERATED_TESTS_DIR): S
 }
 
 /**
- * Selectively clean a persona folder: delete every generated spec EXCEPT a blessed
- * oracle — one whose stamped signature is approved AND whose stamped outcome is
- * still the approved one. An approved spec must survive a regen (approved flows are
- * skip-gated out of candidates and so are never re-emitted) so it keeps running and
- * goes red on drift. But once a DIFFERENT outcome is approved for the same journey
- * (a drift the operator blessed), the old-outcome spec is STALE — it is dropped here
- * so the matching candidate can regenerate the new oracle (retirement). A spec
- * predating the status stamp (outcome === null) falls back to signature-only
- * preservation. Returns how many oracles were preserved.
+ * Selectively clean a persona folder: preserve blessed oracles and undecided
+ * drafts; remove only terminally discarded/superseded versions. An approved spec
+ * must survive a regen (approved flows are skip-gated out of candidates and so are
+ * never re-emitted) so it keeps running and goes red on drift. But once a DIFFERENT
+ * outcome is approved for the same journey (a drift the operator blessed), the
+ * old-outcome spec is STALE — it is dropped here so the matching candidate can
+ * regenerate the new oracle (retirement). A spec predating the status stamp
+ * (outcome === null) falls back to signature-only preservation. Returns the number
+ * of retained specs.
  */
 export function cleanPersonaFolderPreservingApproved(
   folder: string,
   approvedOutcomes: Map<string, Set<string>>,
-  decisions: Map<string, string> = new Map(),
-  activeReviewIds: ReadonlySet<string> | null = null
+  decisions: Map<string, string> = new Map()
 ): number {
   if (!existsSync(folder)) return 0;
   let preserved = 0;
@@ -163,8 +162,7 @@ export function cleanPersonaFolderPreservingApproved(
       preserved += cleanPersonaFolderPreservingApproved(
         full,
         approvedOutcomes,
-        decisions,
-        activeReviewIds
+        decisions
       );
     } else if (entry.endsWith(".spec.ts")) {
       const { signature, outcome } = specStamps(full);
@@ -174,11 +172,10 @@ export function cleanPersonaFolderPreservingApproved(
       // Preserve only a still-blessed oracle; outcome === null is a pre-stamp spec
       // we cannot date, so fall back to signature-level preservation.
       const isBlessedOracle = !!blessed && (outcome === null || blessed.has(outcome));
-      // The latest mine is authoritative for undecided work. A pending draft is
-      // retained only when it is still a selected current scenario; stale and
-      // de-selected variant drafts are removed during reconciliation.
-      const isPendingDraft =
-        decision === undefined && (activeReviewIds === null || activeReviewIds.has(id));
+      // A mine is an observation, not a review decision. Keep every undecided
+      // draft until the operator explicitly approves or discards this exact
+      // outcome, even when a later mine no longer selects it as representative.
+      const isPendingDraft = decision === undefined;
       if (isBlessedOracle || isPendingDraft) {
         preserved++;
       } else {
@@ -612,12 +609,6 @@ async function main(): Promise<void> {
   const candidatesToEmit = selectedCandidates.filter((candidate) => {
     return shouldEmitSelectedCandidate(candidate, approved, existingReviewIds);
   });
-  const activeReviewIds = new Set(
-    selectedCandidates.map(
-      (candidate) => `${candidate.signature.toLowerCase()}:${outcomeOf(candidate) || "unknown"}`
-    )
-  );
-
   // Fail before cleaning existing specs if any emitted happy path cannot be
   // backed by either OpenAPI or an observed response schema.
   const goldenSync = ensureGoldenResponses(candidatesToEmit, specs);
@@ -635,8 +626,7 @@ async function main(): Promise<void> {
     preservedSelected += cleanPersonaFolderPreservingApproved(
       resolvePath(GENERATED_TESTS_DIR, persona),
       approved,
-      decisions,
-      activeReviewIds
+      decisions
     );
   }
   rmSync(resolvePath(GENERATED_TESTS_DIR, "edge"), { recursive: true, force: true });

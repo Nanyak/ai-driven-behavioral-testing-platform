@@ -90,8 +90,9 @@ async function main(): Promise<void> {
   const docs = await loadDocs(args, window);
   log(`[ingest] fetched ${docs.length} raw log docs`);
 
-  const { buckets, droppedNoSession } = groupBySession(docs);
-  const { sessions, droppedSingleStep } = buildSessionFlows(buckets);
+  const { buckets, droppedNoSession, droppedDashboardProbe } = groupBySession(docs);
+  const { sessions, droppedSingleStep, collapsedTransportNoise } =
+    buildSessionFlows(buckets);
   const goldens = extractGoldenCandidates(docs, new Date().toISOString());
 
   mkdirSync(config.sessionsDir, { recursive: true });
@@ -109,6 +110,8 @@ async function main(): Promise<void> {
   log("[ingest] summary");
   log(`  raw docs ............. ${docs.length}`);
   log(`  dropped (no session) . ${droppedNoSession}`);
+  log(`  dropped (dashboard) .. ${droppedDashboardProbe}`);
+  log(`  collapsed (transport)  ${collapsedTransportNoise}`);
   log(`  dropped (single step)  ${droppedSingleStep}`);
   log(`  buckets .............. ${buckets.length}`);
   log(`  session flows ........ ${sessions.length}`);

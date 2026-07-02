@@ -3,40 +3,37 @@
   "expected_status": 200,
   "expected_schema": {
     "product": {
-      "categories": "ignored",
-      "collection": "ignored",
-      "collection_id": "ignored",
-      "created_at": "ignored",
-      "deleted_at": "ignored",
-      "description": "ignored",
-      "discountable": "boolean",
-      "external_id": "ignored",
+      "origin_country": "null",
       "handle": "string",
-      "height": "ignored",
-      "hs_code": "ignored",
-      "id": "ignored",
-      "images": "array",
-      "is_giftcard": "boolean",
-      "length": "ignored",
-      "material": "ignored",
-      "metadata": "ignored",
-      "mid_code": "ignored",
-      "options": "array",
-      "origin_country": "ignored",
-      "sales_channels": "ignored",
-      "shipping_profile": "ignored",
+      "external_id": "null",
+      "description": "string",
       "status": "string",
-      "subtitle": "ignored",
-      "tags": "ignored",
-      "thumbnail": "ignored",
-      "title": "string",
-      "translations": "ignored",
-      "type": "ignored",
-      "type_id": "ignored",
+      "images": "array",
+      "thumbnail": "string",
+      "created_at": "ignored",
+      "hs_code": "null",
+      "mid_code": "null",
+      "options": "array",
+      "collection": "null",
+      "width": "null",
+      "type_id": "null",
+      "subtitle": "null",
+      "is_giftcard": "boolean",
       "updated_at": "ignored",
+      "metadata": "ignored",
+      "title": "string",
+      "deleted_at": "ignored",
+      "tags": "array",
+      "material": "null",
       "variants": "array",
-      "weight": "ignored",
-      "width": "ignored"
+      "__truncated_keys": "number",
+      "length": "null",
+      "discountable": "boolean",
+      "collection_id": "null",
+      "id": "ignored",
+      "type": "null",
+      "weight": "number",
+      "height": "null"
     }
   },
   "ignore_fields": [
@@ -51,36 +48,11 @@
     "trace_id",
     "session_id"
   ],
-  "schema_source": "openapi+observed",
-  "oas_operation_id": "PostProductsId",
-  "oas_ref": "#/components/schemas/AdminProductResponse",
-  "oas_version": "2.15.5",
-  "value_rules": [
-    {
-      "path": "product.collection.products[].status",
-      "kind": "enum",
-      "values": [
-        "draft",
-        "proposed",
-        "published",
-        "rejected"
-      ]
-    },
-    {
-      "path": "product.status",
-      "kind": "enum",
-      "values": [
-        "draft",
-        "proposed",
-        "published",
-        "rejected"
-      ]
-    }
-  ],
-  "captured_at": "2026-06-27T21:08:25.096Z",
+  "schema_source": "observed",
+  "captured_at": "2026-07-02T23:00:12.078Z",
   "source_sessions": [
-    "sess-adminCatalog-0ea05f5d-b3bf-4bb1-b290-5c3b238b2bd3",
-    "sess-adminCatalog-15e13eef-5813-4a43-a493-6c6bfeef393c",
-    "sess-adminCatalog-d62bfea1-d452-4fdd-8bc5-c23d670d5000"
+    "sess-adminCatalog-0d102910-1c40-4ccf-ab99-050b89b09c87",
+    "sess-adminCatalog-b0285d22-ebd9-48fa-87ac-17db2a6cf5ce",
+    "sess-adminCatalog-d9f53cca-d0dc-401a-b268-9975ee1240c6"
   ]
 }

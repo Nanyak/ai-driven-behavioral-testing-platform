@@ -48,7 +48,10 @@ export async function runDirectLandingFlow(
     return session;
   }
 
-  await session.createCart();
+  const cart = await session.createCart();
+  if (!cart.ok || !session.cartId) {
+    return session;
+  }
   await session.addItem();
   if (chance(0.25)) await session.addItem();
 

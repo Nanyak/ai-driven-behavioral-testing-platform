@@ -5,8 +5,7 @@ export type SessionSource =
   | "admin"
   | "llm"
   | "customer"
-  | "edge"
-  | "noise";
+  | "edge";
 
 /**
  * session_id = sess-<source>-<uuid>.

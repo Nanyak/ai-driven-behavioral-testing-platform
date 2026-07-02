@@ -3,26 +3,26 @@
   "expected_status": 200,
   "expected_schema": {
     "inventory_item": {
-      "location_levels": "array",
-      "weight": "null",
-      "hs_code": "null",
-      "thumbnail": "null",
-      "description": "string",
-      "mid_code": "null",
-      "stocked_quantity": "number",
-      "reserved_quantity": "number",
-      "length": "null",
-      "sku": "string",
-      "requires_shipping": "boolean",
-      "width": "null",
-      "id": "ignored",
-      "title": "string",
-      "height": "null",
-      "material": "null",
-      "metadata": "ignored",
       "created_at": "ignored",
-      "origin_country": "null",
-      "updated_at": "ignored"
+      "description": "ignored",
+      "height": "ignored",
+      "hs_code": "ignored",
+      "id": "ignored",
+      "length": "ignored",
+      "location_levels": "ignored",
+      "material": "ignored",
+      "metadata": "ignored",
+      "mid_code": "ignored",
+      "origin_country": "ignored",
+      "requires_shipping": "boolean",
+      "reserved_quantity": "number",
+      "sku": "ignored",
+      "stocked_quantity": "number",
+      "thumbnail": "ignored",
+      "title": "ignored",
+      "updated_at": "ignored",
+      "weight": "ignored",
+      "width": "ignored"
     }
   },
   "ignore_fields": [
@@ -37,10 +37,15 @@
     "trace_id",
     "session_id"
   ],
-  "schema_source": "observed",
-  "captured_at": "2026-06-27T21:08:25.096Z",
+  "schema_source": "openapi+observed",
+  "oas_operation_id": "PostInventoryItemsIdLocationLevels",
+  "oas_ref": "#/components/schemas/AdminInventoryItemResponse",
+  "oas_version": "2.15.5",
+  "value_rules": [],
+  "captured_at": "2026-07-02T23:00:12.078Z",
   "source_sessions": [
-    "sess-adminCatalog-d62bfea1-d452-4fdd-8bc5-c23d670d5000",
-    "sess-seed-admin-edbcfa4a-5505-46a5-9bef-bb842db32b50"
+    "sess-adminCatalog-0d102910-1c40-4ccf-ab99-050b89b09c87",
+    "sess-adminCatalog-d9f53cca-d0dc-401a-b268-9975ee1240c6",
+    "sess-seed-admin-e4562877-93f8-4ff2-9ab5-9a809b8ec337"
   ]
 }

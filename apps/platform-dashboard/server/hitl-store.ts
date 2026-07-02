@@ -211,6 +211,29 @@ export interface DecisionEntry {
   scenario_key?: string;
 }
 
+type JourneyIdentity = {
+  flow_signature: string;
+  route_key?: string;
+};
+
+/**
+ * Conflict and supersession identity is deliberately narrow: the same canonical
+ * flow signature, or an exactly equal persisted route key. Scenario families are
+ * presentation groupings and must never make related routes contradict or retire
+ * one another.
+ */
+export function matchesExactJourney(
+  left: JourneyIdentity,
+  right: JourneyIdentity
+): boolean {
+  if (left.flow_signature.toLowerCase() === right.flow_signature.toLowerCase()) {
+    return true;
+  }
+  const leftRoute = left.route_key?.trim();
+  const rightRoute = right.route_key?.trim();
+  return Boolean(leftRoute && rightRoute && leftRoute === rightRoute);
+}
+
 export interface FlowStep {
   method: string;
   endpoint: string;
@@ -791,8 +814,10 @@ export function upsertDecision(input: {
     for (const [priorId, prior] of decisions) {
       if (
         priorId !== id &&
-        (prior.flow_signature === sig ||
-          Boolean(scenarioKey && prior.scenario_key === scenarioKey)) &&
+        matchesExactJourney(prior, {
+          flow_signature: sig,
+          route_key: input.route_key,
+        }) &&
         prior.status === "approved"
       ) {
         decisions.set(priorId, {
@@ -922,11 +947,15 @@ export function loadFlows(): FlowsPayload {
         : null;
     const specRef = specs.get(id) ?? null;
     const repair = repairs.get(sig);
+    const currentRouteKey = routeKey(c.persona, steps);
     const baseline = [...decisions.values()]
       .filter(
         (entry) =>
           entry.status === "approved" &&
-          (entry.flow_signature === sig || entry.scenario_key === family.family_key)
+          matchesExactJourney(entry, {
+            flow_signature: sig,
+            route_key: currentRouteKey,
+          })
       )
       .sort((a, b) => (b.decided_at ?? "").localeCompare(a.decided_at ?? ""))[0];
     const baselineId = baseline
@@ -988,11 +1017,11 @@ export function loadFlows(): FlowsPayload {
       test_path: specRef?.path ?? null,
       decision: publicDecision,
       covered: Boolean(specRef) || publicDecision !== null,
-      route_key: routeKey(c.persona, steps),
+      route_key: currentRouteKey,
       status_signature: outcome,
       lifecycle: lifecycleOf(publicDecision, Boolean(specRef)),
       conflicts_with_approved: conflicts,
-      conflict_signatures: conflicts ? [sig] : [],
+      conflict_signatures: conflicts && baseline ? [baseline.flow_signature] : [],
       repaired_by_agent: specRef?.repairedByAgent ?? false,
       repair_attempts: repair?.result === "repaired" ? repair.attempts : null,
       spec_hash: specRef?.specHash ?? null,

@@ -777,7 +777,7 @@ function PriorDecisions({ prior }: { prior: PriorDecision[] }) {
     <div className={`prior-decisions ${open ? "open" : ""}`}>
       <button type="button" className="prior-toggle" onClick={() => setOpen((v) => !v)}>
         <History size={14} aria-hidden="true" />
-        <span>Resolved history ({prior.length})</span>
+        <span>Other resolved history ({prior.length})</span>
         <span className="how-caret">{open ? "▲" : "▼"}</span>
       </button>
       {open ? (
@@ -805,6 +805,72 @@ function PriorDecisions({ prior }: { prior: PriorDecision[] }) {
   );
 }
 
+function formatDecisionDate(value?: string): string {
+  if (!value) return "Decision time unavailable";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(date);
+}
+
+function ApprovedHistoryDetail({ decision }: { decision: PriorDecision }) {
+  return (
+    <aside className="review-detail approved-history-detail">
+      <header>
+        <h2>{decision.flow_name}</h2>
+        <div className="detail-badges">
+          <LifecycleBadge lifecycle="approved" />
+          <span className="history-origin">
+            <History size={12} aria-hidden="true" /> history
+          </span>
+        </div>
+      </header>
+      <p className="review-detail-meta">
+        <span>{personaLabel(decision.persona)}</span>
+        <span>{decision.step_count} steps</span>
+        <span>{formatDecisionDate(decision.decided_at)}</span>
+      </p>
+
+      <section className="approved-history-callout" aria-label="Approved history status">
+        <CheckCircle2 size={18} aria-hidden="true" />
+        <div>
+          <strong>Approved baseline retained from review history</strong>
+          <p>
+            This decision is not present in the latest mine. It remains visible and auditable
+            independently of the current candidate set.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <h3>Approved outcome</h3>
+        <div className="version-row active">
+          <LifecycleBadge lifecycle="approved" />
+          <code>{decision.status_signature || "—"}</code>
+        </div>
+      </section>
+
+      <section>
+        <h3>Route &amp; artifact</h3>
+        <p className="review-detail-meta">
+          {decision.test_path ? (
+            <span className="test-path">
+              <FileCode2 size={13} aria-hidden="true" /> {decision.test_path}
+            </span>
+          ) : (
+            <span>Stored artifact path unavailable</span>
+          )}
+        </p>
+        {decision.route_key ? <code className="signature">{decision.route_key}</code> : null}
+        <code className="signature">{decision.signature}</code>
+      </section>
+    </aside>
+  );
+}
+
 export function ReviewView() {
   const { data, state, error, reload, decide, removeTest } = useFlows();
   const [persona, setPersona] = useState<PersonaFilter>("all");
@@ -825,6 +891,17 @@ export function ReviewView() {
 
   const flows = data?.flows ?? [];
   const prior = data?.prior_decisions ?? [];
+  const approvedHistory = useMemo(
+    () =>
+      prior
+        .filter((decision) => decision.status === "approved")
+        .sort((a, b) => (b.decided_at ?? "").localeCompare(a.decided_at ?? "")),
+    [prior]
+  );
+  const otherPrior = useMemo(
+    () => prior.filter((decision) => decision.status !== "approved"),
+    [prior]
+  );
 
   const visible = useMemo(() => {
     const filtered = flows.filter((flow) => {
@@ -863,8 +940,22 @@ export function ReviewView() {
     });
   }, [flows, persona, status, errorsOnly]);
 
+  const visibleApprovedHistory = useMemo(() => {
+    if (errorsOnly || (status !== "all" && status !== "approved")) return [];
+    return approvedHistory.filter(
+      (decision) => persona === "all" || decision.persona === persona
+    );
+  }, [approvedHistory, errorsOnly, persona, status]);
+
+  const explicitlySelectedFlow = visible.find((flow) => flow.review_id === selected) ?? null;
+  const explicitlySelectedApproval =
+    visibleApprovedHistory.find((decision) => decision.review_id === selected) ?? null;
   const selectedFlow =
-    visible.find((flow) => flow.review_id === selected) ?? visible[0] ?? null;
+    explicitlySelectedFlow ??
+    (explicitlySelectedApproval ? null : visible[0] ?? null);
+  const selectedApproval =
+    explicitlySelectedApproval ??
+    (selectedFlow ? null : visibleApprovedHistory[0] ?? null);
 
   async function handleDecide(flow: ReviewFlow, decision: Decision) {
     setPending(true);
@@ -934,7 +1025,7 @@ export function ReviewView() {
     );
   }
 
-  if (flows.length === 0) {
+  if (flows.length === 0 && approvedHistory.length === 0) {
     return (
       <div className="review-empty">
         <p>
@@ -942,7 +1033,7 @@ export function ReviewView() {
           <code>ingest:run</code> → <code>behavior:mine</code> →{" "}
           <code>script-generator:generate</code>), then refresh.
         </p>
-        <PriorDecisions prior={prior} />
+        <PriorDecisions prior={otherPrior} />
       </div>
     );
   }
@@ -954,15 +1045,24 @@ export function ReviewView() {
     "admin_operator",
   ];
   const c = data?.counts;
+  const approvedHistoryCount = approvedHistory.length;
   const statusOptions: Array<{ key: StatusFilter; label: string; n?: number }> = [
-    { key: "all", label: "All", n: c?.total },
+    {
+      key: "all",
+      label: "All",
+      n: c ? c.total + approvedHistoryCount : approvedHistoryCount,
+    },
     {
       key: "attention",
       label: "Needs attention",
       n: (c?.awaiting_review ?? 0) + (c?.conflicts ?? 0) + (c?.stale_approvals ?? 0),
     },
     { key: "awaiting_review", label: "Awaiting review", n: c?.awaiting_review },
-    { key: "approved", label: "Approved", n: c?.approved },
+    {
+      key: "approved",
+      label: "Approved",
+      n: c ? c.approved + approvedHistoryCount : approvedHistoryCount,
+    },
     { key: "discarded", label: "Discarded", n: c?.discarded },
   ];
 
@@ -1010,6 +1110,9 @@ export function ReviewView() {
             <span>
               {c.total} active scenarios · {c.awaiting_review} awaiting review ·{" "}
               {c.discovered} pending generation · {c.with_test} with drafts · {c.conflicts} conflicts
+              {approvedHistoryCount > 0
+                ? ` · ${approvedHistoryCount} approved in history`
+                : ""}
             </span>
           ) : null}
           <button type="button" onClick={reload} title="Reload flows">
@@ -1066,11 +1169,42 @@ export function ReviewView() {
                 </button>
               </li>
             ))}
-            {visible.length === 0 ? (
+            {visibleApprovedHistory.map((decision) => (
+              <li key={`history-${decision.review_id}`}>
+                <button
+                  type="button"
+                  className={`review-row approved-history-row ${
+                    selectedApproval?.review_id === decision.review_id ? "selected" : ""
+                  }`}
+                  onClick={() => setSelected(decision.review_id)}
+                  aria-label={`${decision.flow_name}, approved history, not present in latest mine`}
+                >
+                  <span className="review-row-name">{decision.flow_name}</span>
+                  <span className="review-row-meta">
+                    <span className={`persona-tag ${decision.persona}`}>
+                      {personaLabel(decision.persona)}
+                    </span>
+                    <span className="muted">{decision.step_count} steps</span>
+                    <span className="muted">expected {decision.status_signature || "—"}</span>
+                    {decision.test_path ? (
+                      <span className="muted">
+                        <FileCode2 size={12} aria-hidden="true" /> test
+                      </span>
+                    ) : null}
+                    <span className="history-origin">
+                      <History size={12} aria-hidden="true" /> approved history
+                    </span>
+                    <span className="muted">not in latest mine</span>
+                    <LifecycleBadge lifecycle="approved" />
+                  </span>
+                </button>
+              </li>
+            ))}
+            {visible.length === 0 && visibleApprovedHistory.length === 0 ? (
               <li className="muted review-list-empty">No flows match this filter.</li>
             ) : null}
           </ul>
-          <PriorDecisions prior={prior} />
+          <PriorDecisions prior={otherPrior} />
         </div>
 
         {selectedFlow ? (
@@ -1094,6 +1228,8 @@ export function ReviewView() {
               repairTarget?.signature === selectedFlow.signature ? repairTarget.hash : null
             }
           />
+        ) : selectedApproval ? (
+          <ApprovedHistoryDetail decision={selectedApproval} />
         ) : null}
       </div>
 

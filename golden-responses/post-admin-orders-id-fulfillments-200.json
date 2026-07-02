@@ -3,62 +3,78 @@
   "expected_status": 200,
   "expected_schema": {
     "order": {
-      "billing_address": "ignored",
-      "canceled_at": "ignored",
+      "shipping_tax_total": "number",
+      "shipping_total": "number",
+      "total": "number",
+      "original_total": "number",
+      "status": "string",
+      "original_item_tax_total": "number",
+      "discount_total": "number",
+      "locale": "null",
+      "original_tax_total": "number",
       "created_at": "ignored",
-      "credit_line_subtotal": "ignored",
-      "credit_line_tax_total": "ignored",
-      "credit_line_total": "ignored",
-      "credit_lines": "ignored",
-      "currency_code": "ignored",
-      "custom_display_id": "ignored",
-      "customer": "ignored",
-      "customer_id": "ignored",
-      "discount_tax_total": "ignored",
-      "discount_total": "ignored",
-      "display_id": "ignored",
-      "email": "ignored",
-      "fulfillment_status": "ignored",
-      "fulfillments": "ignored",
-      "gift_card_tax_total": "ignored",
-      "gift_card_total": "ignored",
-      "id": "ignored",
-      "item_discount_total": "ignored",
-      "item_subtotal": "ignored",
-      "item_tax_total": "ignored",
-      "item_total": "ignored",
-      "items": "array",
-      "locale": "ignored",
-      "metadata": "ignored",
-      "original_item_subtotal": "ignored",
-      "original_item_tax_total": "ignored",
-      "original_item_total": "ignored",
-      "original_shipping_subtotal": "ignored",
-      "original_shipping_tax_total": "ignored",
-      "original_shipping_total": "ignored",
-      "original_subtotal": "ignored",
-      "original_tax_total": "ignored",
-      "original_total": "ignored",
-      "payment_collections": "ignored",
-      "payment_status": "ignored",
-      "region": "ignored",
-      "region_id": "ignored",
-      "sales_channel": "ignored",
-      "sales_channel_id": "ignored",
-      "shipping_address": "ignored",
-      "shipping_discount_total": "ignored",
-      "shipping_methods": "ignored",
-      "shipping_subtotal": "ignored",
-      "shipping_tax_total": "ignored",
-      "shipping_total": "ignored",
-      "status": "ignored",
-      "subtotal": "ignored",
-      "summary": "ignored",
-      "tax_total": "ignored",
-      "total": "ignored",
-      "transactions": "ignored",
+      "original_shipping_tax_total": "number",
+      "item_subtotal": "number",
+      "original_subtotal": "number",
       "updated_at": "ignored",
-      "version": "number"
+      "metadata": "ignored",
+      "item_tax_total": "number",
+      "original_item_total": "number",
+      "original_item_subtotal": "number",
+      "display_id": "number",
+      "discount_tax_total": "number",
+      "subtotal": "number",
+      "summary": {
+        "accounting_total": "number",
+        "transaction_total": "number",
+        "credit_line_total": "number",
+        "current_order_total": "number",
+        "original_order_total": "number",
+        "raw_transaction_total": {
+          "value": "string",
+          "precision": "number"
+        },
+        "raw_current_order_total": {
+          "value": "string",
+          "precision": "number"
+        },
+        "paid_total": "number",
+        "raw_accounting_total": {
+          "value": "string",
+          "precision": "number"
+        },
+        "raw_original_order_total": {
+          "value": "string",
+          "precision": "number"
+        },
+        "raw_refunded_total": {
+          "value": "string",
+          "precision": "number"
+        },
+        "raw_credit_line_total": {
+          "value": "string",
+          "precision": "number"
+        },
+        "raw_pending_difference": {
+          "value": "string",
+          "precision": "number"
+        },
+        "pending_difference": "number",
+        "refunded_total": "number",
+        "raw_paid_total": {
+          "value": "string",
+          "precision": "number"
+        }
+      },
+      "__truncated_keys": "number",
+      "custom_display_id": "null",
+      "version": "number",
+      "region_id": "string",
+      "shipping_subtotal": "number",
+      "item_total": "number",
+      "id": "ignored",
+      "tax_total": "number",
+      "original_shipping_subtotal": "number"
     }
   },
   "ignore_fields": [
@@ -73,181 +89,18 @@
     "trace_id",
     "session_id"
   ],
-  "schema_source": "openapi+observed",
-  "oas_operation_id": "PostOrdersIdFulfillments",
-  "oas_ref": "#/components/schemas/AdminOrderResponse",
-  "oas_version": "2.15.5",
-  "value_rules": [
-    {
-      "path": "order.customer.email",
-      "kind": "format",
-      "format": "email"
-    },
-    {
-      "path": "order.email",
-      "kind": "format",
-      "format": "email"
-    },
-    {
-      "path": "order.fulfillment_status",
-      "kind": "enum",
-      "values": [
-        "canceled",
-        "not_fulfilled",
-        "partially_fulfilled",
-        "fulfilled",
-        "partially_shipped",
-        "shipped",
-        "partially_delivered",
-        "delivered"
-      ]
-    },
-    {
-      "path": "order.fulfillments[].canceled_at",
-      "kind": "format",
-      "format": "date-time"
-    },
-    {
-      "path": "order.fulfillments[].delivered_at",
-      "kind": "format",
-      "format": "date-time"
-    },
-    {
-      "path": "order.fulfillments[].packed_at",
-      "kind": "format",
-      "format": "date-time"
-    },
-    {
-      "path": "order.fulfillments[].shipped_at",
-      "kind": "format",
-      "format": "date-time"
-    },
-    {
-      "path": "order.items[].product.status",
-      "kind": "enum",
-      "values": [
-        "draft",
-        "proposed",
-        "published",
-        "rejected"
-      ]
-    },
-    {
-      "path": "order.payment_collections[].completed_at",
-      "kind": "format",
-      "format": "date-time"
-    },
-    {
-      "path": "order.payment_collections[].payment_sessions[].authorized_at",
-      "kind": "format",
-      "format": "date-time"
-    },
-    {
-      "path": "order.payment_collections[].payment_sessions[].payment.canceled_at",
-      "kind": "format",
-      "format": "date-time"
-    },
-    {
-      "path": "order.payment_collections[].payment_sessions[].payment.captured_at",
-      "kind": "format",
-      "format": "date-time"
-    },
-    {
-      "path": "order.payment_collections[].payment_sessions[].status",
-      "kind": "enum",
-      "values": [
-        "authorized",
-        "captured",
-        "canceled",
-        "pending",
-        "requires_more",
-        "error"
-      ]
-    },
-    {
-      "path": "order.payment_collections[].payments[].canceled_at",
-      "kind": "format",
-      "format": "date-time"
-    },
-    {
-      "path": "order.payment_collections[].payments[].captured_at",
-      "kind": "format",
-      "format": "date-time"
-    },
-    {
-      "path": "order.payment_collections[].payments[].payment_session.authorized_at",
-      "kind": "format",
-      "format": "date-time"
-    },
-    {
-      "path": "order.payment_collections[].payments[].payment_session.payment.canceled_at",
-      "kind": "format",
-      "format": "date-time"
-    },
-    {
-      "path": "order.payment_collections[].payments[].payment_session.payment.captured_at",
-      "kind": "format",
-      "format": "date-time"
-    },
-    {
-      "path": "order.payment_collections[].payments[].payment_session.status",
-      "kind": "enum",
-      "values": [
-        "authorized",
-        "captured",
-        "canceled",
-        "pending",
-        "requires_more",
-        "error"
-      ]
-    },
-    {
-      "path": "order.payment_collections[].status",
-      "kind": "enum",
-      "values": [
-        "canceled",
-        "not_paid",
-        "awaiting",
-        "authorized",
-        "partially_authorized"
-      ]
-    },
-    {
-      "path": "order.payment_status",
-      "kind": "enum",
-      "values": [
-        "canceled",
-        "not_paid",
-        "awaiting",
-        "authorized",
-        "partially_authorized",
-        "captured",
-        "partially_captured",
-        "partially_refunded",
-        "refunded",
-        "requires_action"
-      ]
-    },
-    {
-      "path": "order.transactions[].reference",
-      "kind": "enum",
-      "values": [
-        "capture",
-        "refund"
-      ]
-    }
-  ],
-  "captured_at": "2026-06-27T21:08:25.096Z",
+  "schema_source": "observed",
+  "captured_at": "2026-07-02T23:00:12.078Z",
   "source_sessions": [
-    "sess-adminFulfill-0bbc76c3-6bd1-4c7b-924d-f837dbd76b72",
-    "sess-adminFulfill-0e850d94-b220-4006-89cc-5eb0564ac661",
-    "sess-adminFulfill-4eacf14b-662b-4a9a-9de1-05030c8da8c6",
-    "sess-adminFulfill-84369955-f48f-4dd4-a5e4-0f00c3fa4756",
-    "sess-adminFulfill-8b478a0c-1af5-4918-8026-a23e15b164ee",
-    "sess-adminFulfill-9de4bb87-7a49-4324-adcc-19ed0beb65d5",
-    "sess-adminFulfill-cec9218b-c8be-48d3-accc-914197942a67",
-    "sess-adminFulfill-cf56f4b3-1893-4c5b-9cf1-097864d1898b",
-    "sess-adminFulfill-f5486d7a-d86b-41f6-9158-68d3ddac07a9",
-    "sess-adminFulfill-f9c8e39f-b99f-4e61-9efa-c3d9874e858d"
+    "sess-adminFulfill-35adb09f-70ef-4a1e-a3bc-512964377cd1",
+    "sess-adminFulfill-3fee4226-69eb-4276-9e9d-0ef3fe042671",
+    "sess-adminFulfill-47a88c82-6c7c-43da-81de-f9d51e504213",
+    "sess-adminFulfill-68808090-4c17-410d-9a84-74d6107d6ead",
+    "sess-adminFulfill-6a405c5a-43a3-49ed-88ac-738265177247",
+    "sess-adminFulfill-95fa21d6-5d2a-4a94-b589-f22a0e1c9b52",
+    "sess-adminFulfill-d6afff82-625f-4eb3-8ef5-a758c73b944a",
+    "sess-adminFulfill-d7add26f-0db6-4e01-b14b-46c8ce45348a",
+    "sess-adminFulfill-ea0197f1-437c-433c-ba09-f02fdc9cf26c",
+    "sess-adminFulfill-fe245992-fa3a-401b-823f-fcb3d4fbb5d0"
   ]
 }

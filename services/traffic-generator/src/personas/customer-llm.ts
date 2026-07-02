@@ -12,7 +12,7 @@ import { generateNarrative } from "../llm/narrative.js";
  * with no prior knowledge, proving genuine discovery.
  *
  * To avoid holdout starvation, the core checkout backbone is GUARANTEED here;
- * the LLM narrative only varies the browsing/cart noise around it. Every call
+ * the LLM narrative only varies the browsing actions around it. Every call
  * to this function that reaches the network completes a real customer order.
  */
 export async function runCustomerCheckout(
@@ -42,13 +42,15 @@ export async function runCustomerCheckout(
   }
 
   // Guaranteed registered-customer checkout backbone.
-  await session.register();
-  const login = await session.login();
+  const login = await session.register();
   if (!login.ok || !session.token) {
     return { session, completed: false };
   }
   await session.viewProfile();
-  await session.createCart();
+  const cart = await session.createCart();
+  if (!cart.ok || !session.cartId) {
+    return { session, completed: false };
+  }
   await session.addItem();
   if (Math.random() < 0.5) {
     await session.addItem();

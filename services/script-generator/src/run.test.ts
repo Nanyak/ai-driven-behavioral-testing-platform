@@ -3,8 +3,8 @@
  * `npm run test:run`. Plain assertions, no framework — mirrors the repo style.
  *
  * Covers the two safety guarantees of the regression/conflict handling:
- *   1. approved specs and current undecided drafts are preserved across reruns,
- *      while stale pending and explicitly discarded/superseded versions retire;
+ *   1. approved specs and every undecided draft are preserved across reruns,
+ *      while explicitly discarded/superseded versions retire;
  *   2. the approved outcome is read from the HITL store so the loop can withhold a
  *      drifted candidate instead of codifying it.
  */
@@ -99,12 +99,10 @@ check("clean preserves the blessed oracle and pending draft", () => {
   writeFileSync(stale, spec(SIG_OTHER, "200,401"));
 
   const approved = new Map([[SIG_APPROVED, new Set(["200,200,200"])]]);
-  const currentId = `${SIG_OTHER}:200,401`;
   const preserved = cleanPersonaFolderPreservingApproved(
     personaDir,
     approved,
-    new Map(),
-    new Set([currentId])
+    new Map()
   );
 
   assert.equal(preserved, 2);
@@ -112,7 +110,7 @@ check("clean preserves the blessed oracle and pending draft", () => {
   assert.equal(existsSync(stale), true, "undecided draft survives until review");
 });
 
-check("clean removes an undecided draft absent from latest selected scenarios", () => {
+check("clean preserves an undecided draft absent from latest selected scenarios", () => {
   const dir = mkdtempSync(join(tmpdir(), "gen-"));
   const personaDir = join(dir, "customer");
   mkdirSync(join(personaDir, "failure-path"), { recursive: true });
@@ -122,11 +120,27 @@ check("clean removes an undecided draft absent from latest selected scenarios", 
   const preserved = cleanPersonaFolderPreservingApproved(
     personaDir,
     new Map(),
+    new Map()
+  );
+  assert.equal(preserved, 1);
+  assert.equal(existsSync(stale), true, "a later mine cannot silently discard pending work");
+});
+
+check("clean removes a draft only after explicit discard", () => {
+  const dir = mkdtempSync(join(tmpdir(), "gen-"));
+  const personaDir = join(dir, "customer");
+  mkdirSync(join(personaDir, "failure-path"), { recursive: true });
+  const draft = join(personaDir, "failure-path", "bbbbbbbbbbbb.spec.ts");
+  writeFileSync(draft, spec(SIG_OTHER, "200,401"));
+
+  const id = `${SIG_OTHER}:200,401`;
+  const preserved = cleanPersonaFolderPreservingApproved(
+    personaDir,
     new Map(),
-    new Set()
+    new Map([[id, "discarded"]])
   );
   assert.equal(preserved, 0);
-  assert.equal(existsSync(stale), false, "stale pending draft is reconciled away");
+  assert.equal(existsSync(draft), false, "explicit discard retires the exact draft");
 });
 
 // 3. RETIREMENT: once a DIFFERENT outcome is approved for the same journey, the

@@ -2,9 +2,9 @@
   "endpoint": "POST /store/carts/{id}/line-items",
   "expected_status": 400,
   "expected_schema": {
-    "type": "string",
+    "code": "string",
     "message": "string",
-    "code": "string"
+    "type": "string"
   },
   "ignore_fields": [
     "id",
@@ -19,14 +19,14 @@
     "session_id"
   ],
   "schema_source": "observed",
-  "captured_at": "2026-06-27T21:08:25.096Z",
+  "captured_at": "2026-07-02T23:00:12.078Z",
   "source_sessions": [
-    "sess-stockOutCheckout-0f4a6aaa-15a8-460b-932f-264af4d5a0b8",
-    "sess-stockOutCheckout-23cec665-cece-4822-a7cd-ce8f8636a942",
-    "sess-stockOutCheckout-3adde2d4-9004-4c82-b998-8601ebd35615",
-    "sess-stockOutCheckout-78e4f8ed-7274-4c65-bae3-cda7ef993159",
-    "sess-stockOutCheckout-cafe6c62-dc8a-4681-8a90-1e922de92735",
-    "sess-stockOutCheckout-d39d3276-e132-4e52-9af8-e35e69cf5e27",
-    "sess-stockOutCheckout-efd06ae5-1115-4371-a3e2-8cb38b95f5f1"
+    "sess-stockOutCheckout-0f3beb70-35df-44b7-b0f2-9dbdd36aae89",
+    "sess-stockOutCheckout-580be74e-d252-4b0c-9d18-a93b47c52f2d",
+    "sess-stockOutCheckout-66d5710e-cdba-431f-a2d8-30a90bcac464",
+    "sess-stockOutCheckout-9ca3de12-bbc0-4d58-83fb-6612135bf2a5",
+    "sess-stockOutCheckout-c9845807-8a21-4bc3-94ae-8a2d4091eddc",
+    "sess-stockOutCheckout-e3f06cb7-d7b3-4eac-8050-2c19168dda5c",
+    "sess-stockOutCheckout-e875a9f1-8bcf-47b6-b9c3-2310db2c5bac"
   ]
 }

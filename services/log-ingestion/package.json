@@ -6,6 +6,7 @@
   "description": "Data ingestion service: turns raw Elasticsearch logs into session-grouped behavioral sequences and candidate golden responses.",
   "scripts": {
     "ingest": "tsx src/run.ts",
+    "check:noise": "tsx checks/transport-noise.check.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

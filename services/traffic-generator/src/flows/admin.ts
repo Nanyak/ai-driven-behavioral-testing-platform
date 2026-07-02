@@ -1,14 +1,12 @@
 import { AdminSession } from "../api/admin-session.js";
 import type { MedusaClient } from "../http/client.js";
-import { maybeAbandon, runSteps, type NoiseConfig } from "../http/noise.js";
 import { chance } from "../util/random.js";
 
 /** The admin role is established naturally by the auth endpoint; no role header is sent. */
 export async function runAdminFlow(
   client: MedusaClient,
   email: string,
-  password: string,
-  noise: NoiseConfig
+  password: string
 ): Promise<AdminSession> {
   const session = new AdminSession(client, email, password);
 
@@ -26,12 +24,15 @@ export async function runAdminFlow(
   if (chance(0.5)) {
     operations.push(() => session.updateProduct());
   }
-  // createProduct returns a richer result; only its ApiResponse matters to the noise runner.
+  // createProduct returns a richer result; execute the request once like every
+  // other deliberate admin action in this demo flow.
   if (chance(0.4)) {
     operations.push(async () => (await session.createProduct()).res);
   }
 
-  await runSteps(maybeAbandon(operations, noise), noise);
+  for (const operation of operations) {
+    await operation();
+  }
 
   return session;
 }

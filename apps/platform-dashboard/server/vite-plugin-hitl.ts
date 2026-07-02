@@ -4,6 +4,7 @@ import {
   deleteTestFile,
   listReports,
   loadFlows,
+  matchesExactJourney,
   readDecisionHistory,
   readReportHtml,
   readReportHtmlById,
@@ -191,8 +192,10 @@ export function hitlApiPlugin(): Plugin {
             }
             const previousActive = [...readDecisionHistory().values()].filter(
               (decision) =>
-                (decision.flow_signature === signature.toLowerCase() ||
-                  Boolean(body.scenario_key && decision.scenario_key === body.scenario_key)) &&
+                matchesExactJourney(decision, {
+                  flow_signature: signature,
+                  route_key: body.route_key,
+                }) &&
                 decision.status === "approved" &&
                 decision.review_id !== body.review_id
             );

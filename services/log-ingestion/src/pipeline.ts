@@ -66,6 +66,8 @@ export function normalizeEndpoint(rawEndpoint: string): string {
 const DENY_EXACT = new Set<string>(["/", "/health", "/favicon.ico", "/robots.txt"]);
 const DENY_PREFIXES: string[] = ["/health", "/app", "/_next", "/assets", "/static"];
 const STATIC_ASSET_EXT = /\.(?:js|mjs|css|map|png|jpe?g|gif|svg|ico|woff2?|ttf|webp)$/i;
+const DASHBOARD_PROBE_SESSION_ID = "dashboard-status-session";
+const RETRY_WINDOW_MS = 1_000;
 
 // A path segment left by a FAILED client-side id interpolation — the storefront
 // built a URL like `/store/carts/${cart.id}` while `cart.id` was undefined (cart
@@ -102,6 +104,73 @@ export function isNoiseEndpoint(endpoint: string): boolean {
   return false;
 }
 
+/** Dashboard liveness/auth checks are instrumentation, not shopper behavior. */
+export function isDashboardProbe(doc: RawLogDoc): boolean {
+  return doc.session_id === DASHBOARD_PROBE_SESSION_ID;
+}
+
+/** A browser cache revalidation response is transport state, not API behavior. */
+function isCacheNoise(doc: RawLogDoc): boolean {
+  return doc.status === 304;
+}
+
+function requestFingerprint(doc: RawLogDoc): string {
+  return [
+    (doc.method ?? "GET").toUpperCase(),
+    doc.endpoint ?? "/",
+    JSON.stringify(doc.request_payload ?? null),
+  ].join("\n");
+}
+
+function millisecondsBetween(a: RawLogDoc, b: RawLogDoc): number {
+  return Date.parse(b.timestamp) - Date.parse(a.timestamp);
+}
+
+function isSuccessful(doc: RawLogDoc): boolean {
+  const status = doc.status ?? 0;
+  return status >= 200 && status < 300;
+}
+
+/**
+ * Remove cache revalidations and fold immediate repeat attempts of the exact
+ * same unsuccessful request into their final outcome. Successful repeated
+ * business actions (for example adding the same SKU twice) remain distinct.
+ */
+export function collapseTransportNoise(docs: RawLogDoc[]): {
+  docs: RawLogDoc[];
+  dropped: number;
+} {
+  const collapsed: RawLogDoc[] = [];
+  let dropped = 0;
+
+  for (const doc of docs) {
+    if (isCacheNoise(doc)) {
+      dropped++;
+      continue;
+    }
+
+    const previous = collapsed[collapsed.length - 1];
+    const elapsed = previous ? millisecondsBetween(previous, doc) : -1;
+    const repeatedRequest =
+      previous !== undefined &&
+      requestFingerprint(previous) === requestFingerprint(doc) &&
+      ((previous.request_id !== undefined &&
+        previous.request_id === doc.request_id) ||
+        (elapsed >= 0 && elapsed <= RETRY_WINDOW_MS));
+
+    if (repeatedRequest && (!isSuccessful(previous) || !isSuccessful(doc))) {
+      // Keep the terminal attempt so a failed-then-successful retry is mined as
+      // the user-visible success, not as two separate behavioral actions.
+      collapsed[collapsed.length - 1] = doc;
+      dropped++;
+      continue;
+    }
+    collapsed.push(doc);
+  }
+
+  return { docs: collapsed, dropped };
+}
+
 export interface SessionBucket {
   sessionId: string;
   docs: RawLogDoc[];
@@ -110,13 +179,19 @@ export interface SessionBucket {
 export interface GroupResult {
   buckets: SessionBucket[];
   droppedNoSession: number;
+  droppedDashboardProbe: number;
 }
 
 export function groupBySession(docs: RawLogDoc[]): GroupResult {
   const bySession = new Map<string, RawLogDoc[]>();
   let droppedNoSession = 0;
+  let droppedDashboardProbe = 0;
 
   for (const doc of docs) {
+    if (isDashboardProbe(doc)) {
+      droppedDashboardProbe++;
+      continue;
+    }
     const sessionId = doc.session_id;
     if (!sessionId) {
       droppedNoSession++;
@@ -136,7 +211,7 @@ export function groupBySession(docs: RawLogDoc[]): GroupResult {
     buckets.push({ sessionId, docs: sessionDocs });
   }
 
-  return { buckets, droppedNoSession };
+  return { buckets, droppedNoSession, droppedDashboardProbe };
 }
 
 // `role_observed` is VALIDATION GROUND TRUTH ONLY (never a classifier input).
@@ -618,6 +693,7 @@ function toStep(doc: RawLogDoc): FlowStep {
 export interface BuildResult {
   sessions: SessionFlow[];
   droppedSingleStep: number;
+  collapsedTransportNoise: number;
 }
 
 /**
@@ -628,12 +704,18 @@ export interface BuildResult {
 export function buildSessionFlows(buckets: SessionBucket[]): BuildResult {
   const sessions: SessionFlow[] = [];
   let droppedSingleStep = 0;
+  let collapsedTransportNoise = 0;
 
   for (const bucket of buckets) {
+    if (bucket.sessionId === DASHBOARD_PROBE_SESSION_ID) {
+      continue;
+    }
     const steps: FlowStep[] = [];
     const roles = new Set<ObservedRole>();
+    const sanitized = collapseTransportNoise(bucket.docs);
+    collapsedTransportNoise += sanitized.dropped;
 
-    for (const doc of bucket.docs) {
+    for (const doc of sanitized.docs) {
       if (isNoiseEndpoint(doc.endpoint ?? "/")) {
         continue;
       }
@@ -660,7 +742,7 @@ export function buildSessionFlows(buckets: SessionBucket[]): BuildResult {
     });
   }
 
-  return { sessions, droppedSingleStep };
+  return { sessions, droppedSingleStep, collapsedTransportNoise };
 }
 
 // OBSERVED HALF of the ADR 0001 intersection — snapshots schemas only, never
@@ -737,6 +819,9 @@ export function extractGoldenCandidates(
   const byKey = new Map<string, Accumulator>();
 
   for (const doc of docs) {
+    if (isDashboardProbe(doc) || isCacheNoise(doc)) {
+      continue;
+    }
     if (doc.response_body === undefined || doc.response_body === null) {
       continue;
     }

@@ -38,7 +38,10 @@ export async function runMultiItemFlow(
 
   await session.searchProducts(pickQuery());
   await session.viewProduct();
-  await session.createCart();
+  const cart = await session.createCart();
+  if (!cart.ok || !session.cartId) {
+    return session;
+  }
   await session.addItem();
 
   await session.filterProducts();

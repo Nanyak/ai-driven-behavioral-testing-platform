@@ -661,6 +661,16 @@ select:focus-visible {
   box-shadow: 0 0 0 1px var(--accent);
 }
 
+.review-row.approved-history-row {
+  background: var(--success-bg);
+  border-color: color-mix(in srgb, var(--success) 38%, var(--border));
+}
+
+.review-row.approved-history-row.selected {
+  border-color: var(--success);
+  box-shadow: 0 0 0 1px var(--success);
+}
+
 .review-row-name {
   font-weight: 600;
 }
@@ -758,6 +768,19 @@ select:focus-visible {
   background: var(--code-bg);
   color: var(--text-secondary);
   text-decoration: line-through;
+}
+
+.history-origin {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--success) 32%, var(--border));
+  border-radius: 999px;
+  color: var(--success);
+  display: inline-flex;
+  font-size: 11px;
+  gap: 4px;
+  padding: 2px 8px;
+  white-space: nowrap;
 }
 
 .version-history {
@@ -1180,6 +1203,29 @@ select:focus-visible {
   font-size: 12px;
   gap: 10px;
   margin: 8px 0 0;
+}
+
+.approved-history-detail {
+  border-color: color-mix(in srgb, var(--success) 38%, var(--border));
+}
+
+.approved-history-callout {
+  align-items: flex-start;
+  background: var(--success-bg);
+  border: 1px solid color-mix(in srgb, var(--success) 38%, var(--border));
+  border-radius: 8px;
+  color: var(--success);
+  display: flex;
+  gap: 9px;
+  margin-top: 14px;
+  padding: 10px 12px;
+}
+
+.approved-history-callout p {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 3px 0 0;
 }
 
 .review-steps {

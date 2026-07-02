@@ -33,6 +33,7 @@ export class StoreSession {
   providerId?: string;
   lastOrderId?: string;
   steps: StepResult[] = [];
+  private cartCreationFailed = false;
 
   constructor(public readonly client: MedusaClient) {}
 
@@ -57,7 +58,7 @@ export class StoreSession {
   }
 
   async ensureCart(): Promise<void> {
-    if (!this.cartId) {
+    if (!this.cartId && !this.cartCreationFailed) {
       await this.createCart();
     }
   }
@@ -107,6 +108,9 @@ export class StoreSession {
   }
 
   async register(): Promise<ApiResponse> {
+    // A registration token can authorize customer creation, but it is not a
+    // customer session token. Never expose/cache it as session auth.
+    this.token = undefined;
     this.email = newCustomerEmail();
     const authRes = await this.client.request("POST", "/auth/customer/emailpass/register", {
       body: { email: this.email, password: DEFAULT_PASSWORD },
@@ -115,23 +119,32 @@ export class StoreSession {
     if (!authRes.ok || !authRes.body?.token) {
       return authRes;
     }
-    this.token = authRes.body.token;
+    const registrationToken = authRes.body.token;
     const customerRes = await this.client.request("POST", "/store/customers", {
-      token: this.token,
+      token: registrationToken,
       body: { email: this.email, first_name: "Behavior", last_name: "Shopper" },
     });
-    return this.record("create_customer", "POST", "/store/customers", customerRes);
+    this.record("create_customer", "POST", "/store/customers", customerRes);
+    if (!customerRes.ok) {
+      return customerRes;
+    }
+
+    // Customer creation does not upgrade the registration JWT. Establish a
+    // fresh authenticated customer session immediately.
+    return this.login();
   }
 
   async login(): Promise<ApiResponse> {
     if (!this.email) {
-      await this.register();
+      return this.register();
     }
     const res = await this.client.request("POST", "/auth/customer/emailpass", {
       body: { email: this.email, password: DEFAULT_PASSWORD },
     });
     if (res.ok && res.body?.token) {
       this.token = res.body.token;
+    } else {
+      this.token = undefined;
     }
     return this.record("login", "POST", "/auth/customer/emailpass", res);
   }
@@ -157,6 +170,9 @@ export class StoreSession {
     });
     if (res.ok && res.body?.cart?.id) {
       this.cartId = res.body.cart.id;
+      this.cartCreationFailed = false;
+    } else {
+      this.cartCreationFailed = true;
     }
     return this.record("create_cart", "POST", "/store/carts", res);
   }

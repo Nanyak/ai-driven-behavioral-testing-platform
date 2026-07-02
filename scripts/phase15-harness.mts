@@ -141,13 +141,13 @@ const familyHistory = [...readDecisionHistory().values()].filter(
   (entry) => entry.flow_signature === SIG_D || entry.flow_signature === SIG_E
 );
 if (
-  familyHistory.some((entry) => entry.flow_signature === SIG_D && entry.status === "superseded") &&
+  familyHistory.some((entry) => entry.flow_signature === SIG_D && entry.status === "approved") &&
   familyHistory.some((entry) => entry.flow_signature === SIG_E && entry.status === "approved") &&
   new Set(familyHistory.map((entry) => entry.scenario_key)).size === 1
 ) {
-  ok("approving a replacement route supersedes the prior scenario-family baseline");
+  ok("related scenario-family routes remain independently approved");
 } else {
-  fail("scenario-family supersession", JSON.stringify(familyHistory).slice(0, 300));
+  fail("scenario-family isolation", JSON.stringify(familyHistory).slice(0, 300));
 }
 
 // [4] Skip gate reads both approved + discarded signatures back.

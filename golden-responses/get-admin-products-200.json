@@ -2,9 +2,9 @@
   "endpoint": "GET /admin/products",
   "expected_status": 200,
   "expected_schema": {
+    "offset": "number",
     "count": "number",
     "limit": "number",
-    "offset": "number",
     "products": "array"
   },
   "ignore_fields": [
@@ -19,17 +19,13 @@
     "trace_id",
     "session_id"
   ],
-  "schema_source": "openapi+observed",
-  "oas_operation_id": "GetProducts",
-  "oas_ref": null,
-  "oas_version": "2.15.5",
-  "value_rules": [],
-  "captured_at": "2026-06-27T21:08:25.096Z",
+  "schema_source": "observed",
+  "captured_at": "2026-07-02T23:00:12.078Z",
   "source_sessions": [
-    "sess-adminCatalog-0ea05f5d-b3bf-4bb1-b290-5c3b238b2bd3",
-    "sess-adminCatalog-15e13eef-5813-4a43-a493-6c6bfeef393c",
-    "sess-adminCatalog-2b3b05ce-46af-4b4f-aa7a-26c0653101c7",
-    "sess-adminCatalog-61a03261-0a77-4b25-95c0-cfb311757354",
-    "sess-adminCatalog-d62bfea1-d452-4fdd-8bc5-c23d670d5000"
+    "sess-adminCatalog-0d102910-1c40-4ccf-ab99-050b89b09c87",
+    "sess-adminCatalog-928c690c-35a5-4845-ad73-7c7b8cbf609e",
+    "sess-adminCatalog-b0285d22-ebd9-48fa-87ac-17db2a6cf5ce",
+    "sess-adminCatalog-d9f53cca-d0dc-401a-b268-9975ee1240c6",
+    "sess-adminCatalog-f108314b-8457-41fa-b56b-b47c539b71ba"
   ]
 }

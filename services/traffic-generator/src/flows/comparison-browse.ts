@@ -53,7 +53,10 @@ export async function runComparisonBrowseFlow(
   }
 
   if (session.token && chance(0.2)) {
-    await session.createCart();
+    const cart = await session.createCart();
+    if (!cart.ok || !session.cartId) {
+      return session;
+    }
     await session.addItem();
   }
 
