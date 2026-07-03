@@ -146,6 +146,10 @@ services:
       # RW (was :ro): the run writes Playwright results + reports, and the delete button
       # unlinks specs under generated-tests/.
       - ./generated-tests:/workspace/generated-tests
+      # assert-golden.ts resolves goldens at /workspace/golden-responses (../../ from
+      # generated-tests/_golden). Without this mount loadGoldens() sees no dir and every
+      # assertGolden() fails closed with "Missing golden schema".
+      - ./golden-responses:/workspace/golden-responses
       - ./reports:/workspace/reports
       - ./data:/workspace/data
       - platform_dashboard_node_modules:/workspace/apps/platform-dashboard/node_modules

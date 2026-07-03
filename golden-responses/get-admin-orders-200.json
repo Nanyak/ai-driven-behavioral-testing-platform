@@ -2,10 +2,10 @@
   "endpoint": "GET /admin/orders",
   "expected_status": 200,
   "expected_schema": {
-    "offset": "number",
     "count": "number",
-    "orders": "array",
-    "limit": "number"
+    "limit": "number",
+    "offset": "number",
+    "orders": "array"
   },
   "ignore_fields": [
     "id",
@@ -16,30 +16,159 @@
     "token",
     "cart_id",
     "order_id",
+    "shipping_address_id",
+    "billing_address_id",
     "trace_id",
     "session_id"
   ],
-  "schema_source": "observed",
-  "captured_at": "2026-07-02T23:00:12.078Z",
+  "schema_source": "openapi+observed",
+  "oas_operation_id": "GetOrders",
+  "oas_ref": null,
+  "oas_version": "2.15.5",
+  "value_rules": [
+    {
+      "path": "orders[].customer.email",
+      "kind": "format",
+      "format": "email"
+    },
+    {
+      "path": "orders[].email",
+      "kind": "format",
+      "format": "email"
+    },
+    {
+      "path": "orders[].fulfillment_status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "not_fulfilled",
+        "partially_fulfilled",
+        "fulfilled",
+        "partially_shipped",
+        "shipped",
+        "partially_delivered",
+        "delivered"
+      ]
+    },
+    {
+      "path": "orders[].fulfillments[].canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "orders[].fulfillments[].delivered_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "orders[].fulfillments[].packed_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "orders[].fulfillments[].shipped_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "orders[].items[].product.status",
+      "kind": "enum",
+      "values": [
+        "draft",
+        "proposed",
+        "published",
+        "rejected"
+      ]
+    },
+    {
+      "path": "orders[].payment_collections[].completed_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "orders[].payment_collections[].payment_sessions[].authorized_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "orders[].payment_collections[].payment_sessions[].status",
+      "kind": "enum",
+      "values": [
+        "authorized",
+        "captured",
+        "canceled",
+        "pending",
+        "requires_more",
+        "error"
+      ]
+    },
+    {
+      "path": "orders[].payment_collections[].payments[].canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "orders[].payment_collections[].payments[].captured_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "orders[].payment_collections[].status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "not_paid",
+        "awaiting",
+        "authorized",
+        "partially_authorized"
+      ]
+    },
+    {
+      "path": "orders[].payment_status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "not_paid",
+        "awaiting",
+        "authorized",
+        "partially_authorized",
+        "captured",
+        "partially_captured",
+        "partially_refunded",
+        "refunded",
+        "requires_action"
+      ]
+    },
+    {
+      "path": "orders[].transactions[].reference",
+      "kind": "enum",
+      "values": [
+        "capture",
+        "refund"
+      ]
+    }
+  ],
+  "captured_at": "2026-07-03T22:52:49.105Z",
   "source_sessions": [
-    "sess-adminCancel-524056e4-a68f-410f-b1de-6f83cd98a1c5",
-    "sess-adminCancel-6096ba6e-32e5-419d-a74d-56946fb51ba4",
-    "sess-adminCancel-aea062f4-c5a4-4afc-a200-b0999dfaab23",
-    "sess-adminCancel-bbabe0b3-7741-4302-b8e9-67bee941b08d",
-    "sess-adminCancel-fe88a154-f1d1-49fb-8e72-6c55b62af092",
-    "sess-adminCatalog-0d102910-1c40-4ccf-ab99-050b89b09c87",
-    "sess-adminCatalog-928c690c-35a5-4845-ad73-7c7b8cbf609e",
-    "sess-adminCatalog-b0285d22-ebd9-48fa-87ac-17db2a6cf5ce",
-    "sess-adminCatalog-d9f53cca-d0dc-401a-b268-9975ee1240c6",
-    "sess-adminFulfill-35adb09f-70ef-4a1e-a3bc-512964377cd1",
-    "sess-adminFulfill-3fee4226-69eb-4276-9e9d-0ef3fe042671",
-    "sess-adminFulfill-47a88c82-6c7c-43da-81de-f9d51e504213",
-    "sess-adminFulfill-68808090-4c17-410d-9a84-74d6107d6ead",
-    "sess-adminFulfill-6a405c5a-43a3-49ed-88ac-738265177247",
-    "sess-adminFulfill-95fa21d6-5d2a-4a94-b589-f22a0e1c9b52",
-    "sess-adminFulfill-d6afff82-625f-4eb3-8ef5-a758c73b944a",
-    "sess-adminFulfill-d7add26f-0db6-4e01-b14b-46c8ce45348a",
-    "sess-adminFulfill-ea0197f1-437c-433c-ba09-f02fdc9cf26c",
-    "sess-adminFulfill-fe245992-fa3a-401b-823f-fcb3d4fbb5d0"
+    "sess-adminCancel-050e5337-cd54-4370-9b15-80f29f36e331",
+    "sess-adminCancel-15225da3-c4a1-4b40-9175-677fc321d037",
+    "sess-adminCancel-16d6069f-eaf3-435c-b31b-cf6a6ca9d233",
+    "sess-adminCancel-9ab1981f-b532-4815-a0d3-0ce344c0f0df",
+    "sess-adminCancel-c30bb069-0482-4d6e-9fb8-2edea78b3c6e",
+    "sess-adminCatalog-0ec1e025-220f-4d34-91d3-58e8bfd018fa",
+    "sess-adminCatalog-1be9b3c8-f9f5-4d88-9d27-f00502802c77",
+    "sess-adminCatalog-1fea32ca-4952-4253-b84a-841dcf6fea5f",
+    "sess-adminCatalog-8e23e01b-9098-45b7-93d8-c269c205821e",
+    "sess-adminCatalog-f514ee89-8da7-4455-bc6b-59e34e2adc01",
+    "sess-adminFulfill-000227f6-c21a-4582-8d96-e0f92f58caae",
+    "sess-adminFulfill-15310be8-0297-4385-9f67-4e0ff0fcdac2",
+    "sess-adminFulfill-2ba7bd7a-06fb-4c80-8f21-0826dd190384",
+    "sess-adminFulfill-4674682f-24fb-4cf8-8d39-b7f63dee9ee3",
+    "sess-adminFulfill-80ec9114-9898-4d4a-9bf4-d0816ec8cd9f",
+    "sess-adminFulfill-83af9bf1-42f2-4369-9e89-84b81d91249c",
+    "sess-adminFulfill-a4c5c686-6bbe-4846-9dd1-b742966ea4ca",
+    "sess-adminFulfill-b1f59c77-c897-4ca1-b294-c75595f6d058",
+    "sess-adminFulfill-dde54d4f-0c57-4afc-a5bb-ce7840f3b790",
+    "sess-adminFulfill-f72219f4-89e4-4cfb-86f2-3e33652c8da7"
   ]
 }

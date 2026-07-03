@@ -3,18 +3,20 @@
   "expected_status": 200,
   "expected_schema": {
     "customer": {
-      "updated_at": "ignored",
-      "metadata": "ignored",
-      "company_name": "null",
+      "addresses": "array",
+      "company_name": "ignored",
+      "created_at": "ignored",
+      "default_billing_address_id": "ignored",
+      "default_shipping_address_id": "ignored",
       "deleted_at": "ignored",
       "email": "string",
-      "first_name": "string",
+      "first_name": "ignored",
+      "has_account": "ignored",
       "id": "ignored",
-      "created_at": "ignored",
-      "has_account": "boolean",
-      "last_name": "string",
-      "phone": "null",
-      "addresses": "array"
+      "last_name": "ignored",
+      "metadata": "ignored",
+      "phone": "ignored",
+      "updated_at": "ignored"
     }
   },
   "ignore_fields": [
@@ -26,24 +28,45 @@
     "token",
     "cart_id",
     "order_id",
+    "shipping_address_id",
+    "billing_address_id",
     "trace_id",
     "session_id"
   ],
-  "schema_source": "observed",
-  "captured_at": "2026-07-02T23:00:12.078Z",
+  "schema_source": "openapi+observed",
+  "oas_operation_id": "GetCustomersMe",
+  "oas_ref": "#/components/schemas/StoreCustomerResponse",
+  "oas_version": "2.15.5",
+  "value_rules": [
+    {
+      "path": "customer.email",
+      "kind": "format",
+      "format": "email"
+    }
+  ],
+  "captured_at": "2026-07-03T22:52:49.105Z",
   "source_sessions": [
-    "sess-newCheckout-0a39495e-a7ee-4f78-9936-1fe1d4fa1542",
-    "sess-newCheckout-16c06cf1-aa10-4a3b-89b8-6e76862977a3",
-    "sess-newCheckout-975360fd-eb9f-4993-94f3-6d8f44bad2f0",
-    "sess-newCheckout-9bc18100-46c1-4568-b264-8984cc753252",
-    "sess-newCheckout-a48eb5d3-8c90-4bfa-b010-febbbd297178",
-    "sess-newCheckout-ad5ecdf8-dcde-4c97-8208-d7b3bf9098d9",
-    "sess-profileMgmt-03b3575a-acf1-4e9a-88fc-d5630528bcb6",
-    "sess-profileMgmt-0a193995-8e2f-4e55-9b56-bbe5a59339ac",
-    "sess-profileMgmt-6de28284-e803-4b6b-80d8-b865cb7fe512",
-    "sess-profileMgmt-776159fe-e1c1-460c-b9da-46c9bd5f7e23",
-    "sess-profileMgmt-98130ff3-3833-4a66-9535-465e081c5fa7",
-    "sess-profileMgmt-b7e716dc-6cd7-4e88-8258-c1ed42ebd7f1",
-    "sess-profileMgmt-ce0aafcf-7e48-41ea-9088-a979bcf0565f"
+    "sess-newCheckout-16bcbf19-514f-4d22-adc8-122b717320bc",
+    "sess-newCheckout-2713b570-b32d-4e19-99aa-67b4d269b57a",
+    "sess-newCheckout-309dcdcc-7a7d-443d-989d-2b786c2b868f",
+    "sess-newCheckout-78f98bc5-71d2-4634-85cb-e1bfc56bddcb",
+    "sess-newCheckout-81ae2d30-2008-49fd-9d56-7fa313364345",
+    "sess-newCheckout-847a7205-e3ca-478a-812c-c0821d3e3ba3",
+    "sess-profileMgmt-679d068e-4f05-484e-9362-f0c57d77e9ff",
+    "sess-profileMgmt-6e721543-5ed9-44ca-9d48-1d773fbb1dc9",
+    "sess-profileMgmt-73a01ad8-9b6c-4501-841e-a6bc88480f33",
+    "sess-profileMgmt-77c6d3b7-f453-4622-981d-25516fcaa59d",
+    "sess-profileMgmt-821e492b-9962-42de-bc3b-5026c6a65bf1",
+    "sess-profileMgmt-e1d2bda8-6e39-4e2d-bf4e-5c1b7bd71b8f",
+    "sess-profileMgmt-fb8fce6b-46ec-498a-8598-5262a52e19ed",
+    "sess-signup-0b163807-cd49-4f0d-a536-6454f23ad037",
+    "sess-signup-22047bd2-1dc6-44fb-b117-171e752fb49c",
+    "sess-signup-34c02147-7fa9-4710-9f29-76a816a974da",
+    "sess-signup-872ee177-86f1-4e7b-8c6d-1452b823693e",
+    "sess-signup-9aff9f9e-3d83-4188-b4df-4d8f8edcfd7d",
+    "sess-signup-b0ff8872-6e30-494b-ad80-63782b3efacc",
+    "sess-signup-d05d9282-adb4-4881-96b4-5432b1d23407",
+    "sess-signup-d6fe5989-8e16-4f40-95eb-eb2c1ba5161d",
+    "sess-signup-e298b8c3-d519-486b-b3f1-1d3379e52951"
   ]
 }

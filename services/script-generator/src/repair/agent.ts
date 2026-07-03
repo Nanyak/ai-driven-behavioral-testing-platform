@@ -1,21 +1,3 @@
-/**
- * Agent invocation (plan §New module #4). Backed by the Claude Agent SDK
- * (`@anthropic-ai/claude-agent-sdk`) running in headless mode — it reuses the
- * locally installed-and-authenticated `claude` binary under the hood, so no
- * ANTHROPIC_API_KEY is required. CI can swap in a different backend by
- * implementing this same `RepairAgent` interface.
- *
- * Tools are disabled (`allowedTools: []`) and turns capped at 1 so the model
- * produces a single TEXT completion (the rewritten spec) rather than acting
- * agentically and editing files itself — we want a value we can run through the
- * oracle-guard before anything touches disk.
- *
- * Model: defaults to `claude-sonnet-4-6` (override with REPAIR_AGENT_MODEL or
- * per-call `opts.model`). Sonnet is the cost-effective default for this agentic
- * repair work — adaptive-thinking Opus is materially pricier, and triage/naming
- * already standardize on Sonnet 4.6. Bump it back up per-run if a hard, contended
- * flow needs the extra capability.
- */
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -31,23 +13,7 @@ export interface AgentOptions {
   model?: string;
   timeoutMs?: number;
   cwd?: string;
-  /**
-   * Allow READ-ONLY live API exploration: the agent may call `curl` (and only
-   * curl) so it can discover entity state — e.g. list orders and find one that is
-   * genuinely cancelable — before writing the arrange. `Bash(curl:*)` permits the
-   * curl command prefix only. Because shell redirection is still possible, each
-   * invocation runs in a disposable scratch directory. The returned spec remains
-   * oracle-guarded before the caller writes it.
-   */
   explore?: boolean;
-  /**
-   * Cap the agent's turn budget. Defaults to 1 (tool-less, single completion) or
-   * 16 (explore mode). With a live entity sample inlined into the prompt the agent
-   * should reason + emit in ~2 turns, so callers pass a small bound to stop the
-   * curl-paginate wandering that dominated cost (re-reading the full context every
-   * turn). A bound that's too low surfaces as `error_max_turns` rather than a bad
-   * spec, so the loop reverts safely.
-   */
   maxTurns?: number;
 }
 

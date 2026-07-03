@@ -14,19 +14,27 @@
     "token",
     "cart_id",
     "order_id",
+    "shipping_address_id",
+    "billing_address_id",
     "trace_id",
     "session_id"
   ],
   "schema_source": "observed",
-  "captured_at": "2026-07-02T23:00:12.078Z",
+  "captured_at": "2026-07-03T22:52:49.105Z",
   "source_sessions": [
-    "sess-checkoutAbandon-ef9fd521-bb6b-4c71-b728-231c448760b8",
-    "sess-multiItemCheckout-1ac77526-c332-4904-a247-c1fce58d2776",
-    "sess-multiItemCheckout-6d2226ce-7340-4f66-9001-3eba5d793e7e",
-    "sess-returningCheckout-0a89bc72-d43d-4111-ab9b-df3f8a1e481d",
-    "sess-returningCheckout-2abfef06-b6e3-4591-8985-31b29837400e",
-    "sess-returningCheckout-302ba305-010c-4182-aa6f-3bff87074f48",
-    "sess-returningCheckout-8c3411c2-07e8-46a7-b1ec-c0b5745bb0f1",
-    "sess-returningCheckout-a8836428-0f38-4e26-bdd6-c766dc866638"
+    "sess-cartAbandon-9575d941-ec5c-4cbd-b2aa-a1e6ddf530b0",
+    "sess-cartAbandon-9f001e94-df1d-4cd2-a2d3-666955b2ef09",
+    "sess-cartAbandon-f0f8a7ec-cb07-4729-96a9-89b95667f549",
+    "sess-checkoutAbandon-0092d176-bb37-4c47-81bd-af52c795345f",
+    "sess-checkoutAbandon-1de327bf-4684-4997-8866-6d9ffbbcec5d",
+    "sess-checkoutAbandon-2a09c466-1159-41b8-97e5-262a918d3884",
+    "sess-checkoutAbandon-6ce06929-ba89-48d5-a41d-e66d748e108e",
+    "sess-checkoutAbandon-b68c4b4b-3cf2-42ec-ac56-cbb8788a14fd",
+    "sess-multiItemCheckout-897828de-ffaa-451a-96f0-27a6a8689e84",
+    "sess-returningCheckout-28ef1426-9687-4c4b-ba0c-b721e99e0acb",
+    "sess-returningCheckout-69143685-46b9-45c4-8c40-9a772723718e",
+    "sess-returningCheckout-d6d5798c-955d-4921-9333-676557ac96fc",
+    "sess-returningCheckout-e46ee1ef-b075-4251-9820-36544badd5c0",
+    "sess-returningCheckout-ec3a3a6b-2d29-47c3-8230-998e6055ef1e"
   ]
 }

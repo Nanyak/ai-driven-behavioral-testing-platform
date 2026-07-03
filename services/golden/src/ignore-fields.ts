@@ -13,6 +13,11 @@ export const GLOBAL_IGNORE_FIELDS: readonly string[] = [
   "token",
   "cart_id",
   "order_id",
+  // Conditional FK ids: Medusa emits these only once an address is attached to a
+  // cart, so a single flat golden schema can't pin them (present in checkout
+  // flows, absent in address-less cart updates). Volatile ids like cart_id/order_id.
+  "shipping_address_id",
+  "billing_address_id",
   "trace_id",
   "session_id",
 ];

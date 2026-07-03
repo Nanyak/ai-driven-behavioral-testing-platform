@@ -442,8 +442,8 @@ check("typical optionals use masked presence without consuming masked values or 
   );
   assert.equal(
     body.fields.shipping_address.kind === "raw" ? body.fields.shipping_address.expr : "",
-    '{ "address_1": "1 Test Street", "city": "Test City", "country_code": "us" }',
-    "masked address presence selects the field while OAS and safe fixtures supply every value"
+    '{ "address_1": "1 Test Street", "city": "Test City", "country_code": scope.regionCountry }',
+    "masked address presence selects the field; country_code derives from the live region (regionCountry), other values from OAS/fixtures"
   );
   assert.equal(
     "access_token" in body.fields,

@@ -48,6 +48,8 @@
     "token",
     "cart_id",
     "order_id",
+    "shipping_address_id",
+    "billing_address_id",
     "trace_id",
     "session_id"
   ],
@@ -77,10 +79,10 @@
       ]
     }
   ],
-  "captured_at": "2026-07-02T23:00:12.078Z",
+  "captured_at": "2026-07-03T22:52:49.105Z",
   "source_sessions": [
-    "sess-adminCatalog-0d102910-1c40-4ccf-ab99-050b89b09c87",
-    "sess-adminCatalog-d9f53cca-d0dc-401a-b268-9975ee1240c6",
-    "sess-seed-admin-e4562877-93f8-4ff2-9ab5-9a809b8ec337"
+    "sess-adminCatalog-1be9b3c8-f9f5-4d88-9d27-f00502802c77",
+    "sess-adminCatalog-8e23e01b-9098-45b7-93d8-c269c205821e",
+    "sess-seed-admin-8e35f4f9-4fee-4b95-b682-8f5c6a2037c1"
   ]
 }

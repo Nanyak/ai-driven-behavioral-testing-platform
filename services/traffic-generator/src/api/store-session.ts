@@ -178,34 +178,6 @@ export class StoreSession {
   }
 
   /**
-   * Negative probe (false-red demo). Creates a cart carrying an order-level promo
-   * code that is never seeded -> 400 "The promotion code ... is invalid". Same
-   * endpoint as createCart (POST /store/carts), but the bad value rides the
-   * OPTIONAL `promo_codes` field.
-   *
-   * The script-generator has NO negativeInputBody template for POST /store/carts,
-   * so structural synth drops the optional `promo_codes` and emits `{ region_id }`.
-   * The emitted spec then creates the cart (200) while its mined oracle asserts
-   * 400 -> a genuine FALSE RED that a negativeInputBody template (or agent repair)
-   * would resolve. Mirrors the seeded `/store/carts/{id}` promo probe, one level up.
-   */
-  async createCartWithInvalidPromo(code: string): Promise<ApiResponse> {
-    if (!this.hasCustomerAuth()) {
-      return MISSING;
-    }
-
-    await this.ensureRegion();
-    const res = await this.client.request("POST", "/store/carts", {
-      body: this.regionId ? { region_id: this.regionId, promo_codes: [code] } : { promo_codes: [code] },
-      token: this.token,
-    });
-    if (res.ok && res.body?.cart?.id) {
-      this.cartId = res.body.cart.id;
-    }
-    return this.record("create_cart_invalid_promo", "POST", "/store/carts", res);
-  }
-
-  /**
    * With no args it picks a random in-stock variant; `variantId`/`quantity`
    * target a specific variant and amount — used by the stock-out arc to add
    * `stock + 1` of the low-stock variant (expecting a 400) and then a

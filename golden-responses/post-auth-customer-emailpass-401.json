@@ -14,15 +14,18 @@
     "token",
     "cart_id",
     "order_id",
+    "shipping_address_id",
+    "billing_address_id",
     "trace_id",
     "session_id"
   ],
   "schema_source": "observed",
-  "captured_at": "2026-07-02T23:00:12.078Z",
+  "captured_at": "2026-07-03T22:52:49.105Z",
   "source_sessions": [
-    "sess-edge-0787c36d-f9e7-4835-952e-b386eacb6400",
-    "sess-edge-816346a0-a2a7-4511-acdf-783a896d1fce",
-    "sess-edge-839067da-7e40-4864-98b5-aaa6d26028f3",
-    "sess-edge-92741015-d2b0-4760-b0b2-503e8b25ce67"
+    "sess-edge-0bba5a7b-5bcd-4a2f-a5bf-77e3775f33d5",
+    "sess-edge-58f9b6ba-ddd0-499c-80db-bfd23af880cd",
+    "sess-edge-94a0f603-4dbf-40a0-abf5-eebd4c6ccb83",
+    "sess-edge-aa9a95b0-2328-45c2-8164-c2e961df4dc2",
+    "sess-edge-d7a08420-3ec8-4dd1-b27b-ac39f884799f"
   ]
 }

@@ -758,6 +758,10 @@ const IGNORE_FIELDS = [
   "token",
   "cart_id",
   "order_id",
+  // Mirror of GLOBAL_IGNORE_FIELDS in services/golden/src/ignore-fields.ts —
+  // conditional address FK ids that a flat golden schema can't pin.
+  "shipping_address_id",
+  "billing_address_id",
   "trace_id",
   "session_id",
 ];

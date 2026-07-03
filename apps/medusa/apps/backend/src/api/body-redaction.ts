@@ -1,6 +1,11 @@
 const MAX_STRING_LENGTH = 500
 const MAX_ARRAY_ITEMS = 10
-const MAX_OBJECT_KEYS = 30
+// Large API objects (e.g. a fully-populated Medusa cart has ~48 keys) must be
+// logged in full: a truncated body poisons golden capture with a synthetic
+// `__truncated_keys` field that no real response ever returns, so every golden
+// built from it mismatches the live shape. Keep this above the widest response
+// object.
+const MAX_OBJECT_KEYS = 100
 const MAX_DEPTH = 4
 
 export const MASKED_VALUE = "[masked]"

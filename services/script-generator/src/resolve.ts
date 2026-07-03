@@ -186,6 +186,15 @@ function placeholderIdFor(varName: string): string {
   return `${varName}_unauthorized`;
 }
 
+// A NOT-FOUND (404) step's terminal id must name a resource that does not exist.
+// Resolving a real entity would 200 instead. Medusa looks up by id and 404s for
+// any absent id regardless of shape (verified: GET /store/products/does_not_exist
+// -> 404), mirroring the traffic generator's edge probe. Keep the `<var>_` prefix
+// so the emitted id reads as an intentional miss.
+function nonexistentIdFor(varName: string): string {
+  return `${varName}_does_not_exist`;
+}
+
 // Most scope variables resolve via a single GET; `cartId` is a short bootstrap
 // chain (`GET /store/regions` -> `POST /store/carts`) since a cart is a
 // runtime-created resource, never a literal/seeded id (CLAUDE.md §5).
@@ -209,6 +218,14 @@ function standaloneResolverFor(
   switch (varName) {
     case "regionId":
       return [{ bindTo: varName, method: "GET", endpoint: "/store/regions", extract: "regions[0].id" }];
+    case "regionCountry":
+      // An address `country_code` must name a country WITHIN the cart's region or
+      // the cart-update 400s ("Country with code ... is not within region ..."). The
+      // seed ships a single (European) region with no `us`, so a hardcoded country
+      // never matched. Bind the country from the SAME `regions[0]` the `regionId`
+      // resolver uses, so region and address country are always coherent regardless
+      // of which region/countries the backend lists.
+      return [{ bindTo: varName, method: "GET", endpoint: "/store/regions", extract: "regions[0].countries[0].iso_2" }];
     case "productId":
       // Admin and store both list products under a `products` envelope, but the
       // admin step carries an admin token (and the store list rejects it), so the
@@ -478,7 +495,8 @@ function safeStringPlaceholder(fieldName: string, format?: string): string {
   if (normalized === "last_name") return "Tester";
   if (normalized === "city") return "Test City";
   if (normalized === "postal_code" || normalized === "zip") return "00000";
-  if (normalized === "country_code") return "us";
+  // country_code is resolved from the live region via ID_FIELD_TO_SCOPE
+  // (regionCountry), never a hardcoded literal — see synthValueExpr.
   if (normalized === "province") return "Test Province";
   if (/address_(?:1|2)|address_line/.test(normalized)) return "1 Test Street";
   return `test-${fieldName}`;
@@ -671,6 +689,10 @@ const ID_FIELD_TO_SCOPE: Record<string, string> = {
   provider_id: "paymentProviderId",
   cart_id: "cartId",
   location_id: "stockLocationId",
+  // Not an id, but resolved the same way: an address country must be one of the
+  // cart region's countries, so derive it from the live region (see regionCountry
+  // in standaloneResolverFor) instead of a hardcoded literal.
+  country_code: "regionCountry",
 };
 
 /**
@@ -1091,6 +1113,26 @@ export function buildFlowPlan(
     for (let occurrence = 0; occurrence < paramNames.length; occurrence++) {
       const param = paramNames[occurrence];
       const varName = scopeVarForParam(param, step.endpoint, occurrence);
+      // A step whose own expected_status is 404 is a NOT-FOUND probe: its terminal
+      // resource must be absent. Bind a non-existent id for the LAST path param so
+      // the lookup 404s instead of resolving a real entity (which would 200).
+      // Earlier params (e.g. {cartId} in /carts/{cartId}/line-items/{id}) still
+      // resolve real, since the not-found is the leaf resource. Skip when a prior
+      // step already bound this var — the flow's own captured id wins.
+      const isTerminalParam = occurrence === paramNames.length - 1;
+      if (step.expected_status === 404 && isTerminalParam && !scope.has(varName)) {
+        resolveCalls.push({
+          bindTo: varName,
+          literal: nonexistentIdFor(varName),
+          method: "GET",
+          endpoint: "",
+          extract: "",
+          auth,
+        });
+        scope.add(varName);
+        pathParams.push({ param, varName });
+        continue;
+      }
       if (ensure(varName)) {
         pathParams.push({ param, varName });
       } else {

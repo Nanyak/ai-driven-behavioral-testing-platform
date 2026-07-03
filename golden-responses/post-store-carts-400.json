@@ -18,21 +18,35 @@
     "session_id"
   ],
   "schema_source": "observed",
-  "captured_at": "2026-07-02T23:00:12.078Z",
+  "captured_at": "2026-07-02T23:42:45.026Z",
   "source_sessions": [
     "sess-invalidCartCreate-07bfe377-1d3d-4acd-a68c-682285f7395f",
+    "sess-invalidCartCreate-0a995270-ba6d-4779-ac96-0fe3d29233db",
+    "sess-invalidCartCreate-1842cca9-a498-46f0-9b3a-a06809c142a9",
     "sess-invalidCartCreate-1b82da01-eec8-4b00-b04d-c468dd236635",
+    "sess-invalidCartCreate-22615d6f-0e35-45cf-845c-482c2bd58861",
+    "sess-invalidCartCreate-2792814a-44d7-4c67-ad65-c96cb9627c5c",
     "sess-invalidCartCreate-51849714-a49a-425a-8414-5d07de2c5c5c",
+    "sess-invalidCartCreate-558122fc-0cdb-4313-8703-c84adf3586c7",
     "sess-invalidCartCreate-5e6bf252-499d-4e9e-8438-a42281f5d257",
     "sess-invalidCartCreate-6351e23a-a063-4702-a48f-6b7e39388f28",
     "sess-invalidCartCreate-65b0ae1a-78e4-435c-b83a-3a09bcea5e6e",
     "sess-invalidCartCreate-756c5c93-a300-4748-a8d1-cb3387f186d5",
     "sess-invalidCartCreate-7619521c-2105-4e28-ad57-eeb81d2cf876",
     "sess-invalidCartCreate-7cb6028c-b609-4694-8bf4-5b7831b834b5",
+    "sess-invalidCartCreate-8be2ecd5-5021-4f0a-87da-12cfddaf6708",
     "sess-invalidCartCreate-96b143ee-ef8d-483b-b2f6-e582f9e84175",
+    "sess-invalidCartCreate-99311332-781d-4f6d-9c85-6d02c98e2a82",
+    "sess-invalidCartCreate-9a5e3219-05bd-42b4-9754-bfdfcb7449bd",
     "sess-invalidCartCreate-a6d74eab-c4c4-47a6-96ae-573102103c47",
     "sess-invalidCartCreate-b26ccdda-9197-4f2e-960b-e46efa94ca47",
+    "sess-invalidCartCreate-cece8180-e29e-402b-8837-6facd6073939",
+    "sess-invalidCartCreate-d9c705b1-5689-40a8-ad7a-dad9c2217fef",
     "sess-invalidCartCreate-dafb6c9d-6e82-42fc-b804-3b2388aecdba",
-    "sess-invalidCartCreate-f706783c-856b-4a8d-83e3-4a7cdd279dd8"
+    "sess-invalidCartCreate-db3ec548-6a06-4ccb-83e8-66b940515248",
+    "sess-invalidCartCreate-deb0df39-4605-43a8-acee-950f8419a457",
+    "sess-invalidCartCreate-f706783c-856b-4a8d-83e3-4a7cdd279dd8",
+    "sess-invalidCartCreate-f72991c7-c550-4251-9d5f-0cbd70a40d38",
+    "sess-invalidCartCreate-f8306271-68e9-40d5-ad56-578f8144062b"
   ]
 }

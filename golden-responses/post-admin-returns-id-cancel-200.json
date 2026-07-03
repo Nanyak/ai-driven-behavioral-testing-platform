@@ -1,7 +1,9 @@
 {
   "endpoint": "POST /admin/returns/{id}/cancel",
   "expected_status": 200,
-  "expected_schema": {},
+  "expected_schema": {
+    "return": "ignored"
+  },
   "ignore_fields": [
     "id",
     "created_at",
@@ -11,13 +13,36 @@
     "token",
     "cart_id",
     "order_id",
+    "shipping_address_id",
+    "billing_address_id",
     "trace_id",
     "session_id"
   ],
-  "schema_source": "observed",
-  "captured_at": "2026-07-02T23:00:12.078Z",
+  "schema_source": "openapi+observed",
+  "oas_operation_id": "PostReturnsIdCancel",
+  "oas_ref": "#/components/schemas/AdminReturnResponse",
+  "oas_version": "2.15.5",
+  "value_rules": [
+    {
+      "path": "return.canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "return.status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "requested",
+        "received",
+        "partially_received",
+        "open"
+      ]
+    }
+  ],
+  "captured_at": "2026-07-03T22:52:49.105Z",
   "source_sessions": [
-    "sess-adminReturnReject-5011b76f-ade5-41fd-9a25-b35ac8c11ca7",
-    "sess-adminReturnReject-9f6e9a28-b314-4582-a4cd-a54d3bd0b51a"
+    "sess-adminReturnReject-43a27568-8297-46ee-8415-66e91a12c2b4",
+    "sess-adminReturnReject-ba285fff-75a8-4870-9881-3074cf2d9e54"
   ]
 }

@@ -3,68 +3,80 @@
   "expected_status": 200,
   "expected_schema": {
     "order": {
-      "order_change": {
-        "internal_note": "null",
-        "return_id": "string",
-        "claim_id": "null",
-        "description": "null",
-        "exchange_id": "null",
-        "requested_by": "null",
-        "requested_at": "null",
-        "order": {
-          "id": "ignored"
-        },
-        "status": "string",
-        "version": "number",
-        "order_id": "ignored",
-        "change_type": "string",
-        "id": "ignored",
-        "carry_over_promotions": "null"
-      },
-      "is_draft_order": "boolean",
-      "status": "string",
-      "customer_id": "string",
-      "email": "string",
-      "locale": "null",
-      "canceled_at": "null",
-      "billing_address": {
-        "id": "ignored"
-      },
+      "billing_address": "ignored",
+      "billing_address_id": "ignored",
+      "canceled_at": "ignored",
       "created_at": "ignored",
-      "shipping_address_id": "string",
-      "no_notification": "boolean",
-      "updated_at": "ignored",
-      "metadata": "ignored",
-      "display_id": "number",
-      "shipping_address": {
-        "id": "ignored"
-      },
-      "deleted_at": "ignored",
+      "credit_line_total": "ignored",
+      "credit_lines": "ignored",
       "currency_code": "string",
-      "custom_display_id": "null",
-      "region_id": "string",
-      "version": "number",
+      "custom_display_id": "ignored",
+      "customer_id": "ignored",
+      "deleted_at": "ignored",
+      "discount_subtotal": "ignored",
+      "discount_tax_total": "ignored",
+      "discount_total": "ignored",
+      "display_id": "number",
+      "email": "ignored",
+      "gift_card_tax_total": "ignored",
+      "gift_card_total": "ignored",
       "id": "ignored",
-      "sales_channel_id": "string",
-      "billing_address_id": "string"
+      "is_draft_order": "ignored",
+      "item_discount_total": "ignored",
+      "item_subtotal": "ignored",
+      "item_tax_total": "ignored",
+      "item_total": "ignored",
+      "items": "ignored",
+      "locale": "ignored",
+      "metadata": "ignored",
+      "no_notification": "ignored",
+      "order_change": "ignored",
+      "original_item_subtotal": "ignored",
+      "original_item_tax_total": "ignored",
+      "original_item_total": "ignored",
+      "original_shipping_subtotal": "ignored",
+      "original_shipping_tax_total": "ignored",
+      "original_shipping_total": "ignored",
+      "original_subtotal": "ignored",
+      "original_tax_total": "ignored",
+      "original_total": "ignored",
+      "region_id": "ignored",
+      "sales_channel_id": "ignored",
+      "shipping_address": "ignored",
+      "shipping_address_id": "ignored",
+      "shipping_discount_total": "ignored",
+      "shipping_methods": "ignored",
+      "shipping_subtotal": "ignored",
+      "shipping_tax_total": "ignored",
+      "shipping_total": "ignored",
+      "status": "string",
+      "subtotal": "ignored",
+      "summary": "ignored",
+      "tax_total": "ignored",
+      "total": "ignored",
+      "transactions": "ignored",
+      "updated_at": "ignored",
+      "version": "number"
     },
     "return": {
-      "no_notification": "null",
-      "updated_at": "ignored",
-      "created_by": "string",
-      "metadata": "ignored",
-      "items": "array",
-      "location_id": "string",
-      "display_id": "number",
-      "refund_amount": "null",
-      "requested_at": "string",
-      "status": "string",
-      "received_at": "null",
-      "canceled_at": "null",
-      "order_id": "ignored",
+      "canceled_at": "ignored",
+      "claim_id": "ignored",
       "created_at": "ignored",
+      "created_by": "string",
+      "display_id": "number",
+      "exchange_id": "ignored",
       "id": "ignored",
-      "order_version": "number"
+      "items": "ignored",
+      "location_id": "ignored",
+      "metadata": "ignored",
+      "no_notification": "ignored",
+      "order_id": "ignored",
+      "order_version": "number",
+      "received_at": "ignored",
+      "refund_amount": "ignored",
+      "requested_at": "ignored",
+      "status": "ignored",
+      "updated_at": "ignored"
     }
   },
   "ignore_fields": [
@@ -76,16 +88,69 @@
     "token",
     "cart_id",
     "order_id",
+    "shipping_address_id",
+    "billing_address_id",
     "trace_id",
     "session_id"
   ],
-  "schema_source": "observed",
-  "captured_at": "2026-07-02T23:00:12.078Z",
+  "schema_source": "openapi+observed",
+  "oas_operation_id": "PostReturnsIdReceive",
+  "oas_ref": "#/components/schemas/AdminOrderReturnResponse",
+  "oas_version": "2.15.5",
+  "value_rules": [
+    {
+      "path": "order.canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "order.email",
+      "kind": "format",
+      "format": "email"
+    },
+    {
+      "path": "order.status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "requires_action",
+        "pending",
+        "completed",
+        "draft",
+        "archived"
+      ]
+    },
+    {
+      "path": "order.transactions[].reference",
+      "kind": "enum",
+      "values": [
+        "capture",
+        "refund"
+      ]
+    },
+    {
+      "path": "return.canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "return.status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "requested",
+        "received",
+        "partially_received",
+        "open"
+      ]
+    }
+  ],
+  "captured_at": "2026-07-03T22:52:49.105Z",
   "source_sessions": [
-    "sess-adminRefund-0686c193-20a7-4b55-a56e-6e64a9686e35",
-    "sess-adminRefund-45c9b4d4-4782-4928-8188-d283557915d1",
-    "sess-adminRefund-7ce5ce22-d71d-492a-9129-96c9d2272b4b",
-    "sess-adminRefund-b102c0a8-406b-45af-8d2c-eb6f02d00c16",
-    "sess-adminRefund-ba2559ee-911d-4cf7-9384-029570402041"
+    "sess-adminRefund-99b4beaf-6d4c-4cdf-9772-12f424141cfe",
+    "sess-adminRefund-b11a1f0b-4696-4ef0-ad6d-0bae10fd6b88",
+    "sess-adminRefund-ddd76de2-71d5-4a6e-9d13-5eea03b5a389",
+    "sess-adminRefund-f4c42b9f-7904-497e-abe9-afa3f76ccfeb",
+    "sess-adminRefund-fd5cdb45-1fc2-414d-aa84-5031ed0184a6"
   ]
 }

@@ -17,6 +17,8 @@
     "token",
     "cart_id",
     "order_id",
+    "shipping_address_id",
+    "billing_address_id",
     "trace_id",
     "session_id"
   ],
@@ -25,17 +27,17 @@
   "oas_ref": "#/components/schemas/AdminStockLocationListResponse",
   "oas_version": "2.15.5",
   "value_rules": [],
-  "captured_at": "2026-07-02T23:00:12.078Z",
+  "captured_at": "2026-07-03T22:52:49.105Z",
   "source_sessions": [
-    "sess-adminCatalog-0d102910-1c40-4ccf-ab99-050b89b09c87",
-    "sess-adminCatalog-d9f53cca-d0dc-401a-b268-9975ee1240c6",
-    "sess-adminRefund-0686c193-20a7-4b55-a56e-6e64a9686e35",
-    "sess-adminRefund-45c9b4d4-4782-4928-8188-d283557915d1",
-    "sess-adminRefund-7ce5ce22-d71d-492a-9129-96c9d2272b4b",
-    "sess-adminRefund-b102c0a8-406b-45af-8d2c-eb6f02d00c16",
-    "sess-adminRefund-ba2559ee-911d-4cf7-9384-029570402041",
-    "sess-adminReturnReject-5011b76f-ade5-41fd-9a25-b35ac8c11ca7",
-    "sess-adminReturnReject-9f6e9a28-b314-4582-a4cd-a54d3bd0b51a",
-    "sess-seed-admin-e4562877-93f8-4ff2-9ab5-9a809b8ec337"
+    "sess-adminCatalog-1be9b3c8-f9f5-4d88-9d27-f00502802c77",
+    "sess-adminCatalog-8e23e01b-9098-45b7-93d8-c269c205821e",
+    "sess-adminRefund-99b4beaf-6d4c-4cdf-9772-12f424141cfe",
+    "sess-adminRefund-b11a1f0b-4696-4ef0-ad6d-0bae10fd6b88",
+    "sess-adminRefund-ddd76de2-71d5-4a6e-9d13-5eea03b5a389",
+    "sess-adminRefund-f4c42b9f-7904-497e-abe9-afa3f76ccfeb",
+    "sess-adminRefund-fd5cdb45-1fc2-414d-aa84-5031ed0184a6",
+    "sess-adminReturnReject-43a27568-8297-46ee-8415-66e91a12c2b4",
+    "sess-adminReturnReject-ba285fff-75a8-4870-9881-3074cf2d9e54",
+    "sess-seed-admin-8e35f4f9-4fee-4b95-b682-8f5c6a2037c1"
   ]
 }

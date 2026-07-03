@@ -1,5 +1,5 @@
 {
-  "endpoint": "POST /admin/promotions",
+  "endpoint": "POST /store/carts/{id}/complete",
   "expected_status": 400,
   "expected_schema": {
     "message": "string",
@@ -22,6 +22,6 @@
   "schema_source": "observed",
   "captured_at": "2026-07-03T22:52:49.105Z",
   "source_sessions": [
-    "sess-seed-admin-8e35f4f9-4fee-4b95-b682-8f5c6a2037c1"
+    "sess-returningCheckout-b7db275f-3dac-44ea-b692-a9987f733d43"
   ]
 }

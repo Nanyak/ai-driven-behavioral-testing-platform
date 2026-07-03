@@ -1,5 +1,5 @@
 {
-  "endpoint": "POST /admin/promotions",
+  "endpoint": "GET /store/payment-providers",
   "expected_status": 400,
   "expected_schema": {
     "message": "string",
@@ -14,14 +14,10 @@
     "token",
     "cart_id",
     "order_id",
-    "shipping_address_id",
-    "billing_address_id",
     "trace_id",
     "session_id"
   ],
   "schema_source": "observed",
-  "captured_at": "2026-07-03T22:52:49.105Z",
-  "source_sessions": [
-    "sess-seed-admin-8e35f4f9-4fee-4b95-b682-8f5c6a2037c1"
-  ]
+  "captured_at": "2026-07-02T23:42:45.026Z",
+  "source_sessions": []
 }
