@@ -107,6 +107,8 @@ export interface PriorDecision {
   route_key: string;
   status_signature: string;
   step_count: number;
+  /** Steps reconstructed from route_key + status_signature (server-side). */
+  steps: FlowStep[];
   decided_at?: string;
   test_path: string | null;
 }
@@ -184,6 +186,23 @@ export async function postDecision(flow: ReviewFlow, status: Decision): Promise<
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(body.error ?? `/api/decisions returned ${response.status}`);
+  }
+}
+
+/**
+ * Delete an approved (or otherwise decided) flow entirely: the server removes the
+ * decision record from the store AND unlinks its generated spec. Distinct from
+ * deleteTest (draft file only) and from discarding (records a judgment, keeps history).
+ */
+export async function deleteDecision(reviewId: string): Promise<void> {
+  const response = await fetch("/api/decisions/delete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ review_id: reviewId }),
+  });
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? `/api/decisions/delete returned ${response.status}`);
   }
 }
 

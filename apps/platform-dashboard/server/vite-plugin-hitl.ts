@@ -1,6 +1,7 @@
 import type { Plugin } from "vite";
 import {
   artifactReview,
+  deleteDecision,
   deleteTestFile,
   listReports,
   loadFlows,
@@ -154,6 +155,41 @@ export function hitlApiPlugin(): Plugin {
         res.end(html);
       });
 
+      // Registered before /api/decisions because that prefix would otherwise
+      // shadow this more specific route (same pattern as /api/reports/view).
+      // Delete a decision (typically an approval) AND its generated spec — the
+      // "delete the approved flow" action. Distinct from /api/tests/delete (which
+      // removes only a draft file) and from discarding (which records a judgment).
+      server.middlewares.use("/api/decisions/delete", (req, res, next) => {
+        if (req.method !== "POST") {
+          next();
+          return;
+        }
+        void (async () => {
+          try {
+            const body = (await readBody(req)) as { review_id?: string };
+            if (typeof body.review_id !== "string" || body.review_id.trim().length === 0) {
+              sendJson(res, 400, { error: "review_id (string) is required" });
+              return;
+            }
+            const result = deleteDecision(body.review_id);
+            if (result.deleted) {
+              sendJson(res, 200, result);
+              return;
+            }
+            const status = result.reason === "not_found" ? 404 : 400;
+            sendJson(res, status, {
+              error:
+                result.reason === "not_found"
+                  ? "no decision found for this review_id (already deleted?)"
+                  : "review_id is invalid",
+            });
+          } catch (error) {
+            sendJson(res, 500, { error: error instanceof Error ? error.message : "delete failed" });
+          }
+        })();
+      });
+
       server.middlewares.use("/api/decisions", (req, res, next) => {
         if (req.method !== "POST") {
           next();
@@ -199,6 +235,20 @@ export function hitlApiPlugin(): Plugin {
                 decision.status === "approved" &&
                 decision.review_id !== body.review_id
             );
+            // A flow that overrides an approved baseline (same journey, different
+            // outcome) must never be skip-gated: doing so would permanently suppress
+            // future drift/regression detection against that baseline. Approve it to
+            // override, or delete the draft — but do not record a "skip" decision.
+            if (
+              status === "discarded" &&
+              previousActive.some((decision) => (decision.status_signature ?? "") !== outcome)
+            ) {
+              sendJson(res, 409, {
+                error:
+                  "Cannot skip a flow that overrides an approved baseline. Approve it to override the baseline, or delete the draft instead.",
+              });
+              return;
+            }
             const entry = upsertDecision({
               review_id: body.review_id,
               flow_signature: signature,
@@ -222,10 +272,11 @@ export function hitlApiPlugin(): Plugin {
                   deleteTestFile(previous.test_path);
                 }
               }
-            } else if (artifact?.test_path) {
-              // A rejected draft must not linger as an executable draft.
-              deleteTestFile(artifact.test_path);
             }
+            // "Skip" (discarded) records the skip-gate decision only — it does NOT
+            // delete the draft file. File removal is the separate "Delete test" action.
+            // The next generate reconciles a skipped draft (a discarded decision is not
+            // a pending draft, so cleanPersonaFolderPreservingApproved drops it).
             sendJson(res, 200, { entry });
           } catch (error) {
             sendJson(res, 500, { error: error instanceof Error ? error.message : "write failed" });

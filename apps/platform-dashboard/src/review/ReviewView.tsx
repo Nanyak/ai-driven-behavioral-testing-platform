@@ -76,10 +76,10 @@ const LIFECYCLE_META: Record<
     hint: "A human blessed this flow. It's kept and won't be re-mined as a new candidate.",
   },
   discarded: {
-    label: "Discarded",
+    label: "Skipped",
     icon: XCircle,
     cls: "discarded",
-    hint: "A human rejected this flow. It won't re-surface as a candidate on the next mine.",
+    hint: "Skip-gated by a human — it won't be mined again. The draft file is removed on the next generate (or via Delete test).",
   },
 };
 
@@ -108,9 +108,9 @@ function ConflictChip() {
   return (
     <span
       className="lifecycle-badge conflict"
-      title="Same journey as an approved flow but expects a different outcome — likely drift/regression."
+      title="Same journey as an approved flow with a new outcome. Approving it overrides (supersedes) the approved baseline."
     >
-      <AlertTriangle size={13} aria-hidden="true" /> conflicts
+      <History size={13} aria-hidden="true" /> overrides approved
     </span>
   );
 }
@@ -271,7 +271,13 @@ function shortDigest(value: string | null): string {
   return value ? `${value.slice(0, 12)}…${value.slice(-8)}` : "unavailable";
 }
 
-function ArtifactReview({ flow }: { flow: ReviewFlow }) {
+function ArtifactReview({
+  signature,
+  statusSignature,
+}: {
+  signature: string;
+  statusSignature: string;
+}) {
   const [open, setOpen] = useState(false);
   const [artifact, setArtifact] = useState<ArtifactReviewPayload | null>(null);
   const [loadState, setLoadState] = useState<"idle" | "loading" | "error" | "empty">("idle");
@@ -282,7 +288,7 @@ function ArtifactReview({ flow }: { flow: ReviewFlow }) {
     if (next && artifact === null && loadState === "idle") {
       setLoadState("loading");
       try {
-        const payload = await fetchArtifactReview(flow.signature, flow.status_signature);
+        const payload = await fetchArtifactReview(signature, statusSignature);
         if (payload) {
           setArtifact(payload);
           setLoadState("idle");
@@ -410,9 +416,9 @@ function HowItWorks() {
             <li>
               <strong>Approve</strong> = bind the exact spec and body-plan hashes as the runnable baseline.{" "}
               For an updated outcome, approval promotes the draft and marks the previous baseline
-              superseded. <strong>Discard</strong> rejects and removes only the draft. Both stop
-              the flow from re-surfacing as a new candidate on the next{" "}
-              <code>behavior:mine</code> (the skip gate).
+              superseded. <strong>Skip (don't mine again)</strong> records a skip-gate decision so
+              the flow won't re-surface as a candidate on the next <code>behavior:mine</code>; it
+              records a decision only. <strong>Delete test</strong> removes the draft file.
             </li>
             <li>
               If approved source changes later, its hash no longer matches and the runner quarantines
@@ -420,9 +426,10 @@ function HowItWorks() {
               target to exercise undecided specs.
             </li>
             <li>
-              <strong>Persona is derived from observed behavior</strong>, never declared. A{" "}
-              <em>conflict</em> flags a newly-scanned flow that takes the same journey as an
-              already-approved one but expects a different outcome — your drift/regression cue.
+              <strong>Persona is derived from observed behavior</strong>, never declared. When a
+              re-mined flow takes the same journey as an already-approved one but with a new
+              outcome, it is shown as that same flow marked <em>overrides approved</em> — not a
+              separate conflict. Approving it overrides (supersedes) the approved baseline.
             </li>
           </ul>
         </div>
@@ -439,7 +446,7 @@ function Legend() {
           <LifecycleBadge lifecycle={lc} />
         </span>
       ))}
-      <span className="legend-item" title="Contradicts an approved baseline.">
+      <span className="legend-item" title="Same journey as an approved flow, re-observed with a new outcome. Approving overrides the baseline.">
         <ConflictChip />
       </span>
     </div>
@@ -521,6 +528,7 @@ function DetailPanel({
   flow,
   onDecide,
   onDelete,
+  onDeleteApproved,
   onRepair,
   pending,
   repairStatus,
@@ -530,6 +538,7 @@ function DetailPanel({
   flow: ReviewFlow;
   onDecide: (status: Decision) => void;
   onDelete: () => void;
+  onDeleteApproved: () => void;
   onRepair: () => void;
   pending: boolean;
   repairStatus: JobStatus | null;
@@ -565,17 +574,31 @@ function DetailPanel({
       {flow.conflicts_with_approved ? (
         <div className="conflict-box">
           <p className="conflict-title">
-            <AlertTriangle size={15} aria-hidden="true" /> Contradicts an approved baseline
+            <History size={15} aria-hidden="true" /> Updates an approved baseline
           </p>
           <p>
-            This flow runs the same journey as a flow you already approved, but expects a
-            different outcome — likely drift or a regression. Expected statuses now:{" "}
-            <code>{flow.status_signature || "—"}</code>.
+            This is the same journey you already approved, re-observed with a new outcome
+            (expected statuses now <code>{flow.status_signature || "—"}</code>). The approved
+            baseline is kept and stays runnable.{" "}
+            {flow.body_plan_hash ? (
+              <>
+                <strong>Approve</strong> this to override it (the old version is superseded and its
+                spec removed). <strong>Skip</strong> keeps the approved baseline as-is and won't
+                mine this change again.
+              </>
+            ) : (
+              <>
+                This override can't be approved yet — its body-plan manifest is missing, so there's
+                no bound artifact to promote. <strong>Regenerate</strong> the test to enable Approve,
+                or <strong>Delete test</strong> to drop this draft. (Skip stays disabled — skip-gating
+                an override would suppress future drift detection against the baseline.)
+              </>
+            )}
           </p>
           <ul>
             {flow.conflict_baselines.map((base, i) => (
               <li key={`${base.flow_name}-${i}`}>
-                approved: <strong>{base.flow_name}</strong> expected{" "}
+                current baseline: <strong>{base.flow_name}</strong> expected{" "}
                 <code>{base.status_signature || "—"}</code>
               </li>
             ))}
@@ -698,7 +721,9 @@ function DetailPanel({
         <RepairRunStatus status={repairStatus} error={repairError} hash={repairHash} />
       ) : null}
       {flow.repaired_by_agent ? <RepairedDiff flow={flow} /> : null}
-      {flow.test_path ? <ArtifactReview flow={flow} /> : null}
+      {flow.test_path ? (
+        <ArtifactReview signature={flow.signature} statusSignature={flow.status_signature} />
+      ) : null}
 
       <footer className="review-actions">
         <button
@@ -719,10 +744,15 @@ function DetailPanel({
         <button
           type="button"
           className="discard"
-          disabled={pending || repairRunning}
+          disabled={pending || repairRunning || flow.conflicts_with_approved}
+          title={
+            flow.conflicts_with_approved
+              ? "Can't skip a flow that overrides an approved baseline — skip-gating it would suppress future conflicts against that baseline. Approve to override, or Delete test to drop this draft."
+              : "Skip-gate this flow so it is not mined again. Records a decision only; use Delete test to remove the draft file."
+          }
           onClick={() => onDecide("discarded")}
         >
-          <XCircle size={16} aria-hidden="true" /> Discard
+          <XCircle size={16} aria-hidden="true" /> Skip (don't mine again)
         </button>
         <button
           type="button"
@@ -744,25 +774,38 @@ function DetailPanel({
           )}{" "}
           {repairRunning ? "Repairing…" : "Repair this flow"}
         </button>
-        <button
-          type="button"
-          className="delete-test"
-          disabled={pending || repairRunning || !flow.test_path}
-          title={
-            flow.test_path
-              ? `Delete ${flow.test_path} from generated-tests/`
-              : "No generated test to delete"
-          }
-          onClick={onDelete}
-        >
-          <Trash2 size={16} aria-hidden="true" /> Delete test
-        </button>
+        {flow.lifecycle === "approved" ? (
+          <button
+            type="button"
+            className="delete-test"
+            disabled={pending || repairRunning}
+            title="Remove this approval and delete its spec — fully retire the approved flow"
+            onClick={onDeleteApproved}
+          >
+            <Trash2 size={16} aria-hidden="true" /> Delete flow
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="delete-test"
+            disabled={pending || repairRunning || !flow.test_path}
+            title={
+              flow.test_path
+                ? `Delete ${flow.test_path} from generated-tests/`
+                : "No generated test to delete"
+            }
+            onClick={onDelete}
+          >
+            <Trash2 size={16} aria-hidden="true" /> Delete test
+          </button>
+        )}
       </footer>
       <p className="review-note">
         <strong>Approve</strong> stores the exact spec/body-plan hashes and admits that artifact to
-        normal runs; a prior baseline becomes superseded. <strong>Discard</strong> rejects and
-        removes the draft while leaving any active baseline intact.{" "}
-        <strong>Delete test</strong> removes the draft file but records no decision.
+        normal runs; a prior baseline becomes superseded. <strong>Skip (don't mine again)</strong>{" "}
+        records a skip-gate decision so this flow is not mined again — it leaves any active baseline
+        intact and does not delete the file. <strong>Delete test</strong> removes the draft file but
+        records no decision.
       </p>
     </aside>
   );
@@ -816,7 +859,15 @@ function formatDecisionDate(value?: string): string {
       }).format(date);
 }
 
-function ApprovedHistoryDetail({ decision }: { decision: PriorDecision }) {
+function ApprovedHistoryDetail({
+  decision,
+  onDelete,
+  pending,
+}: {
+  decision: PriorDecision;
+  onDelete: () => void;
+  pending: boolean;
+}) {
   return (
     <aside className="review-detail approved-history-detail">
       <header>
@@ -853,6 +904,20 @@ function ApprovedHistoryDetail({ decision }: { decision: PriorDecision }) {
         </div>
       </section>
 
+      {decision.steps.length > 0 ? (
+        <section>
+          <h3>Steps ({decision.steps.length})</h3>
+          <ol className="review-steps">
+            {decision.steps.map((step, index) => (
+              <li key={`${step.method}-${step.endpoint}-${index}`}>
+                <code>{step.method}</code> {step.endpoint}
+                <span className="step-status">→ {step.expected_status}</span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
+
       <section>
         <h3>Route &amp; artifact</h3>
         <p className="review-detail-meta">
@@ -867,12 +932,36 @@ function ApprovedHistoryDetail({ decision }: { decision: PriorDecision }) {
         {decision.route_key ? <code className="signature">{decision.route_key}</code> : null}
         <code className="signature">{decision.signature}</code>
       </section>
+
+      {decision.test_path ? (
+        <ArtifactReview
+          signature={decision.signature}
+          statusSignature={decision.status_signature}
+        />
+      ) : null}
+
+      <footer className="review-actions">
+        <button
+          type="button"
+          className="delete-test"
+          disabled={pending}
+          title="Remove this approval and delete its spec — fully retire the approved flow"
+          onClick={onDelete}
+        >
+          <Trash2 size={16} aria-hidden="true" /> Delete flow
+        </button>
+      </footer>
+      <p className="review-note">
+        <strong>Delete flow</strong> removes the approval record from the store and unlinks its
+        generated spec. This fully retires the approved flow; it can re-surface only if a future
+        mine rediscovers the same journey.
+      </p>
     </aside>
   );
 }
 
 export function ReviewView() {
-  const { data, state, error, reload, decide, removeTest } = useFlows();
+  const { data, state, error, reload, decide, removeTest, removeDecision } = useFlows();
   const [persona, setPersona] = useState<PersonaFilter>("all");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [errorsOnly, setErrorsOnly] = useState(false);
@@ -985,6 +1074,26 @@ export function ReviewView() {
     }
   }
 
+  async function handleDeleteApproved(reviewId: string, label: string) {
+    if (
+      !window.confirm(
+        `Delete the approved flow "${label}"? This removes the approval record and its spec file.`
+      )
+    ) {
+      return;
+    }
+    setPending(true);
+    setActionError(null);
+    try {
+      await removeDecision(reviewId);
+      setSelected(null);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to delete approved flow");
+    } finally {
+      setPending(false);
+    }
+  }
+
   async function handleRepair(flow: ReviewFlow) {
     if (!flow.test_path) return;
     setRepairConfirm({
@@ -1063,7 +1172,7 @@ export function ReviewView() {
       label: "Approved",
       n: c ? c.approved + approvedHistoryCount : approvedHistoryCount,
     },
-    { key: "discarded", label: "Discarded", n: c?.discarded },
+    { key: "discarded", label: "Skipped", n: c?.discarded },
   ];
 
   return (
@@ -1109,7 +1218,7 @@ export function ReviewView() {
           {c ? (
             <span>
               {c.total} active scenarios · {c.awaiting_review} awaiting review ·{" "}
-              {c.discovered} pending generation · {c.with_test} with drafts · {c.conflicts} conflicts
+              {c.discovered} pending generation · {c.with_test} with drafts · {c.conflicts} override approved
               {approvedHistoryCount > 0
                 ? ` · ${approvedHistoryCount} approved in history`
                 : ""}
@@ -1161,7 +1270,13 @@ export function ReviewView() {
                     {flow.active_baseline ? (
                       <span className="lifecycle-badge approved">approved baseline</span>
                     ) : null}
-                    <span className="muted">latest mine</span>
+                    <span className="muted" title={
+                      flow.seen_in_latest_run
+                        ? "Re-surfaced by the latest mine"
+                        : "Kept from a prior mine — not in the latest mine, but preserved for review"
+                    }>
+                      {flow.seen_in_latest_run ? "latest mine" : "kept (prior mine)"}
+                    </span>
                     {flow.artifact_matches_approval === false ? <ArtifactMismatchChip /> : null}
                     {flow.repaired_by_agent ? <AgentBadge attempts={flow.repair_attempts} /> : null}
                     <LifecycleBadge lifecycle={flow.lifecycle} />
@@ -1214,6 +1329,9 @@ export function ReviewView() {
             pending={pending}
             onDecide={(decision) => handleDecide(selectedFlow, decision)}
             onDelete={() => handleDelete(selectedFlow)}
+            onDeleteApproved={() =>
+              handleDeleteApproved(selectedFlow.review_id, selectedFlow.flow_name)
+            }
             onRepair={() => handleRepair(selectedFlow)}
             repairStatus={
               repairTarget?.signature === selectedFlow.signature &&
@@ -1229,7 +1347,13 @@ export function ReviewView() {
             }
           />
         ) : selectedApproval ? (
-          <ApprovedHistoryDetail decision={selectedApproval} />
+          <ApprovedHistoryDetail
+            decision={selectedApproval}
+            pending={pending}
+            onDelete={() =>
+              handleDeleteApproved(selectedApproval.review_id, selectedApproval.flow_name)
+            }
+          />
         ) : null}
       </div>
 

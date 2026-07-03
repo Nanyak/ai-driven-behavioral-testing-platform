@@ -255,21 +255,19 @@ function statusSignature(steps: FlowStep[]): string {
   return steps.map((s) => s.expected_status).join(",");
 }
 
-function inferDecisionScenarioKey(input: {
-  flow_signature: string;
-  flow_name?: string;
-  persona?: string;
-  route_key?: string;
-  status_signature?: string;
-}): string | undefined {
-  if (!input.persona || !input.route_key) return undefined;
-  const route = input.route_key.includes("|")
-    ? input.route_key.slice(input.route_key.indexOf("|") + 1)
-    : input.route_key;
-  const statuses = (input.status_signature ?? "")
-    .split(",")
-    .map((value) => Number(value));
-  const steps = route
+/**
+ * Reconstruct the ordered `FlowStep[]` from a persisted `route_key` (persona +
+ * "METHOD endpoint > …") and its parallel `status_signature` ("200,401,…"). Used
+ * to show steps for a decision whose flow has left the latest candidate set, and
+ * to feed scenario-key inference. Returns [] when the route is empty/malformed.
+ */
+export function stepsFromRoute(routeKey?: string, statusSignature?: string): FlowStep[] {
+  if (!routeKey) return [];
+  const route = routeKey.includes("|")
+    ? routeKey.slice(routeKey.indexOf("|") + 1)
+    : routeKey;
+  const statuses = (statusSignature ?? "").split(",").map((value) => Number(value));
+  return route
     .split(" > ")
     .map((token, index) => {
       const space = token.indexOf(" ");
@@ -281,6 +279,17 @@ function inferDecisionScenarioKey(input: {
       };
     })
     .filter((step): step is FlowStep => step !== null);
+}
+
+function inferDecisionScenarioKey(input: {
+  flow_signature: string;
+  flow_name?: string;
+  persona?: string;
+  route_key?: string;
+  status_signature?: string;
+}): string | undefined {
+  if (!input.persona || !input.route_key) return undefined;
+  const steps = stepsFromRoute(input.route_key, input.status_signature);
   if (steps.length === 0) return undefined;
   return selectBusinessScenarios([
     {
@@ -397,6 +406,9 @@ export interface PriorDecision {
   route_key: string;
   status_signature: string;
   step_count: number;
+  /** Ordered steps reconstructed from route_key + status_signature, so the detail
+   * panel can show the journey even after the flow leaves the latest mine. */
+  steps: FlowStep[];
   decided_at?: string;
   test_path: string | null;
 }
@@ -854,6 +866,41 @@ export function upsertDecision(input: {
   return entry;
 }
 
+/**
+ * Delete a decision (typically an approval) by its outcome-aware review id. Removes
+ * the record from the store AND unlinks its generated spec so the flow is fully
+ * retired — the "delete the approved flow" action. Path-scoped spec removal reuses
+ * deleteTestFile. Returns a tagged result the route maps to an HTTP status.
+ */
+export function deleteDecision(
+  reviewId: string
+):
+  | { deleted: true; spec_deleted: boolean; test_path: string | null }
+  | { deleted: false; reason: "invalid" | "not_found" } {
+  if (typeof reviewId !== "string" || reviewId.trim().length === 0) {
+    return { deleted: false, reason: "invalid" };
+  }
+  const decisions = readDecisionHistory();
+  const entry = decisions.get(reviewId);
+  if (!entry) {
+    return { deleted: false, reason: "not_found" };
+  }
+  decisions.delete(reviewId);
+  mkdirSync(dirname(HITL_STORE), { recursive: true });
+  writeFileSync(
+    HITL_STORE,
+    `${JSON.stringify({ entries: [...decisions.values()] }, null, 2)}\n`,
+    "utf8"
+  );
+  // Prefer the spec actually on disk for this review; fall back to the recorded path.
+  const testPath = specsByReview().get(reviewId)?.path ?? entry.test_path ?? null;
+  let specDeleted = false;
+  if (testPath) {
+    specDeleted = deleteTestFile(testPath).deleted;
+  }
+  return { deleted: true, spec_deleted: specDeleted, test_path: testPath };
+}
+
 interface RawCandidate {
   flow_name: string;
   persona: string;
@@ -876,10 +923,48 @@ interface CandidateObservation {
   seenInLatest: boolean;
 }
 
+/** Persona inferred from a generated spec's folder (guest/customer/admin). */
+function personaFromSpecPath(path: string): string {
+  if (path.includes("/guest/")) return "guest_shopper";
+  if (path.includes("/customer/")) return "registered_customer";
+  if (path.includes("/admin/")) return "admin_operator";
+  return "unknown";
+}
+
+/**
+ * Extract ordered steps from a manifest/spec body plan, unwrapping the repaired
+ * `{ baseline, agent_repair }` shape. Returns [] when no usable plan is present —
+ * the fallback source of steps for a kept draft whose candidate file has rotated away.
+ */
+function stepsFromBodyPlan(bodyPlan: unknown): FlowStep[] {
+  const plan =
+    bodyPlan && typeof bodyPlan === "object" && "baseline" in bodyPlan
+      ? (bodyPlan as { baseline?: unknown }).baseline
+      : bodyPlan;
+  const steps = (plan as { steps?: unknown } | null | undefined)?.steps;
+  if (!Array.isArray(steps)) return [];
+  return steps
+    .map((raw) => {
+      const step = raw as { method?: unknown; endpoint?: unknown; expected_status?: unknown };
+      if (typeof step.method !== "string" || typeof step.endpoint !== "string") return null;
+      return {
+        method: step.method,
+        endpoint: step.endpoint,
+        expected_status: typeof step.expected_status === "number" ? step.expected_status : 0,
+      };
+    })
+    .filter((step): step is FlowStep => step !== null);
+}
+
 /**
  * Load the active review queue. The newest mine is authoritative for undecided
  * work; older candidate files provide first-seen metadata only. Terminal
  * decisions remain separately available as resolved history.
+ *
+ * Undecided drafts that exist on disk but were NOT re-surfaced by the latest mine
+ * are KEPT and shown as `awaiting_review` "kept" flows (seen_in_latest_run=false),
+ * so a re-mine overrides matching journeys in place, appends new ones, and keeps
+ * dropped ones visible — never silently orphaning a generated spec.
  */
 export function loadFlows(): FlowsPayload {
   const files = candidateFiles();
@@ -1077,6 +1162,128 @@ export function loadFlows(): FlowsPayload {
     });
   }
 
+  // Kept drafts: undecided specs on disk that the latest mine did NOT re-surface.
+  // They remain reviewable (approve/discard/delete) instead of lingering invisibly.
+  // A representative or one of its variants already covers some review ids — skip those.
+  const coveredReviewIds = new Set<string>(activeReviewIds);
+  for (const flow of flows) {
+    for (const variant of flow.variants) coveredReviewIds.add(variant.review_id);
+  }
+  for (const [id, spec] of specs) {
+    if (coveredReviewIds.has(id)) continue;
+    const decision = decisions.get(id);
+    // A terminally-decided flow is surfaced elsewhere (approved history / prior
+    // decisions); discarded drafts are unlinked on decision. Only truly undecided
+    // drafts are "kept".
+    if (decision) continue;
+    const sep = id.indexOf(":");
+    const sig = sep >= 0 ? id.slice(0, sep) : id;
+    const observed = observations.get(id);
+    const cand = observed?.candidate;
+    const steps = cand?.steps ?? stepsFromBodyPlan(spec.bodyPlan);
+    const outcome = statusSignature(steps) || (sep >= 0 ? id.slice(sep + 1) : "");
+    const persona = cand?.persona ?? personaFromSpecPath(spec.path);
+    const naming = selectBusinessScenarios([
+      { signature: sig, flow_name: cand?.flow_name ?? "Kept draft", persona, steps },
+    ]).representatives[0];
+    const currentRouteKey = routeKey(persona, steps);
+    const baseline = [...decisions.values()]
+      .filter(
+        (entry) =>
+          entry.status === "approved" &&
+          matchesExactJourney(entry, { flow_signature: sig, route_key: currentRouteKey })
+      )
+      .sort((a, b) => (b.decided_at ?? "").localeCompare(a.decided_at ?? ""))[0];
+    const baselineId = baseline
+      ? baseline.review_id ?? reviewId(sig, baseline.status_signature ?? "")
+      : null;
+    const conflicts = Boolean(baseline && baseline.status_signature !== outcome);
+    const repair = repairs.get(sig);
+    coveredReviewIds.add(id);
+    activeReviewIds.add(id);
+    flows.push({
+      review_id: id,
+      signature: sig,
+      flow_name: naming?.scenario_name ?? cand?.flow_name ?? `Kept draft ${sig.slice(0, 8)}`,
+      persona,
+      attributes: {
+        requires_auth: Boolean(cand?.attributes?.requires_auth),
+        is_admin: cand?.attributes?.is_admin ?? persona === "admin_operator",
+        has_errors: cand?.attributes?.has_errors ?? spec.path.includes("failure-path"),
+      },
+      priority: cand?.priority ?? "medium",
+      support: cand?.support ?? 0,
+      score: cand?.score ?? 0,
+      step_count: steps.length,
+      steps,
+      assertion_fields: cand?.assertion_hints?.fields ?? [],
+      source_sessions: cand?.source_sessions ?? [],
+      test_path: spec.path,
+      decision: null,
+      covered: true,
+      route_key: currentRouteKey,
+      status_signature: outcome,
+      lifecycle: "awaiting_review",
+      conflicts_with_approved: conflicts,
+      conflict_signatures: conflicts && baseline ? [baseline.flow_signature] : [],
+      repaired_by_agent: spec.repairedByAgent,
+      repair_attempts: repair?.result === "repaired" ? repair.attempts : null,
+      spec_hash: spec.specHash,
+      body_plan_hash: spec.bodyPlanHash,
+      body_rule_sources: spec.bodyRuleSources,
+      artifact_matches_approval: null,
+      conflict_baselines:
+        conflicts && baseline
+          ? [{
+              flow_name: baseline.flow_name ?? (naming?.scenario_name ?? "approved"),
+              status_signature: baseline.status_signature ?? "",
+            }]
+          : [],
+      active_baseline:
+        baseline && baselineId && baselineId !== id
+          ? {
+              review_id: baselineId,
+              flow_name: baseline.flow_name ?? (naming?.scenario_name ?? "approved"),
+              status_signature: baseline.status_signature ?? "",
+              test_path: specs.get(baselineId)?.path ?? null,
+              decided_at: baseline.decided_at,
+            }
+          : null,
+      first_seen_run: observed?.firstSeenRun ?? null,
+      last_seen_run: observed?.lastSeenRun ?? null,
+      seen_in_latest_run: false,
+      version_count: 1,
+      versions: [
+        {
+          review_id: id,
+          status_signature: outcome,
+          lifecycle: "awaiting_review",
+          test_path: spec.path,
+          first_seen_run: observed?.firstSeenRun ?? null,
+          last_seen_run: observed?.lastSeenRun ?? null,
+        },
+      ],
+      family_key: naming?.family_key ?? id,
+      variant_count: 1,
+      variants: [
+        {
+          review_id: id,
+          signature: sig,
+          flow_name: naming?.scenario_name ?? cand?.flow_name ?? "Kept draft",
+          support: cand?.support ?? 0,
+          score: cand?.score ?? 0,
+          step_count: steps.length,
+          status_signature: outcome,
+          is_representative: true,
+        },
+      ],
+      not_generated_reason: null,
+    });
+  }
+
+  // The approved baseline being overridden STAYS visible as its own approved row —
+  // the conflicted flow is a separate row that overrides it only once approved. So
+  // we deliberately do NOT hide the baseline from approved history here.
   const priorDecisions: PriorDecision[] = [...decisions.entries()]
     .filter(([id]) => !activeReviewIds.has(id))
     .map(([id, decision]) => ({
@@ -1088,6 +1295,7 @@ export function loadFlows(): FlowsPayload {
       route_key: decision.route_key ?? "",
       status_signature: decision.status_signature ?? "",
       step_count: decision.step_count ?? 0,
+      steps: stepsFromRoute(decision.route_key, decision.status_signature),
       decided_at: decision.decided_at,
       test_path: specs.get(id)?.path ?? decision.test_path ?? null,
     }))
