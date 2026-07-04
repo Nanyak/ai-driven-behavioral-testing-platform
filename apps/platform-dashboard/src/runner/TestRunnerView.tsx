@@ -3,8 +3,21 @@ import { ArrowRight, Loader2, Play } from "lucide-react";
 import { RUN_TARGETS, type RunTarget } from "./runner.js";
 import { useTestRun } from "./useTestRun.js";
 
+// Display labels decouple the UI wording from the wire target keys the backend
+// expects (see server test-run isValidTarget). The `all` target admits only
+// hash-matching approved artifacts, so it reads as "approved" to operators.
+const TARGET_LABELS: Record<RunTarget, string> = {
+  all: "approved",
+  guest: "guest",
+  customer: "customer",
+  admin: "admin",
+  happy: "happy",
+  failure: "failure",
+  drafts: "drafts",
+};
+
 const TARGET_HINTS: Record<RunTarget, string> = {
-  all: "Every persona and path (npm run test:all)",
+  all: "Approved artifacts only — exact hash match (npm run test:all)",
   guest: "Guest shopper specs only",
   customer: "Registered customer specs only",
   admin: "Admin operator specs only",
@@ -34,7 +47,7 @@ export function TestRunnerView({ onViewReports }: { onViewReports: () => void })
             >
               {RUN_TARGETS.map((t) => (
                 <option key={t} value={t}>
-                  {t}
+                  {TARGET_LABELS[t]}
                 </option>
               ))}
             </select>
@@ -47,7 +60,8 @@ export function TestRunnerView({ onViewReports }: { onViewReports: () => void })
           >
             {isRunning ? (
               <>
-                <Loader2 size={15} className="spin" aria-hidden="true" /> Running {status?.target}…
+                <Loader2 size={15} className="spin" aria-hidden="true" /> Running{" "}
+                {status?.target ? TARGET_LABELS[status.target] : ""}…
               </>
             ) : (
               <>

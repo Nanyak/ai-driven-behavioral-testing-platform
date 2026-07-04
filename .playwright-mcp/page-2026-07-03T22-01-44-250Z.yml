@@ -1,0 +1,60 @@
+- generic [ref=f2e3]:
+  - navigation "Primary" [ref=f2e4]:
+    - generic [ref=f2e5]:
+      - img [ref=f2e6]
+      - strong [ref=f2e11]: Behavior Platform
+      - button "Collapse sidebar" [ref=f2e12] [cursor=pointer]:
+        - img [ref=f2e13]
+    - generic [ref=f2e16]:
+      - button "Overview" [ref=f2e17] [cursor=pointer]:
+        - img [ref=f2e18]
+        - generic [ref=f2e23]: Overview
+      - button "Flow Review" [ref=f2e24] [cursor=pointer]:
+        - img [ref=f2e25]
+        - generic [ref=f2e29]: Flow Review
+      - button "Pipeline" [ref=f2e30] [cursor=pointer]:
+        - img [ref=f2e31]
+        - generic [ref=f2e35]: Pipeline
+      - button "Test Runner" [ref=f2e36] [cursor=pointer]:
+        - img [ref=f2e37]
+        - generic [ref=f2e40]: Test Runner
+      - button "Reports" [ref=f2e41] [cursor=pointer]:
+        - img [ref=f2e42]
+        - generic [ref=f2e47]: Reports
+  - main [ref=f2e48]:
+    - generic [ref=f2e49]:
+      - generic [ref=f2e51]:
+        - paragraph [ref=f2e52]: Test Runner
+        - generic [ref=f2e53]: Last checked 5:01:30 AM
+      - button "Switch to dark theme" [ref=f2e55] [cursor=pointer]:
+        - img [ref=f2e56]
+        - generic [ref=f2e58]: Dark
+    - region "Test runner" [ref=f2e540]:
+      - generic [ref=f2e178]:
+        - img [ref=f2e541]
+        - heading "Test Runner" [level=1] [ref=f2e544]
+      - paragraph [ref=f2e182]:
+        - text: Execute the generated Playwright suite against the live SUT. Pick a suite — the whole run (
+        - code [ref=f2e545]: all
+        - text: ), a single persona, or a happy/failure slice — and watch the output. Finished runs are archived in the
+        - strong [ref=f2e546]: Reports
+        - text: tab.
+      - generic [ref=f2e548]:
+        - generic [ref=f2e549]:
+          - generic [ref=f2e550]:
+            - text: Suite
+            - combobox "Suite" [ref=f2e551]:
+              - option "approved" [selected]
+              - option "guest"
+              - option "customer"
+              - option "admin"
+              - option "happy"
+              - option "failure"
+              - option "drafts"
+          - button "Run tests" [ref=f2e552] [cursor=pointer]:
+            - img [ref=f2e553]
+            - text: Run tests
+        - paragraph [ref=f2e555]:
+          - text: Normal suites run exact hash-matching approved artifacts only. Choose
+          - code [ref=f2e556]: drafts
+          - text: to explicitly exercise quarantined, undecided specs.

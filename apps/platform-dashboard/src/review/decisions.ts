@@ -41,6 +41,8 @@ export interface ReviewFlow {
   artifact_matches_approval: boolean | null;
   active_baseline: {
     review_id: string;
+    /** The baseline's flow signature, so the UI can load its artifact for the request diff. */
+    signature: string;
     flow_name: string;
     status_signature: string;
     test_path: string | null;
@@ -165,8 +167,20 @@ export async function fetchArtifactReview(
 /**
  * Persist a decision. Sends the flow's identity metadata too so the store can
  * show review history and detect drift after the flow leaves the latest scan.
+ *
+ * Approval is non-destructive by default (approve-as-new coexists with any related
+ * baseline). Options select the two related-to-baseline behaviors:
+ *   - `supersedeReviewId` — opt-in "Replace <baseline>": the server supersedes AND
+ *     deletes that named baseline's spec.
+ *   - `distinctFromReviewId` — "Approve as new": records the pairing with that
+ *     baseline as DISTINCT scenarios, so future mines stop flagging it. (Ignored
+ *     when superseding.)
  */
-export async function postDecision(flow: ReviewFlow, status: Decision): Promise<void> {
+export async function postDecision(
+  flow: ReviewFlow,
+  status: Decision,
+  options: { supersedeReviewId?: string; distinctFromReviewId?: string } = {}
+): Promise<void> {
   const response = await fetch("/api/decisions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -181,6 +195,8 @@ export async function postDecision(flow: ReviewFlow, status: Decision): Promise<
       status_signature: flow.status_signature,
       step_count: flow.step_count,
       scenario_key: flow.family_key,
+      supersede_review_id: options.supersedeReviewId,
+      distinct_from_review_id: options.distinctFromReviewId,
     }),
   });
   if (!response.ok) {

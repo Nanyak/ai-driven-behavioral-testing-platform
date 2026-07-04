@@ -192,9 +192,10 @@ function App() {
               <h1>Test Runner</h1>
             </div>
             <p className="review-intro">
-              Execute the generated Playwright suite against the live SUT. Pick a suite — the whole
-              run (<code>all</code>), a single persona, or a happy/failure slice — and watch the
-              output. Finished runs are archived in the <strong>Reports</strong> tab.
+              Execute the generated Playwright suite against the live SUT. Pick a suite — the
+              approved artifacts (<code>approved</code>), a single persona, or a happy/failure slice
+              — and watch the output. Finished runs are archived in the <strong>Reports</strong>{" "}
+              tab.
             </p>
             <TestRunnerView onViewReports={() => setView("reports")} />
           </section>

@@ -3,9 +3,9 @@ import {
   artifactReview,
   deleteDecision,
   deleteTestFile,
+  dismissRelationship,
   listReports,
   loadFlows,
-  matchesExactJourney,
   readDecisionHistory,
   readReportHtml,
   readReportHtmlById,
@@ -208,6 +208,14 @@ export function hitlApiPlugin(): Plugin {
               status_signature?: string;
               step_count?: number;
               scenario_key?: string;
+              /** Opt-in "Replace <baseline>": the approved baseline review id to supersede + delete. */
+              supersede_review_id?: string;
+              /**
+               * "Approve as new": the related baseline review id this flow is being
+               * approved as DISTINCT from. Recorded as a distinct-pairing verdict so
+               * future mines stop flagging the pairing. Ignored when superseding.
+               */
+              distinct_from_review_id?: string;
             };
             const signature = body.flow_signature;
             const status = body.status as Decision | undefined;
@@ -226,29 +234,23 @@ export function hitlApiPlugin(): Plugin {
               });
               return;
             }
-            const previousActive = [...readDecisionHistory().values()].filter(
-              (decision) =>
-                matchesExactJourney(decision, {
-                  flow_signature: signature,
-                  route_key: body.route_key,
-                }) &&
-                decision.status === "approved" &&
-                decision.review_id !== body.review_id
-            );
-            // A flow that overrides an approved baseline (same journey, different
-            // outcome) must never be skip-gated: doing so would permanently suppress
-            // future drift/regression detection against that baseline. Approve it to
-            // override, or delete the draft — but do not record a "skip" decision.
-            if (
-              status === "discarded" &&
-              previousActive.some((decision) => (decision.status_signature ?? "") !== outcome)
-            ) {
-              sendJson(res, 409, {
-                error:
-                  "Cannot skip a flow that overrides an approved baseline. Approve it to override the baseline, or delete the draft instead.",
-              });
-              return;
-            }
+            // Supersession is now EXPLICIT and non-destructive-by-default. A plain
+            // Approve (approve-as-new) coexists with any related approved baseline —
+            // both stay approved, both keep their specs. Only "Replace <baseline>"
+            // names a baseline to retire, and it does so opt-in. Skipping a flow that
+            // relates to a baseline is allowed (the UI confirms intent); the baseline
+            // stays hash-pinned, so run-time regression detection is unaffected.
+            const supersedeId =
+              status === "approved" &&
+              typeof body.supersede_review_id === "string" &&
+              body.supersede_review_id.trim().length > 0
+                ? body.supersede_review_id.trim()
+                : null;
+            // Read the baseline's recorded spec BEFORE the upsert marks it superseded,
+            // so we can delete exactly that runnable source afterward.
+            const baselineToReplace = supersedeId
+              ? readDecisionHistory().get(supersedeId) ?? null
+              : null;
             const entry = upsertDecision({
               review_id: body.review_id,
               flow_signature: signature,
@@ -263,15 +265,31 @@ export function hitlApiPlugin(): Plugin {
               body_plan_hash: status === "approved" ? artifact?.body_plan_hash ?? undefined : undefined,
               body_rule_sources: status === "approved" ? artifact?.body_rule_sources : undefined,
               scenario_key: body.scenario_key,
+              supersede_review_ids: supersedeId ? [supersedeId] : undefined,
             });
-            if (status === "approved") {
-              // Promotion is deliberate: only after the new artifact is bound to
-              // the approval do we retire the superseded runnable source.
-              for (const previous of previousActive) {
-                if (previous.test_path && previous.test_path !== artifact?.test_path) {
-                  deleteTestFile(previous.test_path);
-                }
-              }
+            // Retire the explicitly-named baseline's runnable source only AFTER the new
+            // artifact is bound as the approval — never on a plain Approve.
+            if (
+              supersedeId &&
+              baselineToReplace?.test_path &&
+              baselineToReplace.test_path !== artifact?.test_path
+            ) {
+              deleteTestFile(baselineToReplace.test_path);
+            }
+            // "Approve as new" (not a Replace): record that this approved outcome and the
+            // named baseline are DISTINCT scenarios, so future mines stop flagging the
+            // pairing as related/override. This is the folded-in "distinct" verdict — no
+            // separate action. Touches no spec and no approval, only the sidecar store.
+            if (
+              status === "approved" &&
+              !supersedeId &&
+              typeof body.distinct_from_review_id === "string" &&
+              body.distinct_from_review_id.trim().length > 0
+            ) {
+              dismissRelationship({
+                review_id: entry.review_id ?? "",
+                baseline_review_id: body.distinct_from_review_id.trim(),
+              });
             }
             // "Skip" (discarded) records the skip-gate decision only — it does NOT
             // delete the draft file. File removal is the separate "Delete test" action.

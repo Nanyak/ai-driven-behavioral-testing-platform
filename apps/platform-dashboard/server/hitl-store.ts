@@ -57,6 +57,10 @@ const CANDIDATES_DIR = resolve(
 );
 const GENERATED_TESTS_DIR = resolve(REPO_ROOT, "generated-tests");
 const HITL_STORE = resolve(REPO_ROOT, "data", "hitl", "approvals.json");
+// Advisory "these two versions are distinct scenarios, not an override" records.
+// Deliberately its OWN file — coverage.ts parses approvals.json and must not see
+// these presentation-only records (see readDismissedRelationships below).
+const DISMISSED_STORE = resolve(REPO_ROOT, "data", "hitl", "dismissed-relationships.json");
 const ARTIFACT_MANIFEST = resolve(GENERATED_TESTS_DIR, ".artifacts.json");
 const REPORT_HTML = resolve(REPO_ROOT, "reports", "report.html");
 const REPORT_JSON = resolve(REPO_ROOT, "reports", "report.json");
@@ -356,6 +360,8 @@ export interface ReviewFlow {
   /** The currently runnable baseline for this journey, when it differs from this version. */
   active_baseline: {
     review_id: string;
+    /** The baseline's flow signature, so the UI can load its artifact for the request diff. */
+    signature: string;
     flow_name: string;
     status_signature: string;
     test_path: string | null;
@@ -787,8 +793,12 @@ export function readDecisions(): Map<string, DecisionEntry> {
 }
 
 /**
- * Upsert one decision keyed by outcome-aware review id. Approving a new outcome
- * supersedes the previous active baseline without deleting its audit record.
+ * Upsert one decision keyed by outcome-aware review id. Approval is NON-destructive
+ * and additive by default: it NEVER auto-supersedes a related approved baseline,
+ * because "same journey, different outcome" is ambiguous (genuine drift vs. two
+ * legitimately-distinct scenarios) and taking the irreversible path on an inference
+ * is wrong for a HITL tool. Supersession happens ONLY when the caller explicitly
+ * names baselines in `supersede_review_ids` (the opt-in "Replace <baseline>" action).
  * Writes the store in the `{ entries: [...] }` shape coverage.ts parses, creating
  * `data/hitl/` if needed.
  */
@@ -807,6 +817,8 @@ export function upsertDecision(input: {
   body_plan_hash?: string;
   body_rule_sources?: string[];
   scenario_key?: string;
+  /** Opt-in "Replace": approved baseline review id(s) to mark superseded in this write. */
+  supersede_review_ids?: string[];
 }): DecisionEntry {
   const sig = input.flow_signature.toLowerCase();
   const outcome = input.status_signature ?? "";
@@ -822,17 +834,14 @@ export function upsertDecision(input: {
     });
   const decisions = readDecisionHistory();
   const now = new Date().toISOString();
-  if (input.status === "approved") {
-    for (const [priorId, prior] of decisions) {
-      if (
-        priorId !== id &&
-        matchesExactJourney(prior, {
-          flow_signature: sig,
-          route_key: input.route_key,
-        }) &&
-        prior.status === "approved"
-      ) {
-        decisions.set(priorId, {
+  // Explicit, opt-in supersession ONLY. A plain Approve coexists with any related
+  // baseline; the operator must choose "Replace <baseline>", which names the exact
+  // review id(s) to retire here. We still keep the superseded record as audit history.
+  if (input.status === "approved" && input.supersede_review_ids?.length) {
+    for (const supersedeId of input.supersede_review_ids) {
+      const prior = decisions.get(supersedeId);
+      if (prior && supersedeId !== id && prior.status === "approved") {
+        decisions.set(supersedeId, {
           ...prior,
           status: "superseded",
           superseded_at: now,
@@ -899,6 +908,97 @@ export function deleteDecision(
     specDeleted = deleteTestFile(testPath).deleted;
   }
   return { deleted: true, spec_deleted: specDeleted, test_path: testPath };
+}
+
+/* ---- Dismissed override relationships (advisory, non-destructive) ---- */
+
+/**
+ * The dashboard flags a newly-mined flow as `conflicts_with_approved` when it runs
+ * the SAME journey as an approved baseline but expects a DIFFERENT outcome. That
+ * signal is ambiguous — it is EITHER genuine drift (same request, changed SUT
+ * behavior) OR two legitimately-distinct scenarios (different body/auth on the same
+ * endpoint sequence, e.g. a happy 200 and a failure 401). "Dismiss relationship"
+ * records that a specific pairing is the latter, so future mines stop flagging it.
+ *
+ * Kept in its OWN file, NOT in approvals.json: coverage.ts parses the approvals
+ * `{ entries: [...] }` shape for the skip gate and must never see these
+ * presentation-only records. A missing/malformed file is an empty set, never fatal.
+ */
+export interface DismissedRelationship {
+  /** Normalized (sorted) pair of outcome-aware review ids that are NOT the same test. */
+  review_ids: [string, string];
+  dismissed_at?: string;
+  dismissed_by?: string;
+}
+
+/** Order-independent key for a pair of review ids. */
+function relationshipKey(a: string, b: string): string {
+  return [a.toLowerCase(), b.toLowerCase()].sort().join("||");
+}
+
+/** Read dismissed pairings as a set of normalized pair keys. Empty when absent. */
+export function readDismissedRelationships(): Set<string> {
+  const set = new Set<string>();
+  if (!existsSync(DISMISSED_STORE)) return set;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(DISMISSED_STORE, "utf8"));
+  } catch {
+    return set; // malformed -> treated as empty, never fatal
+  }
+  const entries = Array.isArray((parsed as { dismissed?: unknown }).dismissed)
+    ? (parsed as { dismissed: DismissedRelationship[] }).dismissed
+    : [];
+  for (const entry of entries) {
+    const [a, b] = entry.review_ids ?? [];
+    if (typeof a === "string" && typeof b === "string") {
+      set.add(relationshipKey(a, b));
+    }
+  }
+  return set;
+}
+
+/**
+ * Persist that two review versions are distinct scenarios, not an override pair, so
+ * `loadFlows` stops flagging the pairing as `conflicts_with_approved`. Idempotent:
+ * re-dismissing the same pairing is a no-op. Touches NO spec and NO approval.
+ */
+export function dismissRelationship(input: {
+  review_id: string;
+  baseline_review_id: string;
+  dismissed_by?: string;
+}): { dismissed: true } | { dismissed: false; reason: "invalid" } {
+  const a = input.review_id?.trim();
+  const b = input.baseline_review_id?.trim();
+  if (!a || !b || a.toLowerCase() === b.toLowerCase()) {
+    return { dismissed: false, reason: "invalid" };
+  }
+  const records: DismissedRelationship[] = [];
+  if (existsSync(DISMISSED_STORE)) {
+    try {
+      const parsed = JSON.parse(readFileSync(DISMISSED_STORE, "utf8")) as {
+        dismissed?: DismissedRelationship[];
+      };
+      records.push(...(parsed.dismissed ?? []));
+    } catch {
+      /* malformed -> start fresh, never fatal */
+    }
+  }
+  const key = relationshipKey(a, b);
+  const exists = records.some(
+    (r) => relationshipKey(r.review_ids?.[0] ?? "", r.review_ids?.[1] ?? "") === key
+  );
+  if (!exists) {
+    const [x, y] = [a.toLowerCase(), b.toLowerCase()].sort();
+    records.push({
+      review_ids: [x, y],
+      dismissed_at: new Date().toISOString(),
+      dismissed_by: input.dismissed_by ?? "operator",
+    });
+    mkdirSync(dirname(DISMISSED_STORE), { recursive: true });
+    writeFileSync(DISMISSED_STORE, `${JSON.stringify({ dismissed: records }, null, 2)}\n`, "utf8");
+  }
+  return { dismissed: true };
 }
 
 interface RawCandidate {
@@ -1003,6 +1103,9 @@ export function loadFlows(): FlowsPayload {
   }
 
   const decisions = readDecisionHistory();
+  // Pairings the operator has marked "distinct scenarios, not an override" — used
+  // below to suppress the advisory conflict flag for exactly those pairs.
+  const dismissedRelationships = readDismissedRelationships();
   const approvedSignatures = new Set(
     [...decisions.values()]
       .filter((entry) => entry.status === "approved")
@@ -1048,7 +1151,10 @@ export function loadFlows(): FlowsPayload {
       : null;
     const baselineSpec = baselineId ? specs.get(baselineId) ?? null : null;
     const conflicts = Boolean(
-      baseline && baseline.status_signature !== outcome && publicDecision === null
+      baseline &&
+        baseline.status_signature !== outcome &&
+        publicDecision === null &&
+        !(baselineId && dismissedRelationships.has(relationshipKey(id, baselineId)))
     );
 
     const versionIds = new Set<string>([id]);
@@ -1132,6 +1238,7 @@ export function loadFlows(): FlowsPayload {
         baseline && baselineId && baselineId !== id
           ? {
               review_id: baselineId,
+              signature: baseline.flow_signature,
               flow_name: baseline.flow_name ?? family.scenario_name,
               status_signature: baseline.status_signature ?? "",
               test_path: baselineSpec?.path ?? null,
@@ -1197,7 +1304,11 @@ export function loadFlows(): FlowsPayload {
     const baselineId = baseline
       ? baseline.review_id ?? reviewId(sig, baseline.status_signature ?? "")
       : null;
-    const conflicts = Boolean(baseline && baseline.status_signature !== outcome);
+    const conflicts = Boolean(
+      baseline &&
+        baseline.status_signature !== outcome &&
+        !(baselineId && dismissedRelationships.has(relationshipKey(id, baselineId)))
+    );
     const repair = repairs.get(sig);
     coveredReviewIds.add(id);
     activeReviewIds.add(id);
@@ -1243,6 +1354,7 @@ export function loadFlows(): FlowsPayload {
         baseline && baselineId && baselineId !== id
           ? {
               review_id: baselineId,
+              signature: baseline.flow_signature,
               flow_name: baseline.flow_name ?? (naming?.scenario_name ?? "approved"),
               status_signature: baseline.status_signature ?? "",
               test_path: specs.get(baselineId)?.path ?? null,

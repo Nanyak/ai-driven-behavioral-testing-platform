@@ -1,0 +1,117 @@
+- generic [ref=e3]:
+  - navigation "Primary" [ref=e4]:
+    - generic [ref=e5]:
+      - img [ref=e6]
+      - strong [ref=e11]: Behavior Platform
+      - button "Collapse sidebar" [ref=e12] [cursor=pointer]:
+        - img [ref=e13]
+    - generic [ref=e16]:
+      - button "Overview" [ref=e17] [cursor=pointer]:
+        - img [ref=e18]
+        - generic [ref=e23]: Overview
+      - button "Flow Review" [ref=e24] [cursor=pointer]:
+        - img [ref=e25]
+        - generic [ref=e29]: Flow Review
+      - button "Pipeline" [ref=e30] [cursor=pointer]:
+        - img [ref=e31]
+        - generic [ref=e35]: Pipeline
+      - button "Test Runner" [ref=e36] [cursor=pointer]:
+        - img [ref=e37]
+        - generic [ref=e40]: Test Runner
+      - button "Reports" [ref=e41] [cursor=pointer]:
+        - img [ref=e42]
+        - generic [ref=e47]: Reports
+  - main [ref=e48]:
+    - generic [ref=e49]:
+      - generic [ref=e51]:
+        - paragraph [ref=e52]: Overview
+        - generic [ref=e53]: Last checked Not checked yet
+      - button "Switch to dark theme" [ref=e55] [cursor=pointer]:
+        - img [ref=e56]
+        - generic [ref=e58]: Dark
+    - generic [ref=e59]:
+      - region "System status" [ref=e60]:
+        - generic [ref=e61]:
+          - generic [ref=e62]:
+            - paragraph [ref=e63]: Medusa backend
+            - generic [ref=e64]: checking
+          - generic [ref=e65]: Checking now
+        - generic [ref=e66]:
+          - generic [ref=e67]:
+            - paragraph [ref=e68]: Store API
+            - generic [ref=e69]: checking
+          - generic [ref=e70]: Checking now
+        - generic [ref=e71]:
+          - generic [ref=e72]:
+            - paragraph [ref=e73]: Admin auth
+            - generic [ref=e74]: checking
+          - generic [ref=e75]: Checking now
+      - generic [ref=e76]:
+        - generic [ref=e77]:
+          - generic [ref=e78]:
+            - heading "Pipeline" [level=2] [ref=e79]
+            - button "Refresh" [ref=e80] [cursor=pointer]:
+              - img [ref=e81]
+              - generic [ref=e86]: Refresh
+          - generic [ref=e87]:
+            - button "— Flows discovered" [ref=e88] [cursor=pointer]:
+              - generic [ref=e89]: —
+              - generic [ref=e90]: Flows discovered
+            - button "— Awaiting review" [ref=e91] [cursor=pointer]:
+              - generic [ref=e92]: —
+              - generic [ref=e93]: Awaiting review
+            - button "— Approved" [ref=e94] [cursor=pointer]:
+              - generic [ref=e95]: —
+              - generic [ref=e96]: Approved
+            - button "— Tests generated" [ref=e97] [cursor=pointer]:
+              - generic [ref=e98]: —
+              - generic [ref=e99]: Tests generated
+          - paragraph [ref=e100]:
+            - text: No mined flows yet — run
+            - code [ref=e101]: behavior:mine
+            - text: then
+            - code [ref=e102]: script-generator
+            - text: .
+        - generic [ref=e104]:
+          - heading "Test trend" [level=2] [ref=e105]
+          - button "Reports" [ref=e106] [cursor=pointer]:
+            - img [ref=e107]
+            - generic [ref=e112]: Reports
+      - region "Local links" [ref=e116]:
+        - link "Medusa Admin" [ref=e117] [cursor=pointer]:
+          - /url: http://localhost:9000/app
+          - img [ref=e118]
+          - generic [ref=e121]: Medusa Admin
+          - img [ref=e122]
+        - link "Storefront" [ref=e125] [cursor=pointer]:
+          - /url: http://localhost:8000
+          - img [ref=e126]
+          - generic [ref=e131]: Storefront
+          - img [ref=e132]
+        - link "Kibana" [ref=e135] [cursor=pointer]:
+          - /url: http://localhost:5601
+          - img [ref=e136]
+          - generic [ref=e139]: Kibana
+          - img [ref=e140]
+      - region "Jump to sections" [ref=e143]:
+        - generic [ref=e144]:
+          - img [ref=e145]
+          - heading "Sections" [level=1] [ref=e149]
+        - generic [ref=e150]:
+          - button "Flow Review Review mined flows" [ref=e151] [cursor=pointer]:
+            - img [ref=e152]
+            - heading "Flow Review" [level=2] [ref=e156]
+            - paragraph [ref=e157]: Review mined flows
+          - button "Test Runner Run the suite against the SUT" [ref=e158] [cursor=pointer]:
+            - img [ref=e159]
+            - heading "Test Runner" [level=2] [ref=e162]
+            - paragraph [ref=e163]: Run the suite against the SUT
+          - button "Reports Archived run history" [ref=e164] [cursor=pointer]:
+            - img [ref=e165]
+            - heading "Reports" [level=2] [ref=e170]
+            - paragraph [ref=e171]: Archived run history
+          - link "Logs & Traffic Search events in Kibana" [ref=e172] [cursor=pointer]:
+            - /url: http://localhost:5601
+            - img [ref=e173]
+            - heading "Logs & Traffic" [level=2] [ref=e175]
+            - paragraph [ref=e176]: Search events in Kibana

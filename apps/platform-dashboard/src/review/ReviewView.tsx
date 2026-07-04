@@ -108,9 +108,9 @@ function ConflictChip() {
   return (
     <span
       className="lifecycle-badge conflict"
-      title="Same journey as an approved flow with a new outcome. Approving it overrides (supersedes) the approved baseline."
+      title="Same journey as an approved flow, re-observed with a different outcome. This is advisory — it could be genuine drift OR a distinct scenario. You choose: Replace (drift) or Approve as new (keep both). Nothing is deleted automatically."
     >
-      <History size={13} aria-hidden="true" /> overrides approved
+      <History size={13} aria-hidden="true" /> relates to baseline
     </span>
   );
 }
@@ -271,6 +271,122 @@ function shortDigest(value: string | null): string {
   return value ? `${value.slice(0, 12)}…${value.slice(-8)}` : "unavailable";
 }
 
+/** Unwrap the repaired `{ baseline, agent_repair }` body-plan shape to the plan itself. */
+function unwrapBodyPlan(plan: unknown): unknown {
+  return plan && typeof plan === "object" && "baseline" in plan
+    ? (plan as { baseline?: unknown }).baseline ?? plan
+    : plan;
+}
+
+/**
+ * Side-by-side request comparison for a flow that relates to an approved baseline.
+ * This is the crux of the advisory model: a shared journey with a different outcome
+ * is ambiguous, so we show the redacted body-plans of BOTH versions and let the human
+ * classify. Identical requests -> genuine drift (Replace the baseline). Different
+ * requests -> two distinct scenarios (Approve as new, or Dismiss the relationship).
+ */
+function RequestComparison({ flow }: { flow: ReviewFlow }) {
+  const baseline = flow.active_baseline;
+  const [open, setOpen] = useState(false);
+  const [loadState, setLoadState] = useState<"idle" | "loading" | "error" | "ready">("idle");
+  const [current, setCurrent] = useState<ArtifactReviewPayload | null>(null);
+  const [baselineArtifact, setBaselineArtifact] = useState<ArtifactReviewPayload | null>(null);
+
+  async function toggle() {
+    const next = !open;
+    setOpen(next);
+    if (next && loadState === "idle") {
+      setLoadState("loading");
+      try {
+        const [cur, base] = await Promise.all([
+          fetchArtifactReview(flow.signature, flow.status_signature),
+          baseline
+            ? fetchArtifactReview(baseline.signature, baseline.status_signature)
+            : Promise.resolve(null),
+        ]);
+        setCurrent(cur);
+        setBaselineArtifact(base);
+        setLoadState("ready");
+      } catch {
+        setLoadState("error");
+      }
+    }
+  }
+
+  const baseJson =
+    baselineArtifact && baselineArtifact.body_plan !== null
+      ? JSON.stringify(unwrapBodyPlan(baselineArtifact.body_plan), null, 2)
+      : null;
+  const curJson =
+    current && current.body_plan !== null
+      ? JSON.stringify(unwrapBodyPlan(current.body_plan), null, 2)
+      : null;
+  const haveBoth = baseJson !== null && curJson !== null;
+  const rendered = haveBoth ? collapseContext(lineDiff(baseJson, curJson)) : [];
+  const identical = haveBoth && rendered.every((line) => line.type === "ctx");
+
+  return (
+    <section className="artifact-review">
+      <button type="button" className="prior-toggle" onClick={() => void toggle()} aria-expanded={open}>
+        <ListTree size={14} aria-hidden="true" />
+        <span>Compare requests (drift vs. distinct scenario)</span>
+        <span className="how-caret">{open ? "▲" : "▼"}</span>
+      </button>
+      {open ? (
+        <div className="artifact-review-body">
+          {loadState === "loading" ? <p className="muted">Loading both request body plans…</p> : null}
+          {loadState === "error" ? (
+            <p className="review-action-error">Could not load one or both artifacts.</p>
+          ) : null}
+          {loadState === "ready" ? (
+            <>
+              <div className="artifact-integrity">
+                <span>
+                  baseline <strong>{baseline?.flow_name ?? "approved"}</strong> expected{" "}
+                  <code>{baseline?.status_signature || "—"}</code>
+                </span>
+                <span>
+                  this version expected <code>{flow.status_signature || "—"}</code>
+                </span>
+              </div>
+              {!haveBoth ? (
+                <p className="muted">
+                  A body plan is unavailable for one side, so a request diff can't be shown. Compare
+                  the two outcomes above, or open each version's executable artifact below.
+                </p>
+              ) : identical ? (
+                <p className="review-note">
+                  <strong>Requests are identical.</strong> Same request, different outcome — this
+                  looks like genuine <strong>drift</strong>. Use <strong>Replace</strong> to update
+                  the baseline to this outcome.
+                </p>
+              ) : (
+                <p className="review-note">
+                  <strong>Requests differ.</strong> Different request on the same endpoints — these
+                  look like two <strong>distinct scenarios</strong>. Use <strong>Approve as new</strong>{" "}
+                  to keep both; that also records the pairing as distinct so it stops being flagged.
+                </p>
+              )}
+              {haveBoth ? (
+                <pre className="repair-diff-pre" aria-label="Request body-plan diff (baseline → this version)">
+                  {rendered.map((line, idx) => (
+                    <div key={idx} className={`dl ${line.type}`}>
+                      <span className="dl-mark">
+                        {line.type === "add" ? "+" : line.type === "del" ? "−" : " "}
+                      </span>
+                      {line.text}
+                    </div>
+                  ))}
+                </pre>
+              ) : null}
+            </>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function ArtifactReview({
   signature,
   statusSignature,
@@ -414,11 +530,13 @@ function HowItWorks() {
               from normal suite runs until approved.
             </li>
             <li>
-              <strong>Approve</strong> = bind the exact spec and body-plan hashes as the runnable baseline.{" "}
-              For an updated outcome, approval promotes the draft and marks the previous baseline
-              superseded. <strong>Skip (don't mine again)</strong> records a skip-gate decision so
-              the flow won't re-surface as a candidate on the next <code>behavior:mine</code>; it
-              records a decision only. <strong>Delete test</strong> removes the draft file.
+              <strong>Approve</strong> = bind the exact spec and body-plan hashes as a runnable
+              baseline. It is non-destructive: approving a flow that relates to an existing approved
+              baseline creates a <em>coexisting</em> approval — both are kept. Retiring the old one is
+              the explicit, opt-in <strong>Replace</strong> action. <strong>Skip (don't mine again)</strong>{" "}
+              records a skip-gate decision so the flow won't re-surface as a candidate on the next{" "}
+              <code>behavior:mine</code>; it records a decision only. <strong>Delete test</strong>{" "}
+              removes the draft file.
             </li>
             <li>
               If approved source changes later, its hash no longer matches and the runner quarantines
@@ -427,9 +545,12 @@ function HowItWorks() {
             </li>
             <li>
               <strong>Persona is derived from observed behavior</strong>, never declared. When a
-              re-mined flow takes the same journey as an already-approved one but with a new
-              outcome, it is shown as that same flow marked <em>overrides approved</em> — not a
-              separate conflict. Approving it overrides (supersedes) the approved baseline.
+              re-mined flow takes the same journey as an already-approved one but with a different
+              outcome, it is shown marked <em>relates to baseline</em>. That signal is advisory: it
+              may be genuine drift or a distinct scenario. Open <em>Compare requests</em> to classify,
+              then <strong>Replace</strong> (drift — supersede the baseline) or{" "}
+              <strong>Approve as new</strong> (keep both; this also records the pairing as distinct so
+              it stops being flagged). Nothing is deleted automatically.
             </li>
           </ul>
         </div>
@@ -446,7 +567,7 @@ function Legend() {
           <LifecycleBadge lifecycle={lc} />
         </span>
       ))}
-      <span className="legend-item" title="Same journey as an approved flow, re-observed with a new outcome. Approving overrides the baseline.">
+      <span className="legend-item" title="Same journey as an approved flow, re-observed with a different outcome. Advisory only: classify as drift (Replace) or distinct scenario (Approve as new). Nothing is deleted automatically.">
         <ConflictChip />
       </span>
     </div>
@@ -527,6 +648,7 @@ function RepairRunStatus({
 function DetailPanel({
   flow,
   onDecide,
+  onReplace,
   onDelete,
   onDeleteApproved,
   onRepair,
@@ -536,7 +658,14 @@ function DetailPanel({
   repairHash,
 }: {
   flow: ReviewFlow;
+  /**
+   * Records the decision. For "approved" on a flow that relates to a baseline this is
+   * "Approve as new": it coexists with the baseline AND records the pairing as distinct
+   * (folded in — there is no separate dismiss action).
+   */
   onDecide: (status: Decision) => void;
+  /** Opt-in "Replace <baseline>": approve this and supersede + delete the named baseline. */
+  onReplace: () => void;
   onDelete: () => void;
   onDeleteApproved: () => void;
   onRepair: () => void;
@@ -574,27 +703,25 @@ function DetailPanel({
       {flow.conflicts_with_approved ? (
         <div className="conflict-box">
           <p className="conflict-title">
-            <History size={15} aria-hidden="true" /> Updates an approved baseline
+            <History size={15} aria-hidden="true" /> Relates to an approved baseline
           </p>
           <p>
-            This is the same journey you already approved, re-observed with a new outcome
-            (expected statuses now <code>{flow.status_signature || "—"}</code>). The approved
-            baseline is kept and stays runnable.{" "}
-            {flow.body_plan_hash ? (
-              <>
-                <strong>Approve</strong> this to override it (the old version is superseded and its
-                spec removed). <strong>Skip</strong> keeps the approved baseline as-is and won't
-                mine this change again.
-              </>
-            ) : (
-              <>
-                This override can't be approved yet — its body-plan manifest is missing, so there's
-                no bound artifact to promote. <strong>Regenerate</strong> the test to enable Approve,
-                or <strong>Delete test</strong> to drop this draft. (Skip stays disabled — skip-gating
-                an override would suppress future drift detection against the baseline.)
-              </>
-            )}
+            This runs the same journey as a flow you already approved, but expects a different
+            outcome (now <code>{flow.status_signature || "—"}</code>). That is ambiguous, so nothing
+            is changed automatically — the approved baseline stays approved and runnable. It means
+            one of two things, and you decide:
           </p>
+          <ul>
+            <li>
+              <strong>Drift</strong> — same request, the SUT's behavior changed. Update the baseline
+              to this outcome with <strong>Replace</strong>.
+            </li>
+            <li>
+              <strong>Distinct scenarios</strong> — a different request/auth on the same endpoints
+              (e.g. a happy path and a failure path). Keep both with <strong>Approve as new</strong>,
+              which also records the pairing as distinct so this journey stops being flagged.
+            </li>
+          </ul>
           <ul>
             {flow.conflict_baselines.map((base, i) => (
               <li key={`${base.flow_name}-${i}`}>
@@ -603,6 +730,39 @@ function DetailPanel({
               </li>
             ))}
           </ul>
+          {flow.active_baseline ? <RequestComparison flow={flow} /> : null}
+          {!flow.body_plan_hash ? (
+            <p>
+              This can't be approved or replace the baseline yet — its body-plan manifest is missing,
+              so there's no bound artifact to promote. <strong>Regenerate</strong> the test to enable
+              Approve/Replace, or <strong>Delete test</strong> to drop this draft.
+            </p>
+          ) : null}
+          <div className="review-actions">
+            <button
+              type="button"
+              className="approve"
+              disabled={pending || !flow.test_path || !flow.body_plan_hash}
+              title="Approve this outcome as a coexisting scenario. The approved baseline is untouched, and this pairing is recorded as distinct so it stops being flagged."
+              onClick={() => onDecide("approved")}
+            >
+              <CheckCircle2 size={15} aria-hidden="true" /> Approve as new
+            </button>
+            <button
+              type="button"
+              className="delete-test"
+              disabled={pending || !flow.test_path || !flow.body_plan_hash || !flow.active_baseline}
+              title={
+                flow.active_baseline
+                  ? `Approve this and supersede + delete the baseline "${flow.active_baseline.flow_name}"`
+                  : "No resolvable baseline to replace"
+              }
+              onClick={onReplace}
+            >
+              <History size={15} aria-hidden="true" /> Replace
+              {flow.active_baseline ? ` "${flow.active_baseline.flow_name}"` : " baseline"}
+            </button>
+          </div>
         </div>
       ) : null}
 
@@ -744,10 +904,10 @@ function DetailPanel({
         <button
           type="button"
           className="discard"
-          disabled={pending || repairRunning || flow.conflicts_with_approved}
+          disabled={pending || repairRunning}
           title={
             flow.conflicts_with_approved
-              ? "Can't skip a flow that overrides an approved baseline — skip-gating it would suppress future conflicts against that baseline. Approve to override, or Delete test to drop this draft."
+              ? "Skip-gate this flow so it is not mined again. Because it relates to an approved baseline you'll be asked to confirm — the baseline stays hash-pinned, so run-time regression detection is unaffected."
               : "Skip-gate this flow so it is not mined again. Records a decision only; use Delete test to remove the draft file."
           }
           onClick={() => onDecide("discarded")}
@@ -802,10 +962,12 @@ function DetailPanel({
       </footer>
       <p className="review-note">
         <strong>Approve</strong> stores the exact spec/body-plan hashes and admits that artifact to
-        normal runs; a prior baseline becomes superseded. <strong>Skip (don't mine again)</strong>{" "}
-        records a skip-gate decision so this flow is not mined again — it leaves any active baseline
-        intact and does not delete the file. <strong>Delete test</strong> removes the draft file but
-        records no decision.
+        normal runs. It is non-destructive: a flow that relates to an approved baseline coexists with
+        it — both stay approved. Retiring a baseline is the explicit, opt-in <strong>Replace</strong>{" "}
+        action in the relationship box above. <strong>Skip (don't mine again)</strong> records a
+        skip-gate decision so this flow is not mined again — it leaves any active baseline intact and
+        does not delete the file. <strong>Delete test</strong> removes the draft file but records no
+        decision.
       </p>
     </aside>
   );
@@ -1047,12 +1209,59 @@ export function ReviewView() {
     (selectedFlow ? null : visibleApprovedHistory[0] ?? null);
 
   async function handleDecide(flow: ReviewFlow, decision: Decision) {
+    // Skipping a flow that relates to an approved baseline is now ALLOWED (the
+    // destructive auto-supersede coupling is gone), but it still skip-gates the drift
+    // signal from future mines, so guard it with an explicit confirm. The approved
+    // baseline stays hash-pinned, so run-time regression detection is unaffected.
+    if (
+      decision === "discarded" &&
+      flow.conflicts_with_approved &&
+      !window.confirm(
+        "This re-runs an approved journey with a different outcome. Skipping stops future mines " +
+          "from surfacing this change as a candidate. The approved baseline stays hash-pinned, so " +
+          "run-time regression detection is unaffected. If this is genuine drift, prefer Replace; " +
+          "if it's a distinct scenario, prefer Approve as new or Dismiss. Skip anyway?"
+      )
+    ) {
+      return;
+    }
     setPending(true);
     setActionError(null);
     try {
-      await decide(flow, decision);
+      // "Approve as new" folds in the distinct-pairing verdict: approving a flow that
+      // relates to an approved baseline both creates the coexisting approval AND records
+      // the pairing as distinct, so future mines stop flagging it. The baseline is
+      // untouched. A plain approve (no related baseline) sends no distinct verdict.
+      const distinctFromReviewId =
+        decision === "approved" && flow.conflicts_with_approved && flow.active_baseline
+          ? flow.active_baseline.review_id
+          : undefined;
+      await decide(flow, decision, distinctFromReviewId ? { distinctFromReviewId } : undefined);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Failed to save decision");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function handleReplace(flow: ReviewFlow) {
+    const base = flow.active_baseline;
+    if (!base) return;
+    if (
+      !window.confirm(
+        `Replace the approved baseline "${base.flow_name}" (expected ${base.status_signature || "—"})? ` +
+          "It will be marked superseded and its spec deleted, and this outcome becomes the runnable " +
+          "baseline. Do this only for genuine drift (identical request, changed behavior)."
+      )
+    ) {
+      return;
+    }
+    setPending(true);
+    setActionError(null);
+    try {
+      await decide(flow, "approved", { supersedeReviewId: base.review_id });
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to replace baseline");
     } finally {
       setPending(false);
     }
@@ -1218,7 +1427,7 @@ export function ReviewView() {
           {c ? (
             <span>
               {c.total} active scenarios · {c.awaiting_review} awaiting review ·{" "}
-              {c.discovered} pending generation · {c.with_test} with drafts · {c.conflicts} override approved
+              {c.discovered} pending generation · {c.with_test} with drafts · {c.conflicts} relate to a baseline
               {approvedHistoryCount > 0
                 ? ` · ${approvedHistoryCount} approved in history`
                 : ""}
@@ -1328,6 +1537,7 @@ export function ReviewView() {
             flow={selectedFlow}
             pending={pending}
             onDecide={(decision) => handleDecide(selectedFlow, decision)}
+            onReplace={() => handleReplace(selectedFlow)}
             onDelete={() => handleDelete(selectedFlow)}
             onDeleteApproved={() =>
               handleDeleteApproved(selectedFlow.review_id, selectedFlow.flow_name)

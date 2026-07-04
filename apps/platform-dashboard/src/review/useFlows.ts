@@ -33,8 +33,12 @@ export function useFlows() {
   }, [reload]);
 
   const decide = useCallback(
-    async (flow: ReviewFlow, status: Decision) => {
-      await postDecision(flow, status);
+    async (
+      flow: ReviewFlow,
+      status: Decision,
+      options?: { supersedeReviewId?: string; distinctFromReviewId?: string }
+    ) => {
+      await postDecision(flow, status, options);
       await reload();
     },
     [reload]

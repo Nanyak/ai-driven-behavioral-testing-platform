@@ -1,0 +1,337 @@
+- generic [ref=f27e3]:
+  - navigation "Primary" [ref=f27e4]:
+    - generic [ref=f27e5]:
+      - img [ref=f27e6]
+      - strong [ref=f27e11]: Behavior Platform
+      - button "Collapse sidebar" [ref=f27e12] [cursor=pointer]:
+        - img [ref=f27e13]
+    - generic [ref=f27e16]:
+      - button "Overview" [ref=f27e17] [cursor=pointer]:
+        - img [ref=f27e18]
+        - generic [ref=f27e23]: Overview
+      - button "Flow Review" [active] [ref=f27e24] [cursor=pointer]:
+        - img [ref=f27e25]
+        - generic [ref=f27e29]: Flow Review
+      - button "Pipeline" [ref=f27e30] [cursor=pointer]:
+        - img [ref=f27e31]
+        - generic [ref=f27e35]: Pipeline
+      - button "Test Runner" [ref=f27e36] [cursor=pointer]:
+        - img [ref=f27e37]
+        - generic [ref=f27e40]: Test Runner
+      - button "Reports" [ref=f27e41] [cursor=pointer]:
+        - img [ref=f27e42]
+        - generic [ref=f27e47]: Reports
+  - main [ref=f27e48]:
+    - generic [ref=f27e49]:
+      - generic [ref=f27e51]:
+        - paragraph [ref=f27e52]: Flow Review
+        - generic [ref=f27e53]: Last checked 11:01:07 AM
+      - button "Switch to dark theme" [ref=f27e55] [cursor=pointer]:
+        - img [ref=f27e56]
+        - generic [ref=f27e58]: Dark
+    - region "HITL flow review" [ref=f27e177]:
+      - generic [ref=f27e178]:
+        - img [ref=f27e179]
+        - heading "Discovered Flows & Generated Tests" [level=1] [ref=f27e181]
+      - paragraph [ref=f27e182]: Review emergent flows, exact Playwright source, and redacted request-body plans. Persona is derived from behavior, never assigned by hand. Approval binds the artifact hashes used by the runner and also feeds the mining skip gate.
+      - generic [ref=f27e183]:
+        - button "How review works ▼" [ref=f27e185] [cursor=pointer]:
+          - img [ref=f27e186]
+          - generic [ref=f27e189]: How review works
+          - generic [ref=f27e190]: ▼
+        - generic "Status legend" [ref=f27e191]:
+          - generic "A test was generated for this flow but no one has decided yet — this is what's new to review." [ref=f27e192]:
+            - generic "A test was generated for this flow but no one has decided yet — this is what's new to review." [ref=f27e193]:
+              - img [ref=f27e194]
+              - text: Awaiting review
+          - generic "Selected from the latest mine, but its draft has not been generated yet." [ref=f27e196]:
+            - generic "Selected from the latest mine, but its draft has not been generated yet." [ref=f27e197]:
+              - img [ref=f27e198]
+              - text: Generation pending
+          - generic "A human blessed this flow. It's kept and won't be re-mined as a new candidate." [ref=f27e207]:
+            - generic "A human blessed this flow. It's kept and won't be re-mined as a new candidate." [ref=f27e208]:
+              - img [ref=f27e209]
+              - text: Approved
+          - generic "Skip-gated by a human — it won't be mined again. The draft file is removed on the next generate (or via Delete test)." [ref=f27e212]:
+            - generic "Skip-gated by a human — it won't be mined again. The draft file is removed on the next generate (or via Delete test)." [ref=f27e213]:
+              - img [ref=f27e214]
+              - text: Skipped
+          - generic "Same journey as an approved flow, re-observed with a new outcome. Approving overrides the baseline." [ref=f27e218]:
+            - generic "Same journey as an approved flow with a new outcome. Approving it overrides (supersedes) the approved baseline." [ref=f27e219]:
+              - img [ref=f27e220]
+              - text: overrides approved
+        - generic [ref=f27e224]:
+          - group "Filter by status" [ref=f27e225]:
+            - button "All 10" [ref=f27e226] [cursor=pointer]:
+              - text: All
+              - generic [ref=f27e227]: "10"
+            - button "Needs attention 8" [ref=f27e228] [cursor=pointer]:
+              - text: Needs attention
+              - generic [ref=f27e229]: "8"
+            - button "Awaiting review 8" [ref=f27e230] [cursor=pointer]:
+              - text: Awaiting review
+              - generic [ref=f27e231]: "8"
+            - button "Approved 2" [ref=f27e232] [cursor=pointer]:
+              - text: Approved
+              - generic [ref=f27e233]: "2"
+            - button "Skipped 0" [ref=f27e234] [cursor=pointer]:
+              - text: Skipped
+              - generic [ref=f27e235]: "0"
+          - group "Filter by persona" [ref=f27e236]:
+            - button "All personas" [ref=f27e237] [cursor=pointer]
+            - button "Guest Shopper" [ref=f27e238] [cursor=pointer]
+            - button "Registered Customer" [ref=f27e239] [cursor=pointer]
+            - button "Admin Operator" [ref=f27e240] [cursor=pointer]
+          - generic [ref=f27e241]:
+            - checkbox "has_errors only" [ref=f27e242]
+            - text: has_errors only
+          - generic [ref=f27e243]:
+            - generic [ref=f27e244]: 8 active scenarios · 8 awaiting review · 0 pending generation · 8 with drafts · 0 override approved · 2 approved in history
+            - button "Reload flows" [ref=f27e245] [cursor=pointer]:
+              - img [ref=f27e246]
+        - generic [ref=f27e251]:
+          - list [ref=f27e253]:
+            - listitem [ref=f27e254]:
+              - button "Checkout — Authentication failure Guest Shopper support 10 6 steps test errors latest mine Awaiting review" [ref=f27e255] [cursor=pointer]:
+                - generic [ref=f27e256]: Checkout — Authentication failure
+                - generic [ref=f27e257]:
+                  - generic [ref=f27e258]: Guest Shopper
+                  - generic [ref=f27e259]: support 10
+                  - generic [ref=f27e260]: 6 steps
+                  - generic [ref=f27e261]:
+                    - img [ref=f27e262]
+                    - text: test
+                  - generic [ref=f27e267]:
+                    - img [ref=f27e268]
+                    - text: errors
+                  - generic "Re-surfaced by the latest mine" [ref=f27e270]: latest mine
+                  - generic "A test was generated for this flow but no one has decided yet — this is what's new to review." [ref=f27e271]:
+                    - img [ref=f27e272]
+                    - text: Awaiting review
+            - listitem [ref=f27e274]:
+              - button "Cart — Update validation failure Registered Customer support 28 3 steps test errors latest mine Awaiting review" [ref=f27e275] [cursor=pointer]:
+                - generic [ref=f27e276]: Cart — Update validation failure
+                - generic [ref=f27e277]:
+                  - generic [ref=f27e278]: Registered Customer
+                  - generic [ref=f27e279]: support 28
+                  - generic [ref=f27e280]: 3 steps
+                  - generic [ref=f27e281]:
+                    - img [ref=f27e282]
+                    - text: test
+                  - generic [ref=f27e287]:
+                    - img [ref=f27e288]
+                    - text: errors
+                  - generic "Re-surfaced by the latest mine" [ref=f27e290]: latest mine
+                  - generic "A test was generated for this flow but no one has decided yet — this is what's new to review." [ref=f27e291]:
+                    - img [ref=f27e292]
+                    - text: Awaiting review
+            - listitem [ref=f27e294]:
+              - button "Orders — Create fulfillment Admin Operator support 20 4 steps test latest mine Awaiting review" [ref=f27e295] [cursor=pointer]:
+                - generic [ref=f27e296]: Orders — Create fulfillment
+                - generic [ref=f27e297]:
+                  - generic [ref=f27e298]: Admin Operator
+                  - generic [ref=f27e299]: support 20
+                  - generic [ref=f27e300]: 4 steps
+                  - generic [ref=f27e301]:
+                    - img [ref=f27e302]
+                    - text: test
+                  - generic "Re-surfaced by the latest mine" [ref=f27e307]: latest mine
+                  - generic "A test was generated for this flow but no one has decided yet — this is what's new to review." [ref=f27e308]:
+                    - img [ref=f27e309]
+                    - text: Awaiting review
+            - listitem [ref=f27e311]:
+              - button "Catalog — Browse products Guest Shopper support 453 2 steps test latest mine Awaiting review" [ref=f27e312] [cursor=pointer]:
+                - generic [ref=f27e313]: Catalog — Browse products
+                - generic [ref=f27e314]:
+                  - generic [ref=f27e315]: Guest Shopper
+                  - generic [ref=f27e316]: support 453
+                  - generic [ref=f27e317]: 2 steps
+                  - generic [ref=f27e318]:
+                    - img [ref=f27e319]
+                    - text: test
+                  - generic "Re-surfaced by the latest mine" [ref=f27e324]: latest mine
+                  - generic "A test was generated for this flow but no one has decided yet — this is what's new to review." [ref=f27e325]:
+                    - img [ref=f27e326]
+                    - text: Awaiting review
+            - listitem [ref=f27e328]:
+              - button "Returns — Full return lifecycle Admin Operator support 4 8 steps test latest mine Awaiting review" [ref=f27e329] [cursor=pointer]:
+                - generic [ref=f27e330]: Returns — Full return lifecycle
+                - generic [ref=f27e331]:
+                  - generic [ref=f27e332]: Admin Operator
+                  - generic [ref=f27e333]: support 4
+                  - generic [ref=f27e334]: 8 steps
+                  - generic [ref=f27e335]:
+                    - img [ref=f27e336]
+                    - text: test
+                  - generic "Re-surfaced by the latest mine" [ref=f27e341]: latest mine
+                  - generic "A test was generated for this flow but no one has decided yet — this is what's new to review." [ref=f27e342]:
+                    - img [ref=f27e343]
+                    - text: Awaiting review
+            - listitem [ref=f27e345]:
+              - button "Catalog — Admin product update Admin Operator support 4 6 steps test latest mine Awaiting review" [ref=f27e346] [cursor=pointer]:
+                - generic [ref=f27e347]: Catalog — Admin product update
+                - generic [ref=f27e348]:
+                  - generic [ref=f27e349]: Admin Operator
+                  - generic [ref=f27e350]: support 4
+                  - generic [ref=f27e351]: 6 steps
+                  - generic [ref=f27e352]:
+                    - img [ref=f27e353]
+                    - text: test
+                  - generic "Re-surfaced by the latest mine" [ref=f27e358]: latest mine
+                  - generic "A test was generated for this flow but no one has decided yet — this is what's new to review." [ref=f27e359]:
+                    - img [ref=f27e360]
+                    - text: Awaiting review
+            - listitem [ref=f27e362]:
+              - button "Checkout — Standard purchase Registered Customer support 12 12 steps 3 variants test latest mine Awaiting review" [ref=f27e363] [cursor=pointer]:
+                - generic [ref=f27e364]: Checkout — Standard purchase
+                - generic [ref=f27e365]:
+                  - generic [ref=f27e366]: Registered Customer
+                  - generic [ref=f27e367]: support 12
+                  - generic [ref=f27e368]: 12 steps
+                  - generic [ref=f27e369]:
+                    - img [ref=f27e370]
+                    - text: 3 variants
+                  - generic [ref=f27e373]:
+                    - img [ref=f27e374]
+                    - text: test
+                  - generic "Re-surfaced by the latest mine" [ref=f27e379]: latest mine
+                  - generic "A test was generated for this flow but no one has decided yet — this is what's new to review." [ref=f27e380]:
+                    - img [ref=f27e381]
+                    - text: Awaiting review
+            - listitem [ref=f27e383]:
+              - button "Catalog — Product detail browsing Guest Shopper support 48 3 steps 2 variants test latest mine Awaiting review" [ref=f27e384] [cursor=pointer]:
+                - generic [ref=f27e385]: Catalog — Product detail browsing
+                - generic [ref=f27e386]:
+                  - generic [ref=f27e387]: Guest Shopper
+                  - generic [ref=f27e388]: support 48
+                  - generic [ref=f27e389]: 3 steps
+                  - generic [ref=f27e390]:
+                    - img [ref=f27e391]
+                    - text: 2 variants
+                  - generic [ref=f27e394]:
+                    - img [ref=f27e395]
+                    - text: test
+                  - generic "Re-surfaced by the latest mine" [ref=f27e400]: latest mine
+                  - generic "A test was generated for this flow but no one has decided yet — this is what's new to review." [ref=f27e401]:
+                    - img [ref=f27e402]
+                    - text: Awaiting review
+            - listitem [ref=f27e404]:
+              - button "Guest Browse-to-Cart Blocked, approved history, not present in latest mine" [ref=f27e405] [cursor=pointer]:
+                - generic [ref=f27e406]: Guest Browse-to-Cart Blocked
+                - generic [ref=f27e407]:
+                  - generic [ref=f27e408]: Guest Shopper
+                  - generic [ref=f27e409]: 4 steps
+                  - generic [ref=f27e410]: expected 200,200,200,401
+                  - generic [ref=f27e411]:
+                    - img [ref=f27e412]
+                    - text: test
+                  - generic [ref=f27e417]:
+                    - img [ref=f27e418]
+                    - text: approved history
+                  - generic [ref=f27e422]: not in latest mine
+                  - generic "A human blessed this flow. It's kept and won't be re-mined as a new candidate." [ref=f27e423]:
+                    - img [ref=f27e424]
+                    - text: Approved
+            - listitem [ref=f27e427]:
+              - button "Failed Customer Login with Region Prefetch, approved history, not present in latest mine" [ref=f27e428] [cursor=pointer]:
+                - generic [ref=f27e429]: Failed Customer Login with Region Prefetch
+                - generic [ref=f27e430]:
+                  - generic [ref=f27e431]: Registered Customer
+                  - generic [ref=f27e432]: 2 steps
+                  - generic [ref=f27e433]: expected 200,401
+                  - generic [ref=f27e434]:
+                    - img [ref=f27e435]
+                    - text: test
+                  - generic [ref=f27e440]:
+                    - img [ref=f27e441]
+                    - text: approved history
+                  - generic [ref=f27e445]: not in latest mine
+                  - generic "A human blessed this flow. It's kept and won't be re-mined as a new candidate." [ref=f27e446]:
+                    - img [ref=f27e447]
+                    - text: Approved
+          - complementary [ref=f27e450]:
+            - generic [ref=f27e451]:
+              - heading "Checkout — Authentication failure" [level=2] [ref=f27e452]
+              - generic "A test was generated for this flow but no one has decided yet — this is what's new to review." [ref=f27e454]:
+                - img [ref=f27e455]
+                - text: Awaiting review
+            - paragraph [ref=f27e457]:
+              - generic [ref=f27e458]: Guest Shopper
+              - generic [ref=f27e459]: priority medium
+              - generic [ref=f27e460]: support 10
+              - generic [ref=f27e461]: score 0.697
+              - generic [ref=f27e462]:
+                - img [ref=f27e463]
+                - text: has_errors
+            - generic [ref=f27e465]:
+              - heading "Steps (6)" [level=3] [ref=f27e466]
+              - list [ref=f27e467]:
+                - listitem [ref=f27e468]:
+                  - code [ref=f27e469]: GET
+                  - text: /store/shipping-options
+                  - generic [ref=f27e470]: → 404
+                - listitem [ref=f27e471]:
+                  - code [ref=f27e472]: POST
+                  - text: /store/carts
+                  - generic [ref=f27e473]: → 401
+                - listitem [ref=f27e474]:
+                  - code [ref=f27e475]: POST
+                  - text: /store/payment-collections
+                  - generic [ref=f27e476]: → 401
+                - listitem [ref=f27e477]:
+                  - code [ref=f27e478]: POST
+                  - text: /store/carts
+                  - generic [ref=f27e479]: → 401
+                - listitem [ref=f27e480]:
+                  - code [ref=f27e481]: POST
+                  - text: /store/payment-collections
+                  - generic [ref=f27e482]: → 401
+                - listitem [ref=f27e483]:
+                  - code [ref=f27e484]: GET
+                  - text: /store/payment-providers
+                  - generic [ref=f27e485]: → 200
+            - generic [ref=f27e486]:
+              - heading "Golden assertions (5)" [level=3] [ref=f27e487]
+              - list [ref=f27e488]:
+                - listitem [ref=f27e489]:
+                  - code [ref=f27e490]: type
+                - listitem [ref=f27e491]:
+                  - code [ref=f27e492]: message
+                - listitem [ref=f27e493]:
+                  - code [ref=f27e494]: payment_providers
+                - listitem [ref=f27e495]:
+                  - code [ref=f27e496]: payment_providers[].id
+                - listitem [ref=f27e497]:
+                  - code [ref=f27e498]: payment_providers[].is_enabled
+            - generic [ref=f27e499]:
+              - heading "Test & provenance" [level=3] [ref=f27e500]
+              - paragraph [ref=f27e501]:
+                - generic [ref=f27e502]: 10 source sessions
+                - generic [ref=f27e503]:
+                  - img [ref=f27e504]
+                  - text: generated-tests/guest/failure-path/3601d42113e1.spec.ts
+              - code [ref=f27e509]: 3601d42113e16f6dc35e6a0beaaf27263826c6640dfac573eccc48a453a6f409
+            - button "Review executable artifact ▼" [ref=f27e511] [cursor=pointer]:
+              - img [ref=f27e512]
+              - generic [ref=f27e516]: Review executable artifact
+              - generic [ref=f27e517]: ▼
+            - generic [ref=f27e518]:
+              - button "Approve" [ref=f27e519] [cursor=pointer]:
+                - img [ref=f27e520]
+                - text: Approve
+              - button "Skip (don't mine again)" [ref=f27e523] [cursor=pointer]:
+                - img [ref=f27e524]
+                - text: Skip (don't mine again)
+              - button "Repair this flow" [ref=f27e528] [cursor=pointer]:
+                - img [ref=f27e529]
+                - text: Repair this flow
+              - button "Delete test" [ref=f27e531] [cursor=pointer]:
+                - img [ref=f27e532]
+                - text: Delete test
+            - paragraph [ref=f27e535]:
+              - strong [ref=f27e536]: Approve
+              - text: stores the exact spec/body-plan hashes and admits that artifact to normal runs; a prior baseline becomes superseded.
+              - strong [ref=f27e537]: Skip (don't mine again)
+              - text: records a skip-gate decision so this flow is not mined again — it leaves any active baseline intact and does not delete the file.
+              - strong [ref=f27e538]: Delete test
+              - text: removes the draft file but records no decision.
