@@ -26,12 +26,12 @@
   "oas_ref": null,
   "oas_version": "2.15.5",
   "value_rules": [],
-  "captured_at": "2026-07-03T22:52:49.105Z",
+  "captured_at": "2026-07-05T13:15:12.075Z",
   "source_sessions": [
-    "sess-adminCatalog-0ec1e025-220f-4d34-91d3-58e8bfd018fa",
-    "sess-adminCatalog-1be9b3c8-f9f5-4d88-9d27-f00502802c77",
-    "sess-adminCatalog-1fea32ca-4952-4253-b84a-841dcf6fea5f",
-    "sess-adminCatalog-8e23e01b-9098-45b7-93d8-c269c205821e",
-    "sess-adminCatalog-f514ee89-8da7-4455-bc6b-59e34e2adc01"
+    "sess-adminCatalog-03699333-ad79-4cff-9038-257a3b9e76d9",
+    "sess-adminCatalog-1c76dbc0-9986-4bf1-9cef-579d9bc4b6ca",
+    "sess-adminCatalog-4684287d-e846-4d96-82ac-face800dfea8",
+    "sess-adminCatalog-5d18b5c0-a8ae-41b0-848c-44d576039cee",
+    "sess-adminCatalog-d696865c-deab-450c-bcbb-d5714aa5fc2e"
   ]
 }

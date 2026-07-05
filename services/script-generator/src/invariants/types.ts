@@ -29,7 +29,9 @@ import { dirname, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = resolvePath(__dirname, "..", "..", "..", "..");
+/** Repo root, derived from this module's location so paths are CWD-independent
+ * (the invariant CLI can be spawned from anywhere — e.g. `npm --prefix …`). */
+export const REPO_ROOT = resolvePath(__dirname, "..", "..", "..", "..");
 export const INVARIANTS_ARTIFACT = resolvePath(REPO_ROOT, "data", "invariants", "invariants.json");
 
 /**

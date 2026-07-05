@@ -33,6 +33,8 @@
     "golden:test": "npm --prefix services/golden test",
     "script-generator:install": "npm --prefix services/script-generator install",
     "script-generator:generate": "npm --prefix services/script-generator run generate",
+    "script-generator:invariants": "npm --prefix services/script-generator run invariants --",
+    "script-generator:invariants:verify": "npm --prefix services/script-generator run invariants -- --verify reports/playwright/normalized.json",
     "script-generator:repair": "npm --prefix services/script-generator run repair --",
     "script-generator:test:repair": "npm --prefix services/script-generator run test:repair-guard",
     "test-runner:install": "npm --prefix services/test-runner install",

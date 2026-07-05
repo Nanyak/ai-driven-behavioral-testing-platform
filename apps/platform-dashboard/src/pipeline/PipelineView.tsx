@@ -5,6 +5,7 @@ import {
   Loader2,
   Pickaxe,
   Play,
+  ShieldCheck,
   Sparkles,
   Stethoscope,
   X,
@@ -43,6 +44,14 @@ const STAGES: StageDef[] = [
     title: "Mine flows",
     icon: Pickaxe,
     blurb: "Cluster ingested traffic into ranked behavior flows (test candidates).",
+  },
+  {
+    job: "invariants:verify",
+    title: "Invariants",
+    icon: ShieldCheck,
+    blurb:
+      "Propose behavioral invariants (body-level oracles) for changed flows, and bake only those that held on the last trusted baseline run (reports/playwright/normalized.json).",
+    guarded: true,
   },
   {
     job: "generate",

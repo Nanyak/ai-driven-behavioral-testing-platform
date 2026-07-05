@@ -1,9 +1,7 @@
 {
   "endpoint": "POST /admin/returns/{id}/cancel",
   "expected_status": 200,
-  "expected_schema": {
-    "return": "ignored"
-  },
+  "expected_schema": {},
   "ignore_fields": [
     "id",
     "created_at",
@@ -18,31 +16,10 @@
     "trace_id",
     "session_id"
   ],
-  "schema_source": "openapi+observed",
-  "oas_operation_id": "PostReturnsIdCancel",
-  "oas_ref": "#/components/schemas/AdminReturnResponse",
-  "oas_version": "2.15.5",
-  "value_rules": [
-    {
-      "path": "return.canceled_at",
-      "kind": "format",
-      "format": "date-time"
-    },
-    {
-      "path": "return.status",
-      "kind": "enum",
-      "values": [
-        "canceled",
-        "requested",
-        "received",
-        "partially_received",
-        "open"
-      ]
-    }
-  ],
-  "captured_at": "2026-07-03T22:52:49.105Z",
+  "schema_source": "observed",
+  "captured_at": "2026-07-05T13:15:12.075Z",
   "source_sessions": [
-    "sess-adminReturnReject-43a27568-8297-46ee-8415-66e91a12c2b4",
-    "sess-adminReturnReject-ba285fff-75a8-4870-9881-3074cf2d9e54"
+    "sess-adminReturnReject-27cfb8d1-38ca-45a1-b03c-50f6ffa5f38e",
+    "sess-adminReturnReject-93ac8412-98e3-46cf-bce9-c1f1de101fc4"
   ]
 }

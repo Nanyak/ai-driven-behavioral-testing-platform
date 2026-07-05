@@ -20,21 +20,19 @@
     "session_id"
   ],
   "schema_source": "observed",
-  "captured_at": "2026-07-03T22:52:49.105Z",
+  "captured_at": "2026-07-05T13:15:12.075Z",
   "source_sessions": [
-    "sess-cartAbandon-9575d941-ec5c-4cbd-b2aa-a1e6ddf530b0",
-    "sess-cartAbandon-9f001e94-df1d-4cd2-a2d3-666955b2ef09",
-    "sess-cartAbandon-f0f8a7ec-cb07-4729-96a9-89b95667f549",
-    "sess-checkoutAbandon-0092d176-bb37-4c47-81bd-af52c795345f",
-    "sess-checkoutAbandon-1de327bf-4684-4997-8866-6d9ffbbcec5d",
-    "sess-checkoutAbandon-2a09c466-1159-41b8-97e5-262a918d3884",
-    "sess-checkoutAbandon-6ce06929-ba89-48d5-a41d-e66d748e108e",
-    "sess-checkoutAbandon-b68c4b4b-3cf2-42ec-ac56-cbb8788a14fd",
-    "sess-multiItemCheckout-897828de-ffaa-451a-96f0-27a6a8689e84",
-    "sess-returningCheckout-28ef1426-9687-4c4b-ba0c-b721e99e0acb",
-    "sess-returningCheckout-69143685-46b9-45c4-8c40-9a772723718e",
-    "sess-returningCheckout-d6d5798c-955d-4921-9333-676557ac96fc",
-    "sess-returningCheckout-e46ee1ef-b075-4251-9820-36544badd5c0",
-    "sess-returningCheckout-ec3a3a6b-2d29-47c3-8230-998e6055ef1e"
+    "sess-cartAbandon-03175e46-a78f-4eda-b46c-77e4a6aafb0a",
+    "sess-cartAbandon-2e6ff97b-3f52-45cf-acc2-6bccfe23dfe9",
+    "sess-checkoutAbandon-060a9220-41ba-43cb-9416-442e0ba74606",
+    "sess-checkoutAbandon-6016a302-f37f-4bfc-b824-d0fe5ed2e2e5",
+    "sess-checkoutAbandon-b3f12170-66db-4ffd-8fae-77906cc29275",
+    "sess-checkoutAbandon-c844956c-843d-4bee-a9b2-c64535baec37",
+    "sess-multiItemCheckout-a7df7b25-f13c-4af2-971d-6a7cc803e1d2",
+    "sess-returningCheckout-0923dd0c-4726-4aee-8143-230da5222159",
+    "sess-returningCheckout-0acbcb7c-b480-4cc0-9c53-f41125241e9d",
+    "sess-returningCheckout-1e988cf1-7585-4a31-958c-14e0feeb8a44",
+    "sess-returningCheckout-2a81bd94-a92b-4f38-ab94-9cf37c60640e",
+    "sess-returningCheckout-629ed80f-c761-44fe-b141-63d41d3f83fa"
   ]
 }

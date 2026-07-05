@@ -1,114 +1,1782 @@
 {
-  "generated_at": "2026-06-26T00:00:00.000Z",
+  "generated_at": "2026-07-05T13:49:15.696Z",
   "flows": {
-    "511bb4352f00a8319a6a8e86448788f82936bd37987141373a039e4e2e5c05c0": {
-      "flow_name": "Registered Customer Checkout – Update Cart, Ship, Pay, Complete, Confirm Order",
+    "6e71cb4b2203f3837ce8a9e9dce0e2222ef58737339530d10c5d2708bfe9a213": {
+      "flow_name": "Guest Browse Regions and Products",
+      "cache_key": "27b046e2cfb65738228d89f395d0fc3630c97cd5d6b325acff89668774a56766",
+      "proposed_at": "2026-07-05T13:37:48.385Z",
       "invariants": [
         {
-          "stepTitle": "POST /store/carts/{id}/line-items/{id}",
-          "path": "cart.items.length",
-          "matcher": "toBeGreaterThan",
+          "kind": "field",
+          "stepTitle": "GET /store/regions",
+          "path": "regions.length",
+          "matcher": "toBeGreaterThanOrEqual",
           "expected": 0,
-          "rationale": "the cart still holds at least one line item after the quantity update",
+          "rationale": "Proves `regions` is a real array (not null, undefined, or a plain object). A 200 that serialises `regions` as `null` or `{}` would silently break all downstream region-selection logic.",
           "source": "ai-proposed",
+          "polarity": "success",
           "verified": true
         },
         {
+          "kind": "field",
+          "stepTitle": "GET /store/regions",
+          "path": "count",
+          "matcher": "toBeGreaterThanOrEqual",
+          "expected": 0,
+          "rationale": "A negative or missing `count` indicates a counting regression; pagination consumers rely on this field to know when to stop fetching pages.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/regions",
+          "path": "limit",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "A `limit` of 0 would make the page-size denominator unusable and signals a broken pagination default. Status 200 alone cannot reveal this.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/regions",
+          "path": "offset",
+          "matcher": "toBeGreaterThanOrEqual",
+          "expected": 0,
+          "rationale": "A negative `offset` is semantically invalid and indicates the response envelope has corrupted pagination metadata.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/products",
+          "path": "products.length",
+          "matcher": "toBeGreaterThanOrEqual",
+          "expected": 0,
+          "rationale": "Proves `products` is a real array. A regression that returns `products: null` or omits the key entirely would still yield HTTP 200 but silently break every storefront listing.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/products",
+          "path": "estimate_count",
+          "matcher": "toBeDefined",
+          "rationale": "`estimate_count` is a Medusa v2-only envelope field. Its absence indicates the request was served by a v1 handler or a route mismatch, which a status-200 check cannot detect.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/products",
+          "path": "count",
+          "matcher": "toBeGreaterThanOrEqual",
+          "expected": 0,
+          "rationale": "A negative or missing `count` signals a counting regression; storefronts use this for pagination math and result-set size display.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/products",
+          "path": "limit",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "A zero `limit` means no products were requested or the default page-size configuration is broken; undetectable from the status code alone.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/products",
+          "path": "offset",
+          "matcher": "toBeGreaterThanOrEqual",
+          "expected": 0,
+          "rationale": "A negative `offset` is semantically invalid for a cursor-based browse flow and reveals corrupt pagination metadata despite a 200 status.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        }
+      ]
+    },
+    "656408701148a5844aa1d08771211f1eca356c37136d6854b373983ffbcc588e": {
+      "flow_name": "Guest Product Browse and Detail View",
+      "cache_key": "373ca035abc7c0121e0ef2906ff014ace425637829d1b0070a0d9490235fa05c",
+      "proposed_at": "2026-07-05T13:38:10.983Z",
+      "invariants": [
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/products/{id}",
+          "path": "product",
+          "matcher": "toBeTruthy",
+          "rationale": "A 200 that returns a null or absent product envelope is a silent failure the status code cannot catch; this guards against serialization regressions that drop the top-level object.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/products/{id}",
+          "path": "product.id",
+          "matcher": "toBeDefined",
+          "rationale": "Every persisted product must carry a stable identifier; an undefined id indicates a data-mapping or ORM regression even when HTTP 200 is returned.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/products/{id}",
+          "path": "product.title",
+          "matcher": "toBeTruthy",
+          "rationale": "A product with a missing or empty title is effectively uncatalogued; this catches silent content-serialization regressions that still yield 200.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/products",
+          "path": "products",
+          "matcher": "toBeDefined",
+          "rationale": "The products array must always be present on a successful list response; its absence signals a schema-serialization regression invisible to the status assertion.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/products",
+          "path": "products.length",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "Both surrounding detail steps return 200 for a specific product, proving at least one published product exists; an empty list here indicates a visibility, sales-channel, or region filtering regression.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/products",
+          "path": "limit",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "A zero or negative limit breaks pagination semantics for downstream consumers; this invariant catches misconfigured or regressed pagination defaults.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/products",
+          "path": "offset",
+          "matcher": "toBeGreaterThanOrEqual",
+          "expected": 0,
+          "rationale": "Offset must be non-negative; a negative value signals a corrupted pagination state that a 200 status code cannot surface.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/products",
+          "path": "count",
+          "matcher": "toBeGreaterThanOrEqual",
+          "expected": 0,
+          "rationale": "Total catalog count cannot be negative; a negative value indicates a broken aggregation query whose error is masked by the 200 status.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        }
+      ]
+    },
+    "0a0bfa568ca74c2dc4d2aa6b312db30c59bb0d1df8e6af64e556aa54d52eebcb": {
+      "flow_name": "Admin Order Fulfillment Workflow",
+      "cache_key": "51cd442e306a7b9053ce441a3a199a1cdf73600e82cf1d65afbe978fd125c778",
+      "proposed_at": "2026-07-05T13:38:25.522Z",
+      "invariants": [
+        {
+          "kind": "template",
+          "template": "auth_success_token",
+          "stepTitle": "POST /auth/user/emailpass",
+          "path": "",
+          "rationale": "Confirms a real, non-empty credential was issued; HTTP 200 alone cannot prove the token field is present and usable for subsequent admin calls.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /admin/orders",
+          "path": "count",
+          "matcher": "toBeGreaterThanOrEqual",
+          "expected": 0,
+          "rationale": "count must be a non-negative integer; a missing or negative value signals a broken aggregation query even when the envelope returns 200.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /admin/orders",
+          "path": "orders.length",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "The test fixture must contain at least one order (the one to be fulfilled); an empty array with HTTP 200 means the order was not persisted or the admin token has no visibility into it.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /admin/orders",
+          "path": "limit",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "limit must be a positive integer for pagination to be meaningful; zero or missing breaks every downstream page-size calculation.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /admin/orders",
+          "path": "offset",
+          "matcher": "toBeGreaterThanOrEqual",
+          "expected": 0,
+          "rationale": "offset must be zero or positive; a negative value signals a pagination regression that HTTP 200 cannot surface.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /admin/orders/{id}",
+          "path": "order.id",
+          "matcher": "toBeDefined",
+          "rationale": "The fetched order must carry its own id; absence indicates a serialization failure even if the status code is 200.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /admin/orders/{id}",
+          "path": "order.fulfillment_status",
+          "matcher": "toBe",
+          "expected": "not_fulfilled",
+          "rationale": "Before any fulfillment is created the order must be in the 'not_fulfilled' state; any other value means the test fixture has an invalid pre-condition and the POST step's assertion cannot be trusted.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "template",
+          "template": "order_totals_balance",
+          "stepTitle": "GET /admin/orders/{id}",
+          "path": "order",
+          "rationale": "Verifies financial totals on the fetched order are internally consistent before the fulfillment mutation; a corrupt total that 200s here would silently propagate to the fulfilled order.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /admin/orders/{id}/fulfillments",
+          "path": "order.id",
+          "matcher": "toBeDefined",
+          "rationale": "The returned payload must identify the order so callers can confirm the response body belongs to the order that was just mutated, not a stub.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /admin/orders/{id}/fulfillments",
+          "path": "order.fulfillment_status",
+          "matcher": "toBe",
+          "expected": "fulfilled",
+          "rationale": "After fulfilling all order items, fulfillment_status must transition to 'fulfilled'; receiving 'not_fulfilled' or 'partially_fulfilled' with HTTP 200 is a silent workflow failure—the core behavioral regression this test must catch.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /admin/orders/{id}/fulfillments",
+          "path": "order.fulfillments.length",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "The fulfillments array on the returned order must contain at least one entry; an empty array with HTTP 200 means the fulfillment record was not created or was not serialized into the response, making the status-code assertion meaningless.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        }
+      ]
+    },
+    "db693e9aa4a0260c4cad88457d55fe515b54567912a46328e8ff2384606295d9": {
+      "flow_name": "Admin Product Catalogue and Order Overview with Product Update",
+      "cache_key": "cdaa48df3e2aa3bb03966edededb92649bc877ddf84d5a4a63b0e875e308783a",
+      "proposed_at": "2026-07-05T13:38:18.418Z",
+      "invariants": [
+        {
+          "kind": "template",
+          "template": "auth_success_token",
+          "stepTitle": "POST /auth/user/emailpass",
+          "path": "",
+          "rationale": "A 200 with a missing or empty token still passes the status-code assertion but leaves every downstream admin call unauthenticated; the template confirms the token field is present and non-empty.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /admin/products",
+          "path": "products.length",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "The flow immediately fetches a specific product by ID and later updates it, so the catalogue must be non-empty; an empty array on 200 would indicate a data-setup or query regression invisible to the status check.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /admin/products",
+          "path": "count",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "count must be consistent with a non-empty products array; a count of 0 while items are returned exposes a pagination-metadata regression that callers use for total-page calculations.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /admin/products",
+          "path": "offset",
+          "matcher": "toBe",
+          "expected": 0,
+          "rationale": "An unpaginated first-page request must echo offset 0; any other value means the server applied an unexpected default cursor and callers would skip leading records.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /admin/products",
+          "path": "limit",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "A zero or negative limit would make every page silently appear empty regardless of catalogue size; this guards the default-limit configuration.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /admin/products/{id}",
+          "path": "product.id",
+          "matcher": "toBeDefined",
+          "rationale": "A 200 that returns a product shell without an id means the record was not resolved correctly; any subsequent update call would target the wrong or nonexistent resource.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /admin/products/{id}",
+          "path": "product.title",
+          "matcher": "toBeTruthy",
+          "rationale": "A product without a title is an incomplete record; a null or empty-string title on 200 is a silent serializer regression the status-code assertion cannot detect.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /admin/products/{id}",
+          "path": "product.variants",
+          "matcher": "toBeDefined",
+          "rationale": "Variants are a mandatory sub-resource of every Medusa product; their absence on a successful GET signals a broken eager-load or serializer regression.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /admin/products/{id}",
+          "path": "product.variants.length",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "A purchasable product must have at least one variant; zero variants silently breaks downstream order-creation and inventory flows that depend on variant IDs even though the endpoint returns 200.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /admin/orders",
+          "path": "orders",
+          "matcher": "toBeDefined",
+          "rationale": "The orders key must be present in the envelope even when the list is empty; its absence indicates an envelope-shape regression that callers treating the field as an array would crash on.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /admin/orders",
+          "path": "count",
+          "matcher": "toBeGreaterThanOrEqual",
+          "expected": 0,
+          "rationale": "count must be a non-negative integer; undefined or negative signals a broken aggregation query that the 200 status does not surface.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /admin/orders",
+          "path": "offset",
+          "matcher": "toBe",
+          "expected": 0,
+          "rationale": "A default first-page orders request must echo offset 0; a non-zero default means records are skipped without any pagination parameter having been sent.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /admin/orders",
+          "path": "limit",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "A positive limit must always be echoed back; 0 would suppress all order records from the response regardless of stored data.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /admin/customers",
+          "path": "customers",
+          "matcher": "toBeDefined",
+          "rationale": "The customers array must exist in the envelope even when empty; a missing key is a silent serializer regression invisible to the status-code assertion.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /admin/customers",
+          "path": "count",
+          "matcher": "toBeGreaterThanOrEqual",
+          "expected": 0,
+          "rationale": "count must be a non-negative integer; an undefined or negative value reveals a broken aggregation query that 200 alone cannot surface.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /admin/customers",
+          "path": "offset",
+          "matcher": "toBe",
+          "expected": 0,
+          "rationale": "A default first-page request must echo offset 0; a non-zero value means customers are silently skipped without any pagination parameter being sent.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /admin/customers",
+          "path": "limit",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "The default page limit must be positive; 0 would suppress all customer records from the response despite them existing in the database.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /admin/products/{id}",
+          "path": "product.id",
+          "matcher": "toBeDefined",
+          "rationale": "The update endpoint must return the persisted product with its ID; a missing ID means the response body is not a valid product record and the success of the write is unverifiable.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /admin/products/{id}",
+          "path": "product.updated_at",
+          "matcher": "toBeTruthy",
+          "rationale": "A successful product update must produce a non-null updated_at timestamp; a null or absent value is the strongest indicator that the write was not actually committed to the database even though the server returned 200.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /admin/products/{id}",
+          "path": "product.variants",
+          "matcher": "toBeDefined",
+          "rationale": "The update response must include the variants sub-resource to confirm the serializer completed a full product hydration; an absent variants key suggests partial or failed serialization of the post-write state.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        }
+      ]
+    },
+    "5604e6c87f21cc8e3d4a723cd73f6acefaf26ab3c01b541124459e1199888fb0": {
+      "flow_name": "Registered Customer Browses, Authenticates, Builds Cart, Hits Cart Update Error",
+      "cache_key": "81c064d631fdb33d8280a1c97d6896e0c7e867871ba205ff46d8c488350ceee4",
+      "proposed_at": "2026-07-05T13:38:42.427Z",
+      "invariants": [
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts/{id}",
+          "path": "type",
+          "matcher": "toBe",
+          "expected": "invalid_data",
+          "rationale": "A HTTP 400 from POST /store/carts/{id} is produced by business-logic validation inside the workflow (e.g. country code not belonging to the supplied region_id). The Medusa error envelope sets type:'invalid_data' for these cases — distinguishing them from auth-gate rejections (type:'unauthorized', 401) and missing-resource errors (type:'not_found', 404). Asserting this value proves the cart was rejected for the correct semantic reason, not merely that some non-2xx was returned.",
+          "source": "ai-proposed",
+          "polarity": "error",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts/{id}",
+          "path": "message",
+          "matcher": "toBeTruthy",
+          "rationale": "The Medusa error envelope always populates 'message' with a non-empty human-readable explanation of the specific violation (e.g. 'Country with code X is not within region Y'). A truthy assertion confirms the server identified and articulated a concrete failure cause rather than returning a blank or structurally malformed error body.",
+          "source": "ai-proposed",
+          "polarity": "error",
+          "verified": true
+        }
+      ]
+    },
+    "959423677e0fa2fb5f4216b2f8bbb329f913f4a88964ce4d89862eff7f1fb964": {
+      "flow_name": "registered customer hits an error path",
+      "cache_key": "18d94893c31da86abf9b4c090821055b3311d8a507a2641db7d9bfa8e7a77021",
+      "proposed_at": "2026-07-05T13:38:40.845Z",
+      "invariants": [
+        {
+          "kind": "template",
+          "template": "auth_failure_error",
+          "stepTitle": "POST /auth/customer/emailpass",
+          "path": "",
+          "rationale": "The whole response body must conform to the auth-failure error envelope, proving the 401 originates from a credential rejection (wrong password / unknown identity) rather than a routing misconfiguration or an internal 500 that was accidentally downgraded.",
+          "source": "ai-proposed",
+          "polarity": "error",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /auth/customer/emailpass",
+          "path": "message",
+          "matcher": "toBeTruthy",
+          "rationale": "Medusa's emailpass provider always surfaces a non-empty human-readable message on a 401 so that callers can distinguish an invalid-credentials rejection from a silent or malformed error; an absent or empty message would indicate the wrong code path was hit.",
+          "source": "ai-proposed",
+          "polarity": "error",
+          "verified": true
+        }
+      ]
+    },
+    "b9d076378f33bba31b46ff6cf02824efa9dc9371a643033254d51ad15f33c524": {
+      "flow_name": "Registered Customer Full Checkout Journey",
+      "cache_key": "1a75ee9ed43fba8d09ede6332838c60301fa8bcf76272bdd1b3c332309a65190",
+      "proposed_at": "2026-07-05T13:40:56.875Z",
+      "invariants": [
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/products",
+          "path": "products.length",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "A checkout journey requires at least one purchasable product; a 200 with an empty products array would make every downstream item-add step impossible and signals a catalog or sales-channel misconfiguration.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/products",
+          "path": "count",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "count must be consistent with a non-empty catalog; count=0 while products is non-empty reveals an aggregation or index bug that would corrupt pagination.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/products",
+          "path": "offset",
+          "matcher": "toEqual",
+          "expected": 0,
+          "rationale": "The first product listing page must report offset=0; a non-zero offset on an unpaged call indicates the query cursor is not reset correctly.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "template",
+          "template": "auth_success_token",
+          "stepTitle": "POST /auth/customer/emailpass",
+          "path": "",
+          "rationale": "A 200 must carry a usable JWT token; without asserting the token field, a 200 with a missing or empty token would silently fail every auth-gated downstream call (POST /store/carts*, POST /store/payment-collections*) with a 401.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts",
+          "path": "cart.id",
+          "matcher": "toBeDefined",
+          "rationale": "The success discriminator requires cart.id to be present; a missing id means the cart was not persisted and every subsequent step that references {id} in the URL would 404.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts",
+          "path": "cart.region_id",
+          "matcher": "toBeDefined",
+          "rationale": "A cart must resolve and record a region_id at creation; absent region_id means regional pricing, tax lines, and currency cannot be computed in any later step.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts",
+          "path": "cart.currency_code",
+          "matcher": "toBeDefined",
+          "rationale": "currency_code is derived from the resolved region at cart creation; an absent value means item prices and order totals would be currency-less, breaking payment provider authorization.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts",
+          "path": "cart.sales_channel_id",
+          "matcher": "toBeDefined",
+          "rationale": "The sales channel must be resolved and stored; without sales_channel_id the confirmVariantInventoryWorkflow in later steps cannot validate availability.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "template",
+          "template": "cart_totals_balance",
+          "stepTitle": "POST /store/carts",
+          "path": "cart",
+          "rationale": "Even an empty, just-created cart must satisfy the totals balance invariant; a discrepancy here would propagate silently through every subsequent recalculation step.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "template",
+          "template": "cart_has_items",
+          "stepTitle": "POST /store/carts/{id}/line-items",
+          "path": "cart",
+          "rationale": "After a successful add-line-item call the cart must contain at least one item; a 200 with an empty items array means createLineItemsStep silently failed to persist the item.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts/{id}/line-items",
+          "path": "cart.item_total",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "Adding a priced variant must produce a positive item_total after refreshCartItemsWorkflow; a zero value means the variant's calculated_price was not applied or the item was not counted in totals.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "template",
+          "template": "cart_totals_balance",
+          "stepTitle": "POST /store/carts/{id}/line-items",
+          "path": "cart",
+          "rationale": "refreshCartItemsWorkflow reruns after the add; the balance invariant catches cases where item_total changed but cart.total was not updated consistently.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts/{id}",
+          "path": "cart.id",
+          "matcher": "toBeDefined",
+          "rationale": "The cart update must return the same cart object; a missing id means the response body is not a valid cart and the cart reference is lost for subsequent steps.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts/{id}",
+          "path": "cart.email",
+          "matcher": "toBeDefined",
+          "rationale": "For a registered-customer flow, the cart update sets the customer's email on the cart; an undefined email means customer association failed and the order cannot be linked to the account.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "template",
+          "template": "cart_totals_balance",
+          "stepTitle": "POST /store/carts/{id}",
+          "path": "cart",
+          "rationale": "refreshCartItemsWorkflow reruns on every cart update; a balance violation here would silently corrupt the subtotal/total displayed at checkout and carried into the order.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
           "stepTitle": "GET /store/shipping-options",
           "path": "shipping_options.length",
           "matcher": "toBeGreaterThan",
           "expected": 0,
-          "rationale": "a non-empty cart must offer at least one shipping option, or checkout cannot proceed",
+          "rationale": "The checkout flow cannot advance without at least one shipping option; zero results on a 200 would cause the subsequent shipping-methods step to have nothing to select, crashing checkout silently.",
           "source": "ai-proposed",
+          "polarity": "success",
           "verified": true
         },
         {
+          "kind": "field",
+          "stepTitle": "POST /store/carts/{id}/shipping-methods",
+          "path": "cart.shipping_methods.length",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "This endpoint replaces all shipping methods; a 200 with an empty shipping_methods array means addShippingMethodToCartStep produced no result and validateShippingStep at cart completion will fail.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts/{id}/shipping-methods",
+          "path": "cart.shipping_total",
+          "matcher": "toBeGreaterThanOrEqual",
+          "expected": 0,
+          "rationale": "The selected shipping option's calculated_amount must be folded into cart.shipping_total; a negative or undefined value means the refreshCartItemsWorkflow did not propagate the shipping cost into cart totals.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "template",
+          "template": "cart_totals_balance",
+          "stepTitle": "POST /store/carts/{id}/shipping-methods",
+          "path": "cart",
+          "rationale": "After adding a shipping method, refreshCartItemsWorkflow updates all totals; the balance invariant catches cases where shipping_total was set but cart.total was not updated to include it.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/payment-collections",
+          "path": "payment_collection.id",
+          "matcher": "toBeDefined",
+          "rationale": "A created payment collection must carry its id; without it the subsequent POST /store/payment-collections/{id}/payment-sessions step cannot reference the collection and no session can be created.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/payment-collections",
+          "path": "payment_collection.currency_code",
+          "matcher": "toBeDefined",
+          "rationale": "The payment collection must inherit the cart's currency_code; an absent value means the provider cannot denominate the authorization amount and payment will fail at completion.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
           "stepTitle": "GET /store/payment-providers",
           "path": "payment_providers.length",
           "matcher": "toBeGreaterThan",
           "expected": 0,
-          "rationale": "the region must expose at least one payment provider for the cart to be payable",
+          "rationale": "At least one payment provider must be enabled; zero providers means no payment session can be created and cart completion will be blocked at validateCartPaymentsStep.",
           "source": "ai-proposed",
+          "polarity": "success",
           "verified": true
         },
         {
+          "kind": "field",
+          "stepTitle": "GET /store/payment-providers",
+          "path": "count",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "count must reflect a non-empty provider set; count=0 while payment_providers is non-empty reveals an aggregation bug; count>0 with an empty list reveals a retrieval bug — either silently breaks the next step.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/payment-collections/{id}/payment-sessions",
+          "path": "payment_collection.payment_sessions.length",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "After this call, payment_sessions must be non-empty; an empty array on a 200 means the session was not persisted, and validateCartPaymentsStep at cart completion will reject the cart with no clear error.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "template",
+          "template": "checkout_returns_order",
+          "stepTitle": "POST /store/carts/{id}/complete",
+          "path": "",
+          "rationale": "Cart completion returns HTTP 200 on BOTH success (type='order') and payment-authorization failure (type='cart', error set); this template asserts the order branch was taken — the only invariant that distinguishes a real order from a silent payment failure.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
           "stepTitle": "POST /store/carts/{id}/complete",
           "path": "type",
           "matcher": "toBe",
           "expected": "order",
-          "rationale": "complete returns HTTP 200 even when the cart fails to convert ({type:'cart',error}); only type==='order' proves the order was actually created",
+          "rationale": "type is the sole discriminator between a placed order and a failed payment on a 200 response; type='cart' means authorization failed and no order exists — a status-code assertion alone cannot detect this.",
           "source": "ai-proposed",
+          "polarity": "success",
           "verified": true
         },
         {
+          "kind": "field",
           "stepTitle": "POST /store/carts/{id}/complete",
+          "path": "order.status",
+          "matcher": "toBe",
+          "expected": "pending",
+          "rationale": "A newly placed order must be in 'pending' status; any other value (e.g. 'canceled', 'completed') would indicate an unexpected post-placement workflow transition that would break fulfillment flows.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/orders/{id}",
+          "path": "order.id",
+          "matcher": "toBeDefined",
+          "rationale": "The fetched order must carry its persisted id; a missing id means the response is not a valid order object, regardless of HTTP 200.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/orders/{id}",
+          "path": "order.status",
+          "matcher": "toBe",
+          "expected": "pending",
+          "rationale": "Immediately after placement the order must still be 'pending'; a different status would indicate an unexpected automated transition (e.g. auto-capture or auto-cancel) occurred between placement and this read.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": true
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/orders/{id}",
           "path": "order.items.length",
           "matcher": "toBeGreaterThan",
           "expected": 0,
-          "rationale": "the created order must carry the cart's line items, not be an empty order",
+          "rationale": "The placed order must carry the cart's line items; an empty items array means the cart→order item linkage was lost during the createCartsToOrderStep conversion, making the order unfulfillable.",
           "source": "ai-proposed",
+          "polarity": "success",
           "verified": true
         },
         {
+          "kind": "template",
+          "template": "order_totals_balance",
           "stepTitle": "GET /store/orders/{id}",
-          "path": "order.payment_status",
-          "matcher": "toBeDefined",
-          "rationale": "a completed order must carry a payment status (the payment side effect actually ran)",
+          "path": "order",
+          "rationale": "Order totals must be self-consistent as persisted; a balance violation here means the financial summary used for invoicing and fulfillment is corrupt and was not caught at placement time.",
           "source": "ai-proposed",
+          "polarity": "success",
           "verified": true
         }
       ]
     },
-    "003f95280ff1f97703b65c99d98d72c9657d80efdf6ac09f9464f1019a675b7c": {
-      "flow_name": "registered_customer_multi_item_browse_and_purchase",
+    "deccf3a64eb07b808afe2aa92ff8c054ee09a4fcbbed55858dd3422e294959b4": {
+      "flow_name": "registered customer completes checkout",
+      "cache_key": "c1a4c64bf1d200f35bdcc777329a845b914c795be1e88908c76943e259fddfde",
+      "proposed_at": "2026-07-05T13:41:26.388Z",
+      "invariants": []
+    },
+    "03701ea9836279e9fd5868ae51b2fe1f91188b4ac58d2736f9532629037c4ba7": {
+      "flow_name": "Registered Customer Full Purchase Journey",
+      "cache_key": "07f82cecedf559724048fb86fa1b626bd5f896e8344078a085cb0491bfb9b4ed",
+      "proposed_at": "2026-07-05T13:41:23.349Z",
       "invariants": [
         {
-          "stepTitle": "POST /store/carts/{id}/line-items",
-          "path": "cart.items.length",
+          "kind": "field",
+          "stepTitle": "GET /store/regions",
+          "path": "regions.length",
           "matcher": "toBeGreaterThan",
           "expected": 0,
-          "rationale": "adding a line item must leave the cart with at least one item",
+          "rationale": "At least one region must exist; an empty array with HTTP 200 is a silent catalog failure that causes cart creation to throw NOT_FOUND, making the rest of the journey unreachable.",
           "source": "ai-proposed",
-          "verified": true
+          "polarity": "success",
+          "verified": false
         },
         {
+          "kind": "field",
+          "stepTitle": "GET /store/regions",
+          "path": "count",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "count must be non-zero when regions are present; a zero count alongside a non-empty regions array reveals a pagination metadata regression independent of the list contents.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "template",
+          "template": "auth_success_token",
+          "stepTitle": "POST /auth/customer/emailpass",
+          "path": "",
+          "rationale": "A 200 without a bearer token leaves the customer unable to pass the requireCustomerAuth gate (GATE_MATCHERS: /store/carts*, /store/payment-collections*), silently blocking every subsequent mutation in the journey.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/products",
+          "path": "products.length",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "The flow requires at least one purchasable product; HTTP 200 with an empty list is a silent catalog failure that makes variant selection impossible.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/products/{id}",
+          "path": "product",
+          "matcher": "toBeDefined",
+          "rationale": "The top-level 'product' key must be present; its absence at HTTP 200 is a serialization regression that would leave downstream steps with no product data.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/products/{id}",
+          "path": "product.id",
+          "matcher": "toBeTruthy",
+          "rationale": "product.id must be a non-empty string so that the correct variant can be associated with this product when building the cart.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/products/{id}",
+          "path": "product.variants.length",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "At least one variant must be present; a 200 with an empty variants array silently prevents any line-item from being added to the cart.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts",
+          "path": "cart.id",
+          "matcher": "toBeTruthy",
+          "rationale": "cart.id (a cart_* string) must be present so subsequent POST /store/carts/{id} and complete calls can reference the correct cart.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts",
+          "path": "cart.region_id",
+          "matcher": "toBeTruthy",
+          "rationale": "The handler resolves a region before creating the cart; a missing region_id with HTTP 200 means the region guard silently passed without binding a region, breaking currency and price resolution.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts",
+          "path": "cart.currency_code",
+          "matcher": "toBeTruthy",
+          "rationale": "currency_code is derived from the resolved region; its absence means all line-item prices will be undefined and totals cannot be computed.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts",
+          "path": "cart.sales_channel_id",
+          "matcher": "toBeTruthy",
+          "rationale": "A successfully validated sales channel must be bound to the cart; absence means validateSalesChannelStep completed without persisting the channel, which will cause subsequent inventory checks to reference no channel.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "template",
+          "template": "cart_has_items",
+          "stepTitle": "POST /store/carts",
+          "path": "cart",
+          "rationale": "Items submitted in the creation payload must appear in cart.items; an empty items array with HTTP 200 means the line-item creation step was silently skipped.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts/{id}",
+          "path": "cart.id",
+          "matcher": "toBeTruthy",
+          "rationale": "The updated cart must echo its id; absence signals a serialization regression in the update handler response.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts/{id}",
+          "path": "cart.email",
+          "matcher": "toBeTruthy",
+          "rationale": "For a registered customer (has_account === true), email must be persisted on the cart after update; a missing email means the customer association step failed silently despite HTTP 200.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "template",
+          "template": "cart_has_items",
+          "stepTitle": "POST /store/carts/{id}",
+          "path": "cart",
+          "rationale": "Line items must survive the cart update; an empty items array here will cause validateCartItemsStep to block completion even though all prior steps returned 200.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "template",
+          "template": "cart_totals_balance",
+          "stepTitle": "POST /store/carts/{id}",
+          "path": "cart",
+          "rationale": "After refreshCartItemsWorkflow re-derives prices, promotions, and tax lines, the cart's subtotal/tax_total/discount_total/total must be internally consistent; mismatched totals at HTTP 200 are a silent pricing regression.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/shipping-options",
+          "path": "shipping_options.length",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "At least one shipping option must be available for the cart; an empty list with HTTP 200 means validateShippingStep will block cart completion with no actionable error visible here.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/payment-collections",
+          "path": "payment_collection.id",
+          "matcher": "toBeTruthy",
+          "rationale": "The created payment collection must have an id so the subsequent POST /store/payment-collections/{id}/payment-sessions call can reference the correct collection.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/payment-providers",
+          "path": "payment_providers.length",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "At least one payment provider must be registered; an empty list with HTTP 200 means no payment session can be created and checkout is silently blocked.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/payment-collections/{id}/payment-sessions",
+          "path": "payment_collection.payment_sessions.length",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "At least one payment session must exist after this call; an empty sessions array means validateCartPaymentsStep will find nothing to authorize and will block cart completion.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "template",
+          "template": "checkout_returns_order",
+          "stepTitle": "POST /store/carts/{id}/complete",
+          "path": "",
+          "rationale": "HTTP 200 alone cannot distinguish a placed order from a payment-authorization failure; the body must confirm type === 'order' with a populated order object — type === 'cart' (with an error field) is the same-status failure shape.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
           "stepTitle": "POST /store/carts/{id}/complete",
           "path": "type",
           "matcher": "toBe",
           "expected": "order",
-          "rationale": "complete returns 200 even on a failed conversion; type==='order' is the real success oracle",
+          "rationale": "type === 'cart' is the HTTP-200 failure envelope (payment-auth failed, cart not converted); asserting 'order' is the only body-level proof that the cart was actually converted to an order.",
           "source": "ai-proposed",
-          "verified": true
+          "polarity": "success",
+          "verified": false
         },
         {
+          "kind": "field",
+          "stepTitle": "POST /store/carts/{id}/complete",
+          "path": "order.id",
+          "matcher": "toBeTruthy",
+          "rationale": "order.id must be a non-empty string so the subsequent GET /store/orders/{id} retrieval targets the correct, newly placed order.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts/{id}/complete",
+          "path": "order.status",
+          "matcher": "toBe",
+          "expected": "pending",
+          "rationale": "A newly placed order must carry status 'pending'; any other value ('completed', 'canceled', etc.) indicates the order lifecycle was incorrectly advanced or the idempotent re-entry path returned a stale order.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
           "stepTitle": "GET /store/orders/{id}",
           "path": "order.id",
-          "matcher": "toBeDefined",
-          "rationale": "the confirmed order must be retrievable with a real id",
+          "matcher": "toBeTruthy",
+          "rationale": "The retrieved order must have a populated id; absence with HTTP 200 signals a serialization regression or that the wrong resource was resolved by the id.",
           "source": "ai-proposed",
-          "verified": true
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/orders/{id}",
+          "path": "order.status",
+          "matcher": "toBe",
+          "expected": "pending",
+          "rationale": "A freshly placed order must remain 'pending' at retrieval; a different status indicates the order lifecycle was incorrectly advanced between placement and this read.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/orders/{id}",
+          "path": "order.items.length",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "The placed order must contain at least one line item; an empty items array with HTTP 200 means the cart's products were not transferred to the order during completion.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "template",
+          "template": "order_totals_balance",
+          "stepTitle": "GET /store/orders/{id}",
+          "path": "order",
+          "rationale": "The finalized order's financial fields must be internally consistent; mismatched subtotal/tax_total/discount_total/total values at HTTP 200 indicate a pricing or serialization regression in order creation.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
         }
       ]
     },
-    "9814b5a0bf736e66ee3d4ef20ad0fad4c69109bca6c66c0ae5b7dd1368412fa3": {
-      "flow_name": "Admin Order Cancellation Journey",
+    "04ae082558bac653c82d9f7c5f82fa5ece82d476df1d3e1868ec6697393fd2b4": {
+      "flow_name": "Registered Customer Full Checkout Journey",
+      "cache_key": "dabc43ca5d9c788712bc72e4911cd29fcbbaf4673e223e5c18867a70c77511d7",
+      "proposed_at": "2026-07-05T13:41:43.299Z",
+      "invariants": []
+    },
+    "053ae148a9a10d293318d21e363ff0709a1d254c29e63e6794d932ef51b9af18": {
+      "flow_name": "Registered Customer Full Checkout Journey",
+      "cache_key": "26617d23a1717251dcb59e73a768e9352ca2638d05d61201d79c4e610964fc48",
+      "proposed_at": "2026-07-05T13:43:45.794Z",
       "invariants": [
         {
-          "stepTitle": "POST /admin/orders/{id}/cancel",
-          "path": "order.status",
-          "matcher": "toBe",
-          "expected": "canceled",
-          "rationale": "cancel returns HTTP 200 regardless; order.status==='canceled' is the only proof the cancellation actually took effect",
+          "kind": "template",
+          "template": "auth_success_token",
+          "stepTitle": "POST /auth/customer/emailpass",
+          "path": "",
+          "rationale": "A successful customer auth must return a usable token; a 200 without a valid token leaves every gated cart/checkout route (GATE_MATCHERS: /store/carts*, /store/payment-collections*) inaccessible, silently breaking all downstream steps.",
           "source": "ai-proposed",
-          "verified": true
+          "polarity": "success",
+          "verified": false
         },
         {
-          "stepTitle": "GET /admin/orders/{id}",
+          "kind": "field",
+          "stepTitle": "GET /store/products/{id}",
+          "path": "product.id",
+          "matcher": "toBeDefined",
+          "rationale": "The product object must carry its id; downstream steps reference the product's variant ids when constructing line items.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/products/{id}",
+          "path": "product.variants.length",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "At least one variant must exist so a line item can be added in the next step; zero variants means checkout cannot proceed regardless of status code.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts",
+          "path": "cart.id",
+          "matcher": "toBeDefined",
+          "rationale": "The created cart must be assigned an id; every subsequent mutating step embeds this id in the URL path — an absent id means the cart was never persisted.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts",
+          "path": "cart.region_id",
+          "matcher": "toBeDefined",
+          "rationale": "The endpoint behavior notes that the workflow throws NOT_FOUND when no region resolves; a defined region_id on the response proves the region guard was satisfied and prices can be computed.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts",
+          "path": "cart.currency_code",
+          "matcher": "toBeDefined",
+          "rationale": "Currency code must be set (from request or region default) for all price computations in subsequent steps; an absent currency_code means line-item prices cannot be resolved.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts",
+          "path": "cart.sales_channel_id",
+          "matcher": "toBeDefined",
+          "rationale": "A resolved sales channel must be stored on the cart; it is required by inventory and availability checks when adding line items.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "template",
+          "template": "cart_totals_balance",
+          "stepTitle": "POST /store/carts",
+          "path": "cart",
+          "rationale": "Even a newly created cart must have internally consistent totals; an imbalance here indicates the tax or discount pipeline is broken before any items are added.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "template",
+          "template": "cart_has_items",
+          "stepTitle": "POST /store/carts/{id}/line-items",
+          "path": "cart",
+          "rationale": "After adding a line item, cart.items must be non-empty; a 200 with zero items means the add silently failed — the status code alone cannot detect this because the body is always a cart object regardless.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts/{id}/line-items",
+          "path": "cart.item_total",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "A non-zero item_total proves that the added variant has a resolved unit_price and that refreshCartItemsWorkflow recalculated totals; zero here means price resolution silently failed even though an item entry may appear.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "template",
+          "template": "cart_totals_balance",
+          "stepTitle": "POST /store/carts/{id}/line-items",
+          "path": "cart",
+          "rationale": "After adding items and running refreshCartItemsWorkflow, all cart totals must be internally consistent; an imbalance reveals a regression in the post-add recalculation pipeline.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts/{id}",
+          "path": "cart.id",
+          "matcher": "toBeDefined",
+          "rationale": "The updated cart must echo back its id, confirming the correct cart was mutated and returned.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "template",
+          "template": "cart_totals_balance",
+          "stepTitle": "POST /store/carts/{id}",
+          "path": "cart",
+          "rationale": "After updating the cart (email, address, region) and running refreshCartItemsWorkflow, totals must remain balanced including any repriced items; an imbalance here is a silent pricing regression.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/shipping-options",
+          "path": "shipping_options.length",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "At least one shipping option must be available for the cart's region/sales-channel context; zero options means the next step has no valid option to select and the validateShippingStep will block order placement.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts/{id}/shipping-methods",
+          "path": "cart.shipping_methods.length",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "The workflow replaces all prior shipping methods then adds the submitted one(s); zero methods on the returned cart means neither the replacement nor the add was persisted — validateShippingStep at completion will fail.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts/{id}/shipping-methods",
+          "path": "cart.shipping_total",
+          "matcher": "toBeGreaterThanOrEqual",
+          "expected": 0,
+          "rationale": "After adding a method with a calculated_price, shipping_total must be a non-negative number; this proves the method's calculated_amount was folded into totals by refreshCartItemsWorkflow.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "template",
+          "template": "cart_totals_balance",
+          "stepTitle": "POST /store/carts/{id}/shipping-methods",
+          "path": "cart",
+          "rationale": "After replacing shipping methods and refreshing the cart, totals including the new shipping amount must be balanced; an imbalance reveals the refresh did not run or the amount was not folded in.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/payment-collections",
+          "path": "payment_collection.id",
+          "matcher": "toBeDefined",
+          "rationale": "The payment collection must be created with an id; subsequent steps pass this id in the URL to create payment sessions and the cart-complete step links order to it.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/payment-providers",
+          "path": "payment_providers.length",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "At least one payment provider must be available; without one, the next step cannot select a provider for the payment session and validateCartPaymentsStep will block order placement.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/payment-providers",
+          "path": "count",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "The count field must reflect a non-zero available provider count; a count of 0 while payment_providers is non-empty (or vice versa) reveals a pagination or aggregation regression.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/payment-collections/{id}/payment-sessions",
+          "path": "payment_collection.payment_sessions.length",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "After creating a payment session, the collection must contain at least one session; the cart-complete step's validateCartPaymentsStep requires an authorizable session and will surface as a 4xx if none exists.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/payment-collections/{id}/payment-sessions",
+          "path": "payment_collection.id",
+          "matcher": "toBeDefined",
+          "rationale": "The payment collection must retain its id after sessions are added to it; a missing id means the returned object is not the expected collection.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts/{id}/complete",
+          "path": "type",
+          "matcher": "toBe",
+          "expected": "order",
+          "rationale": "This endpoint returns HTTP 200 for BOTH success (type='order') and payment-authorization failure (type='cart'); asserting type='order' is the only way to prove the cart was actually converted to an order — the status code cannot distinguish these outcomes.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "template",
+          "template": "checkout_returns_order",
+          "stepTitle": "POST /store/carts/{id}/complete",
+          "path": "",
+          "rationale": "The template holistically asserts the success envelope — type='order' plus a valid order object — ruling out the payment-failure envelope (type='cart', no order) that also returns HTTP 200.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts/{id}/complete",
+          "path": "order.status",
+          "matcher": "toBe",
+          "expected": "pending",
+          "rationale": "A newly placed order must have status 'pending'; any other status (e.g. 'completed' or 'canceled') signals an unexpected state transition during placement.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts/{id}/complete",
           "path": "order.id",
           "matcher": "toBeDefined",
-          "rationale": "the order under cancellation must exist and be fetchable before the cancel step",
+          "rationale": "A successfully placed order must carry an id; this id is used in the subsequent GET step to retrieve and verify the order.",
           "source": "ai-proposed",
-          "verified": true
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/orders/{id}",
+          "path": "order.id",
+          "matcher": "toBeDefined",
+          "rationale": "The retrieved order must carry its id, confirming it was persisted and is retrievable after placement.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/orders/{id}",
+          "path": "order.status",
+          "matcher": "toBe",
+          "expected": "pending",
+          "rationale": "A newly placed order must still be in 'pending' status when subsequently retrieved; any other status (e.g. 'canceled') signals an unintended side-effect during or after order creation.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/orders/{id}",
+          "path": "order.items.length",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "The placed order must contain at least the line items transferred from the cart; zero items means items were silently dropped during the cart-to-order conversion.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "template",
+          "template": "order_totals_balance",
+          "stepTitle": "GET /store/orders/{id}",
+          "path": "order",
+          "rationale": "The order's totals must be internally consistent; an imbalance here reveals a silent pricing or discount regression that occurred during order creation from the cart.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        }
+      ]
+    },
+    "07dba55a074b1dc639b56d494d2d3dead130a0830fdbd4c8e93bdf14d0042f64": {
+      "flow_name": "registered customer completes checkout",
+      "cache_key": "f68b1b028b99021f6fc4ff7535d5976b67f1dadea95affdfd0c55615caa67751",
+      "proposed_at": "2026-07-05T13:44:02.161Z",
+      "invariants": [
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/regions",
+          "path": "regions.length",
+          "matcher": "toBeGreaterThanOrEqual",
+          "expected": 1,
+          "rationale": "The checkout flow requires at least one active region; a zero-length array means POST /store/carts will throw 'No regions found' and every subsequent step is unreachable.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/regions",
+          "path": "count",
+          "matcher": "toBeGreaterThanOrEqual",
+          "expected": 1,
+          "rationale": "The server-reported count must agree that regions exist; a count/regions.length discrepancy exposes a pagination or serialization bug invisible to the status code.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "template",
+          "template": "auth_success_token",
+          "stepTitle": "POST /auth/customer/emailpass",
+          "path": "",
+          "rationale": "HTTP 200 does not prove a usable credential was issued; the token must be present and non-empty because all subsequent POST/PATCH operations on /store/carts* and /store/payment-collections* are gated by requireCustomerAuth and will return 401 without it.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/products",
+          "path": "products.length",
+          "matcher": "toBeGreaterThanOrEqual",
+          "expected": 1,
+          "rationale": "A non-empty catalog is a prerequisite for selecting a valid variant_id; an empty list means the line-item step will fail with a not_found or invalid_data error for any variant chosen.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts",
+          "path": "cart.id",
+          "matcher": "toBeDefined",
+          "rationale": "cart.id must be present and stable because every subsequent step addresses the cart by this id; its absence proves the cart was not persisted despite the 200.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts",
+          "path": "cart.region_id",
+          "matcher": "toBeDefined",
+          "rationale": "The resolved region must be attached to the cart; a missing region_id means currency and tax computation are undefined and line-item pricing will silently fail downstream.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts",
+          "path": "cart.currency_code",
+          "matcher": "toBeDefined",
+          "rationale": "Currency must be set from the resolved region; without it variant prices cannot be computed in a consistent denomination in the line-item step.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts",
+          "path": "cart.sales_channel_id",
+          "matcher": "toBeDefined",
+          "rationale": "The sales channel must be attached; inventory and price validation in POST /store/carts/{id}/line-items keys off this field, so its absence silently breaks availability checks.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "template",
+          "template": "cart_has_items",
+          "stepTitle": "POST /store/carts/{id}/line-items",
+          "path": "cart",
+          "rationale": "The response is always a cart object regardless of whether the item was actually added; asserting cart.items.length > 0 is the only body-level proof that the line-item mutation took effect.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts/{id}/line-items",
+          "path": "cart.item_total",
+          "matcher": "toBeGreaterThan",
+          "expected": 0,
+          "rationale": "A successfully added item must produce a non-zero item_total; a zero value means the variant's price was not resolved—the item exists in the cart but carries no monetary value, causing the order total to be wrong at completion.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts/{id}",
+          "path": "cart.email",
+          "matcher": "toBeDefined",
+          "rationale": "For a registered customer, the email must be echoed back on the updated cart; its absence means the customer context was not linked, which would produce an anonymous order or break order-confirmation emails.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts/{id}",
+          "path": "cart.shipping_address",
+          "matcher": "toBeDefined",
+          "rationale": "The shipping address must be persisted in this update step; an absent address predicts a downstream failure in validateShippingStep during cart completion, and a 200 here cannot reveal that the field was silently dropped.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/shipping-options",
+          "path": "shipping_options.length",
+          "matcher": "toBeGreaterThanOrEqual",
+          "expected": 1,
+          "rationale": "At least one shipping option must exist for the cart's region/sales channel; validateShippingStep during POST /store/carts/{id}/complete will block order placement if no valid shipping method is available, so an empty list here is a guaranteed future failure.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/payment-collections",
+          "path": "payment_collection.id",
+          "matcher": "toBeDefined",
+          "rationale": "A payment collection must be created with a stable id; without it the payment-session step has no collection to attach to and validateCartPaymentsStep during completion will block order placement.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/payment-collections",
+          "path": "payment_collection.cart_id",
+          "matcher": "toBeDefined",
+          "rationale": "The payment collection must reference the cart it was created for; an absent cart_id means the collection is orphaned and will not be recognized by the completion workflow's payment validation.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/payment-providers",
+          "path": "payment_providers.length",
+          "matcher": "toBeGreaterThanOrEqual",
+          "expected": 1,
+          "rationale": "At least one payment provider must be configured; without a provider the next step cannot create a payment session and cart completion is impossible regardless of HTTP status.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/payment-collections/{id}/payment-sessions",
+          "path": "payment_collection.payment_sessions.length",
+          "matcher": "toBeGreaterThanOrEqual",
+          "expected": 1,
+          "rationale": "A payment session must exist on the collection; validateCartPaymentsStep during cart completion will reject the cart with a 4xx if no active session is present, and this 200 cannot prove the session was actually created without inspecting the array.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "template",
+          "template": "checkout_returns_order",
+          "stepTitle": "POST /store/carts/{id}/complete",
+          "path": "",
+          "rationale": "Cart completion returns HTTP 200 for both successful placement ({ type: 'order', order }) and payment-authorization failure ({ type: 'cart', error }); asserting type === 'order' is the only way to distinguish the two outcomes—the status code alone cannot.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "POST /store/carts/{id}/complete",
+          "path": "order.status",
+          "matcher": "toBe",
+          "expected": "pending",
+          "rationale": "A newly placed order must be in 'pending' status; any other value (e.g. 'completed' or 'canceled') indicates an unintended post-placement state transition in the order lifecycle event chain.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/orders/{id}",
+          "path": "order.id",
+          "matcher": "toBeDefined",
+          "rationale": "The order must be retrievable by the id returned from cart completion; an absent id means the order was not durably persisted or the id in the completion response is stale or mismatched.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
+        },
+        {
+          "kind": "field",
+          "stepTitle": "GET /store/orders/{id}",
+          "path": "order.status",
+          "matcher": "toBe",
+          "expected": "pending",
+          "rationale": "The persisted order status must match what cart completion reported; a discrepancy (e.g. 'canceled') proves the order was mutated between placement and retrieval by a rogue side-effect or event handler.",
+          "source": "ai-proposed",
+          "polarity": "success",
+          "verified": false
         }
       ]
     }

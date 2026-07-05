@@ -8,7 +8,14 @@
  * through the same single-flight lock so the pipeline view's Run stage shares the
  * pipeline's busy state (slice-level suite control stays in the Test Runner view).
  */
-export type PipelineJob = "mine" | "generate" | "repair" | "triage" | "test:all";
+export type PipelineJob =
+  | "mine"
+  | "invariants"
+  | "invariants:verify"
+  | "generate"
+  | "repair"
+  | "triage"
+  | "test:all";
 
 export interface JobParams {
   /** behavior:mine — minimum support threshold (positive integer). */

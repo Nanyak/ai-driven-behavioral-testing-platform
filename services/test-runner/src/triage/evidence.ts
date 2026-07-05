@@ -20,7 +20,15 @@ function bodyKey(persona: string, flowId: string, endpoint: string): string {
   return `${persona}|${flowId}|${endpoint}`;
 }
 
-/** Map a failing step's (persona, flow, endpoint) -> its captured response body. */
+/** Cap on the body slice that becomes `response_body_excerpt` and is sent to the
+ * triage LLM. Deliberately small and INDEPENDENT of the capture cap in
+ * script-generator/emit.ts: that ceiling is sized so invariant VERIFY (a local,
+ * LLM-free pure function) can see deep fields of a full list response, but the
+ * triage prompt must stay a true excerpt so a large body can't blow up tokens/cost. */
+const TRIAGE_EXCERPT_CAP = 4000;
+
+/** Map a failing step's (persona, flow, endpoint) -> a capped excerpt of its
+ * captured response body (bounded for the LLM prompt, not the full capture). */
 function responseBodyIndex(normalized: NormalizedRunResult | null): Map<string, string> {
   const out = new Map<string, string>();
   if (!normalized) return out;
@@ -28,7 +36,7 @@ function responseBodyIndex(normalized: NormalizedRunResult | null): Map<string, 
     const flowId = test.flow_signature ?? test.flow_name;
     for (const step of test.steps) {
       if (step.status !== "failed" || step.response_body == null) continue;
-      out.set(bodyKey(test.persona, flowId, step.endpoint), step.response_body);
+      out.set(bodyKey(test.persona, flowId, step.endpoint), step.response_body.slice(0, TRIAGE_EXCERPT_CAP));
     }
   }
   return out;

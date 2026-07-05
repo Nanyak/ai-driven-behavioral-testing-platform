@@ -23,7 +23,14 @@ export type RunTarget = "all" | "guest" | "customer" | "admin" | "happy" | "fail
 const RUN_TARGETS: RunTarget[] = ["all", "guest", "customer", "admin", "happy", "failure", "drafts"];
 
 /** Pipeline-authoring jobs the dashboard can trigger, plus the per-target suite runs. */
-export type JobId = "mine" | "generate" | "repair" | "triage" | `test:${RunTarget}`;
+export type JobId =
+  | "mine"
+  | "invariants"
+  | "invariants:verify"
+  | "generate"
+  | "repair"
+  | "triage"
+  | `test:${RunTarget}`;
 
 export interface JobParams {
   /** behavior:mine — minimum support threshold; positive integer when present. */
@@ -46,6 +53,13 @@ interface JobSpec {
 /** The complete allowlist. A job id absent here is rejected before any spawn. */
 const JOBS: Record<string, JobSpec> = {
   mine: { label: "Mine flows", argv: ["run", "behavior:mine"], mutating: true, needsSut: false },
+  invariants: { label: "Propose invariants", argv: ["run", "script-generator:invariants"], mutating: true, needsSut: false },
+  "invariants:verify": {
+    label: "Verify invariants",
+    argv: ["run", "script-generator:invariants:verify"],
+    mutating: true,
+    needsSut: false,
+  },
   generate: { label: "Generate tests", argv: ["run", "script-generator:generate"], mutating: true, needsSut: false },
   repair: { label: "Repair (agent)", argv: ["run", "script-generator:repair"], mutating: true, needsSut: true },
   triage: { label: "Triage report", argv: ["run", "triage"], mutating: true, needsSut: false },

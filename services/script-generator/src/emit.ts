@@ -12,6 +12,13 @@ export interface EmitResult {
   fixmeCount: number;
 }
 
+/** Cap on the captured response body written to the advisory attachment
+ * (reports/playwright/normalized.json). This is the ceiling invariant VERIFY can
+ * see: a field beyond it reads `undefined` and its invariant is dropped, so it's
+ * sized to hold a full list response (Medusa product/order lists), not just the
+ * first page of fields. Still bounded to keep the report small. */
+const RESPONSE_BODY_CAP = 200_000;
+
 function authHeaderExpr(auth: AuthRequirement): string {
   switch (auth) {
     case "publishable-key":
@@ -205,7 +212,7 @@ function renderStep(
   inner.push(
     `    await test.info().attach("response-body", { body: JSON.stringify({ endpoint: ${JSON.stringify(
       `${plan.step.method} ${plan.step.endpoint}`
-    )}, status: ${respVar}.status(), body: (await safeText(${respVar})).slice(0, 4000) }), contentType: "application/json" });`
+    )}, status: ${respVar}.status(), body: (await safeText(${respVar})).slice(0, ${RESPONSE_BODY_CAP}) }), contentType: "application/json" });`
   );
   inner.push(
     `    expect(${respVar}.status(), ${JSON.stringify(`${plan.step.method} ${plan.step.endpoint}`)}).toBe(${plan.step.expected_status});`

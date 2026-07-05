@@ -2,10 +2,9 @@
   "endpoint": "GET /admin/stock-locations",
   "expected_status": 200,
   "expected_schema": {
-    "count": "number",
-    "estimate_count": "ignored",
-    "limit": "number",
     "offset": "number",
+    "count": "number",
+    "limit": "number",
     "stock_locations": "array"
   },
   "ignore_fields": [
@@ -22,22 +21,16 @@
     "trace_id",
     "session_id"
   ],
-  "schema_source": "openapi+observed",
-  "oas_operation_id": "GetStockLocations",
-  "oas_ref": "#/components/schemas/AdminStockLocationListResponse",
-  "oas_version": "2.15.5",
-  "value_rules": [],
-  "captured_at": "2026-07-03T22:52:49.105Z",
+  "schema_source": "observed",
+  "captured_at": "2026-07-05T13:15:12.075Z",
   "source_sessions": [
-    "sess-adminCatalog-1be9b3c8-f9f5-4d88-9d27-f00502802c77",
-    "sess-adminCatalog-8e23e01b-9098-45b7-93d8-c269c205821e",
-    "sess-adminRefund-99b4beaf-6d4c-4cdf-9772-12f424141cfe",
-    "sess-adminRefund-b11a1f0b-4696-4ef0-ad6d-0bae10fd6b88",
-    "sess-adminRefund-ddd76de2-71d5-4a6e-9d13-5eea03b5a389",
-    "sess-adminRefund-f4c42b9f-7904-497e-abe9-afa3f76ccfeb",
-    "sess-adminRefund-fd5cdb45-1fc2-414d-aa84-5031ed0184a6",
-    "sess-adminReturnReject-43a27568-8297-46ee-8415-66e91a12c2b4",
-    "sess-adminReturnReject-ba285fff-75a8-4870-9881-3074cf2d9e54",
-    "sess-seed-admin-8e35f4f9-4fee-4b95-b682-8f5c6a2037c1"
+    "sess-adminRefund-03c835be-8ceb-415c-a973-add2098bbf55",
+    "sess-adminRefund-29a1dfd7-ceb0-47a3-9f52-7e3f8da455bc",
+    "sess-adminRefund-5c194acb-ceab-4f7a-8826-60c4d6ffe5ae",
+    "sess-adminRefund-9dc78250-e80b-405c-8c9b-70e167146486",
+    "sess-adminRefund-b72c016a-ecfe-4037-80d1-94e0bfd27cf2",
+    "sess-adminReturnReject-27cfb8d1-38ca-45a1-b03c-50f6ffa5f38e",
+    "sess-adminReturnReject-93ac8412-98e3-46cf-bce9-c1f1de101fc4",
+    "sess-seed-admin-82ae96b6-f34a-4635-a144-4e12bf93adc5"
   ]
 }

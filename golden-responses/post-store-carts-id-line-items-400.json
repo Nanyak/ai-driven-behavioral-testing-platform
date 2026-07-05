@@ -21,15 +21,14 @@
     "session_id"
   ],
   "schema_source": "observed",
-  "captured_at": "2026-07-03T22:52:49.105Z",
+  "captured_at": "2026-07-05T13:15:12.075Z",
   "source_sessions": [
-    "sess-comparisonBrowse-c7e73d6f-9838-4874-a57a-42d4a658cedb",
-    "sess-stockOutCheckout-057d28c7-32bd-44b3-b9ae-9e04c3ef4353",
-    "sess-stockOutCheckout-150e0d76-2eb5-467e-9015-49a3ff302f07",
-    "sess-stockOutCheckout-5c388048-c0d6-4cfb-b777-dba186aed00d",
-    "sess-stockOutCheckout-5f8a922f-30f3-4956-b98c-d877d03ef575",
-    "sess-stockOutCheckout-6f369320-2705-4963-bda9-250e74e7f20c",
-    "sess-stockOutCheckout-c9e1800e-b2be-4a2f-ad0c-91f042e400c4",
-    "sess-stockOutCheckout-cb577adc-15c8-4436-93f3-fa8e86302a29"
+    "sess-stockOutCheckout-1c1e8e38-6681-45d8-97f5-f00d1eec4558",
+    "sess-stockOutCheckout-47aceae5-2c8a-43f3-82da-b440095c70b1",
+    "sess-stockOutCheckout-90ecc471-50cc-4953-a1af-52047b758ee1",
+    "sess-stockOutCheckout-92da8a05-caa0-4a04-b49c-94c601220b93",
+    "sess-stockOutCheckout-9832dbed-6df7-4815-b3ca-1afc8be1c3d8",
+    "sess-stockOutCheckout-9e3d369f-d785-4064-89d1-c1089378afa1",
+    "sess-stockOutCheckout-a895e1ec-3356-467b-acab-191c1416518e"
   ]
 }

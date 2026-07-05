@@ -1,7 +1,8 @@
 {
-  "endpoint": "GET /store/products/{id}",
-  "expected_status": 404,
+  "endpoint": "POST /admin/orders/{id}/cancel",
+  "expected_status": 500,
   "expected_schema": {
+    "code": "string",
     "message": "string",
     "type": "string"
   },
@@ -22,10 +23,7 @@
   "schema_source": "observed",
   "captured_at": "2026-07-05T13:15:12.075Z",
   "source_sessions": [
-    "sess-edge-52277ba4-5e68-40bc-9cbd-083b822adaeb",
-    "sess-edge-73bdaaf6-44c4-49a1-9872-a91695c8c0fc",
-    "sess-edge-80f58c7e-41b4-4fc1-be4e-041eba7284f3",
-    "sess-edge-c36cbccf-a3da-4078-92b4-2ddde1d8b2de",
-    "sess-edge-f8a1c28e-6675-4e23-b077-d2ba13bdc9fa"
+    "sess-adminCancel-687edcf3-d940-4c93-852d-6380e73c5d94",
+    "sess-adminCancel-be4036ae-9a0d-461c-b495-ad4109decbba"
   ]
 }
