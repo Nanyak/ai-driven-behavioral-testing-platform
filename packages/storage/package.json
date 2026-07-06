@@ -1,0 +1,24 @@
+{
+  "name": "@behavior-platform/storage",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "bootstrap": "tsx bootstrap.ts",
+    "migrate": "tsx migrate.ts",
+    "import-local": "tsx import-local.ts",
+    "test": "tsx local.test.ts && tsx remote.test.ts",
+    "test:integration": "tsx integration.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.840.0",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.32",
+    "@types/pg": "^8.15.4",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  }
+}

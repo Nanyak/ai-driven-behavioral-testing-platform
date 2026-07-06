@@ -21,9 +21,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const SERVICE_ROOT = resolve(__dirname, "..", "..");
 const REPO_ROOT = resolve(SERVICE_ROOT, "..", "..");
+const WORKSPACE_ROOT = process.env.STORAGE_WORKSPACE_ROOT
+  ? resolve(process.env.STORAGE_WORKSPACE_ROOT)
+  : REPO_ROOT;
 
 /** Repo-root `data/sessions/` — the ingestion output dir (shared, read-only here). */
-export const SESSIONS_DIR = resolve(REPO_ROOT, "data", "sessions");
+export const SESSIONS_DIR = resolve(WORKSPACE_ROOT, "data", "sessions");
 
 export interface RequestBodyFeatures {
   present: boolean;

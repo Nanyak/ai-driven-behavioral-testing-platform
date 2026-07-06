@@ -6,9 +6,9 @@
 // `generated-tests/<persona>/<happy-path|failure-path>/<hash>.spec.ts`.
 // There is no `edge` persona and no `edge/` folder — error flows live in their
 // own persona's failure-path/.
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, cpSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { dirname, join, resolve as resolvePath } from "node:path";
+import { dirname, join, relative, resolve as resolvePath, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadAugmentedSpecs, resolveOperation } from "../../golden/src/oas-source.js";
 import type { OasDocument } from "../../golden/src/oas-types.js";
@@ -28,16 +28,18 @@ import { loadInvariants, verifiedInvariantsByStep } from "./invariants/types.js"
 import { deterministicInvariantsByStep, mergeInvariantMaps } from "./invariants/deterministic.js";
 import { businessInvariantRuntimeSource } from "./invariants/templates.js";
 import { manifestEntry, writeGenerationManifest, type GenerationManifestEntry } from "./artifacts.js";
+import { storage, type Storage } from "../../../packages/storage/index.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SERVICE_ROOT = resolvePath(__dirname, "..");
 const REPO_ROOT = resolvePath(SERVICE_ROOT, "..", "..");
-const GENERATED_TESTS_DIR = resolvePath(REPO_ROOT, "generated-tests");
+const WORKSPACE_ROOT = process.env.STORAGE_WORKSPACE_ROOT
+  ? resolvePath(process.env.STORAGE_WORKSPACE_ROOT)
+  : REPO_ROOT;
+const GENERATED_TESTS_DIR = resolvePath(WORKSPACE_ROOT, "generated-tests");
 const GOLDEN_VENDOR_DIR = resolvePath(GENERATED_TESTS_DIR, "_golden");
 const GOLDEN_SOURCE_DIR = resolvePath(REPO_ROOT, "services", "golden", "src");
-const GOLDEN_RESPONSES_DIR = resolvePath(REPO_ROOT, "golden-responses");
-const HITL_STORE = resolvePath(REPO_ROOT, "data", "hitl", "approvals.json");
-
+const GOLDEN_RESPONSES_DIR = resolvePath(WORKSPACE_ROOT, "golden-responses");
 // Each generated spec stamps its flow_signature (ADR 0002). Same permissive
 // matcher coverage.ts uses, so a cosmetic stamp change does not silently break
 // approved-spec preservation.
@@ -53,40 +55,42 @@ const STATUS_SIGNATURE_STAMP = /status_signature["'\s:=]+([\d,]+)/i;
  * generator must NOT codify. Missing/malformed store -> empty (every flow is new),
  * never fatal — mirrors coverage.ts tolerance.
  */
-export function approvedOutcomes(path: string = HITL_STORE): Map<string, Set<string>> {
+export async function approvedOutcomes(
+  store: Storage = storage
+): Promise<Map<string, Set<string>>> {
   const out = new Map<string, Set<string>>();
-  if (!existsSync(path)) return out;
-  let parsed: unknown;
   try {
-    parsed = JSON.parse(readFileSync(path, "utf8"));
+    const parsed = await store.records.readJson<unknown>("hitl/approvals");
+    if (parsed === null) return out;
+    const entries = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray((parsed as { entries?: unknown }).entries)
+        ? (parsed as { entries: unknown[] }).entries
+        : [];
+    for (const raw of entries as Array<Record<string, unknown>>) {
+      const signature = raw.flow_signature ?? raw.signature;
+      if (raw.status !== "approved" || typeof signature !== "string") continue;
+      if (typeof raw.status_signature !== "string") continue;
+      const sig = signature.toLowerCase();
+      const set = out.get(sig) ?? new Set<string>();
+      set.add(raw.status_signature);
+      out.set(sig, set);
+    }
   } catch {
     return out;
-  }
-  const entries = Array.isArray(parsed)
-    ? parsed
-    : Array.isArray((parsed as { entries?: unknown }).entries)
-      ? (parsed as { entries: unknown[] }).entries
-      : [];
-  for (const raw of entries as Array<Record<string, unknown>>) {
-    const signature = raw.flow_signature ?? raw.signature;
-    if (raw.status !== "approved" || typeof signature !== "string") continue;
-    if (typeof raw.status_signature !== "string") continue;
-    const sig = signature.toLowerCase();
-    const set = out.get(sig) ?? new Set<string>();
-    set.add(raw.status_signature);
-    out.set(sig, set);
   }
   return out;
 }
 
-export function reviewDecisions(path: string = HITL_STORE): Map<string, string> {
+export async function reviewDecisions(
+  store: Storage = storage
+): Promise<Map<string, string>> {
   const out = new Map<string, string>();
-  if (!existsSync(path)) return out;
   try {
-    const parsed = JSON.parse(readFileSync(path, "utf8")) as {
+    const parsed = await store.records.readJson<{
       entries?: Array<Record<string, unknown>>;
-    };
-    for (const raw of parsed.entries ?? []) {
+    }>("hitl/approvals");
+    for (const raw of parsed?.entries ?? []) {
       const signature = raw.flow_signature;
       const outcome = raw.status_signature;
       const status = raw.status;
@@ -109,31 +113,64 @@ export function reviewDecisions(path: string = HITL_STORE): Map<string, string> 
   return out;
 }
 
-/** The {flow_signature, status_signature} a generated spec stamped (either may be
- * null if unreadable/unstamped — an older spec predating the status stamp). */
-function specStamps(file: string): { signature: string | null; outcome: string | null } {
+/**
+ * Restore any APPROVED spec whose on-disk artifact is missing, from its tracked
+ * snapshot (data/hitl/approved-specs, written on approve). generated-tests/ is
+ * gitignored and approved flows are skip-gated out of candidates, so generate
+ * NEVER re-emits an approved flow — it relies on the on-disk file surviving. When
+ * that file is gone (a cleaned tree, a fresh checkout), this fills it back in
+ * VERBATIM so the approval stays valid (hash-exact) and keeps running.
+ *
+ * Fills MISSING files only: a flow that WAS emitted this run (present on disk,
+ * possibly drifted) is left untouched, so legitimate "artifact changed" still
+ * surfaces instead of being overwritten by the old snapshot. Returns the count.
+ */
+async function restoreMissingApprovedSpecs(store: Storage = storage): Promise<number> {
+  let restored = 0;
   try {
-    const text = readFileSync(file, "utf8");
-    return {
-      signature: SIGNATURE_STAMP.exec(text)?.[1].toLowerCase() ?? null,
-      outcome: STATUS_SIGNATURE_STAMP.exec(text)?.[1] ?? null,
-    };
+    const parsed = await store.records.readJson<{
+      entries?: Array<Record<string, unknown>>;
+    }>("hitl/approvals");
+    for (const raw of parsed?.entries ?? []) {
+      if (raw.status !== "approved" || typeof raw.test_path !== "string") continue;
+      const relative = raw.test_path.replace(/^generated-tests[/\\]/, "");
+      const specKey = `specs/${relative}`;
+      if ((await store.blobs.get(specKey)) !== null) continue;
+      const snapshot = await store.blobs.get(`approved-specs/${relative}`);
+      if (snapshot === null) continue;
+      await store.blobs.put(specKey, snapshot);
+      restored++;
+    }
   } catch {
-    return { signature: null, outcome: null };
+    // malformed store -> nothing to restore, never fatal
   }
+  return restored;
 }
 
-export function existingGeneratedReviewIds(dir: string = GENERATED_TESTS_DIR): Set<string> {
+/** The {flow_signature, status_signature} a generated spec stamped (either may be
+ * null if unreadable/unstamped — an older spec predating the status stamp). */
+function specStamps(text: string): { signature: string | null; outcome: string | null } {
+  return {
+    signature: SIGNATURE_STAMP.exec(text)?.[1].toLowerCase() ?? null,
+    outcome: STATUS_SIGNATURE_STAMP.exec(text)?.[1] ?? null,
+  };
+}
+
+export async function existingGeneratedReviewIds(
+  store: Storage = storage
+): Promise<Set<string>> {
   const ids = new Set<string>();
-  if (!existsSync(dir)) return ids;
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) {
-      for (const id of existingGeneratedReviewIds(full)) ids.add(id);
-    } else if (entry.endsWith(".spec.ts")) {
-      const { signature, outcome } = specStamps(full);
-      if (signature) ids.add(`${signature}:${outcome || "unknown"}`);
-    }
+  const keys = (
+    await Promise.all(
+      PERSONA_FOLDERS.map((persona) => store.blobs.list(`specs/${persona}`))
+    )
+  ).flat();
+  for (const key of keys) {
+    if (!key.endsWith(".spec.ts")) continue;
+    const bytes = await store.blobs.get(key);
+    if (bytes === null) continue;
+    const { signature, outcome } = specStamps(bytes.toString("utf8"));
+    if (signature) ids.add(`${signature}:${outcome || "unknown"}`);
   }
   return ids;
 }
@@ -149,38 +186,27 @@ export function existingGeneratedReviewIds(dir: string = GENERATED_TESTS_DIR): S
  * (outcome === null) falls back to signature-only preservation. Returns the number
  * of retained specs.
  */
-export function cleanPersonaFolderPreservingApproved(
-  folder: string,
+export async function cleanPersonaFolderPreservingApproved(
+  persona: string,
   approvedOutcomes: Map<string, Set<string>>,
-  decisions: Map<string, string> = new Map()
-): number {
-  if (!existsSync(folder)) return 0;
+  decisions: Map<string, string> = new Map(),
+  store: Storage = storage
+): Promise<number> {
   let preserved = 0;
-  for (const entry of readdirSync(folder)) {
-    const full = join(folder, entry);
-    if (statSync(full).isDirectory()) {
-      preserved += cleanPersonaFolderPreservingApproved(
-        full,
-        approvedOutcomes,
-        decisions
-      );
-    } else if (entry.endsWith(".spec.ts")) {
-      const { signature, outcome } = specStamps(full);
-      const blessed = signature ? approvedOutcomes.get(signature) : undefined;
-      const id = signature ? `${signature}:${outcome || "unknown"}` : "";
-      const decision = decisions.get(id);
-      // Preserve only a still-blessed oracle; outcome === null is a pre-stamp spec
-      // we cannot date, so fall back to signature-level preservation.
-      const isBlessedOracle = !!blessed && (outcome === null || blessed.has(outcome));
-      // A mine is an observation, not a review decision. Keep every undecided
-      // draft until the operator explicitly approves or discards this exact
-      // outcome, even when a later mine no longer selects it as representative.
-      const isPendingDraft = decision === undefined;
-      if (isBlessedOracle || isPendingDraft) {
-        preserved++;
-      } else {
-        rmSync(full, { force: true });
-      }
+  for (const key of await store.blobs.list(`specs/${persona}`)) {
+    if (!key.endsWith(".spec.ts")) continue;
+    const bytes = await store.blobs.get(key);
+    if (bytes === null) continue;
+    const { signature, outcome } = specStamps(bytes.toString("utf8"));
+    const blessed = signature ? approvedOutcomes.get(signature) : undefined;
+    const id = signature ? `${signature}:${outcome || "unknown"}` : "";
+    const decision = decisions.get(id);
+    const isBlessedOracle = !!blessed && (outcome === null || blessed.has(outcome));
+    const isPendingDraft = decision === undefined;
+    if (isBlessedOracle || isPendingDraft) {
+      preserved++;
+    } else {
+      await store.blobs.delete(key);
     }
   }
   return preserved;
@@ -355,12 +381,22 @@ export function ensureGoldenResponses(
 
 // Vendor services/golden/src/ into generated-tests/_golden/ so generated-tests/
 // is self-contained and never reaches back into services/ at test-run time.
-function vendorGoldenComparator(): void {
-  if (existsSync(GOLDEN_VENDOR_DIR)) {
-    rmSync(GOLDEN_VENDOR_DIR, { recursive: true, force: true });
+async function vendorGoldenComparator(): Promise<void> {
+  for (const key of await storage.blobs.list("specs/_golden")) {
+    await storage.blobs.delete(key);
   }
-  mkdirSync(GOLDEN_VENDOR_DIR, { recursive: true });
-  cpSync(GOLDEN_SOURCE_DIR, GOLDEN_VENDOR_DIR, { recursive: true });
+  const copySourceTree = async (dir: string): Promise<void> => {
+    for (const entry of readdirSync(dir)) {
+      const path = resolvePath(dir, entry);
+      if (statSync(path).isDirectory()) {
+        await copySourceTree(path);
+      } else {
+        const rel = relative(GOLDEN_SOURCE_DIR, path).split(sep).join("/");
+        await storage.blobs.put(`specs/_golden/${rel}`, Buffer.from(readFileSync(path)));
+      }
+    }
+  };
+  await copySourceTree(GOLDEN_SOURCE_DIR);
 
   // compare.ts exports compareResponse(golden, status, body), not assertGolden.
   // The generator materializes every required happy-path golden before emitting
@@ -427,8 +463,14 @@ export async function assertGolden(endpoint: string, liveStatus: number, liveBod
   expect(result.pass, \`golden mismatch for \${endpoint}: \${detail}\`).toBe(true);
 }
 `;
-  writeFileSync(resolvePath(GOLDEN_VENDOR_DIR, "assert-golden.ts"), assertGoldenSource);
-  writeFileSync(resolvePath(GOLDEN_VENDOR_DIR, "business-invariants.ts"), businessInvariantRuntimeSource());
+  await storage.blobs.put(
+    "specs/_golden/assert-golden.ts",
+    Buffer.from(assertGoldenSource, "utf8")
+  );
+  await storage.blobs.put(
+    "specs/_golden/business-invariants.ts",
+    Buffer.from(businessInvariantRuntimeSource(), "utf8")
+  );
 
   const utilSource = `export function extractPath(value: unknown, path: string): string {
   const segments = path
@@ -490,10 +532,10 @@ export async function safeText(response: { text: () => Promise<string> }): Promi
   }
 }
 `;
-  writeFileSync(resolvePath(GOLDEN_VENDOR_DIR, "util.ts"), utilSource);
+  await storage.blobs.put("specs/_golden/util.ts", Buffer.from(utilSource, "utf8"));
 }
 
-function writeConfigAndFixtures(): void {
+async function writeConfigAndFixtures(): Promise<void> {
   const configPath = resolvePath(GENERATED_TESTS_DIR, "playwright.config.ts");
   const configSource = `import { defineConfig } from "@playwright/test";
 
@@ -533,10 +575,9 @@ export default defineConfig({
   },
 });
 `;
-  writeFileSync(configPath, configSource);
+  await storage.blobs.put("specs/playwright.config.ts", Buffer.from(configSource, "utf8"));
 
   const fixturesDir = resolvePath(GENERATED_TESTS_DIR, "fixtures");
-  mkdirSync(fixturesDir, { recursive: true });
   const authFixturePath = resolvePath(fixturesDir, "auth.ts");
   const authFixtureSource = `import type { APIRequestContext } from "@playwright/test";
 
@@ -557,7 +598,7 @@ export async function adminToken(request: APIRequestContext): Promise<string> {
   return body.token;
 }
 `;
-  writeFileSync(authFixturePath, authFixtureSource);
+  await storage.blobs.put("specs/fixtures/auth.ts", Buffer.from(authFixtureSource, "utf8"));
 }
 
 interface RunSummaryEntry {
@@ -586,7 +627,7 @@ async function main(): Promise<void> {
   const repairOnly = onlyArgIndex >= 0 ? args[onlyArgIndex + 1]?.split(",").filter(Boolean) : undefined;
 
   const candidateFile = loadCandidates(explicitFile);
-  const approved = approvedOutcomes();
+  const approved = await approvedOutcomes();
   const dedupResult = dedup(candidateFile.candidates, new Set(approved.keys()));
 
   const specs: OasSpecs = loadAugmentedSpecs() as { store: OasDocument; admin: OasDocument };
@@ -595,14 +636,14 @@ async function main(): Promise<void> {
   // the AI invariant step and checked against the live known-good backend. Empty
   // artifact -> every spec is status-only, exactly as before (zero behavior change
   // when no invariants exist). Generation stays deterministic: no LLM call here.
-  const invariantsArtifact = loadInvariants();
+  const invariantsArtifact = await loadInvariants(storage, true);
   let invariantStepCount = 0;
 
   // The blessed outcome(s) per approved journey — drives BOTH spec preservation
   // (a still-blessed oracle survives a regen) and conflict withholding below.
-  const decisions = reviewDecisions();
+  const decisions = await reviewDecisions();
   const selectedCandidates = dedupResult.candidates;
-  const existingReviewIds = existingGeneratedReviewIds();
+  const existingReviewIds = await existingGeneratedReviewIds();
   // A stale/explicit candidate artifact can still contain an exact approved
   // outcome even though normal mining skip-gates it. Never rewrite that blessed
   // source; emit only when its executable artifact is actually missing.
@@ -623,20 +664,17 @@ async function main(): Promise<void> {
   // untouched. The legacy flat `edge/` folder is dropped.
   let preservedSelected = 0;
   for (const persona of PERSONA_FOLDERS) {
-    preservedSelected += cleanPersonaFolderPreservingApproved(
-      resolvePath(GENERATED_TESTS_DIR, persona),
+    preservedSelected += await cleanPersonaFolderPreservingApproved(
+      persona,
       approved,
       decisions
     );
   }
-  rmSync(resolvePath(GENERATED_TESTS_DIR, "edge"), { recursive: true, force: true });
-  for (const persona of PERSONA_FOLDERS) {
-    for (const path of PATH_FOLDERS) {
-      mkdirSync(resolvePath(GENERATED_TESTS_DIR, persona, path), { recursive: true });
-    }
+  for (const key of await storage.blobs.list("specs/edge")) {
+    await storage.blobs.delete(key);
   }
-  vendorGoldenComparator();
-  writeConfigAndFixtures();
+  await vendorGoldenComparator();
+  await writeConfigAndFixtures();
 
   const summary: RunSummaryEntry[] = [];
   const artifactEntries: GenerationManifestEntry[] = [];
@@ -652,8 +690,6 @@ async function main(): Promise<void> {
     const route = routeFor(candidate);
     const relDir = `${route.persona}/${route.path}`;
     const filename = versionedSpecFilename(candidate.signature, outcomeOf(candidate), drift);
-    const filePath = resolvePath(GENERATED_TESTS_DIR, route.persona, route.path, filename);
-
     const flowPlan = buildFlowPlan(candidate.steps, specs, candidate.attributes.requires_auth);
     const golden = route.path === "happy-path";
     const invariantsByStep = mergeInvariantMaps(
@@ -663,7 +699,7 @@ async function main(): Promise<void> {
     for (const list of invariantsByStep.values()) invariantStepCount += list.length;
     const { source, fixmeCount } = emitSpec({ candidate, plan: flowPlan, golden, invariantsByStep });
 
-    writeFileSync(filePath, source);
+    await storage.blobs.put(`specs/${relDir}/${filename}`, Buffer.from(source, "utf8"));
     artifactEntries.push(manifestEntry(candidate.signature, `${relDir}/${filename}`, source, flowPlan));
     perFolderCount[relDir]++;
 
@@ -678,7 +714,12 @@ async function main(): Promise<void> {
     });
   }
 
-  writeGenerationManifest(GENERATED_TESTS_DIR, artifactEntries);
+  await writeGenerationManifest(artifactEntries);
+
+  // Approved flows are skip-gated out of candidates (never re-emitted). If the
+  // gitignored spec tree was cleaned, restore each missing approved spec verbatim
+  // from its tracked snapshot so the approval keeps running (hash-exact).
+  const restoredApproved = await restoreMissingApprovedSpecs();
 
   const totalFiles = summary.length;
   const totalFixme = summary.reduce((n, s) => n + s.fixmeCount, 0);
@@ -694,6 +735,7 @@ async function main(): Promise<void> {
     console.log(`    ${relDir.padEnd(22)} ${perFolderCount[relDir]}`);
   }
   console.log(`  Selected specs preserved: ${preservedSelected}`);
+  console.log(`  Approved specs restored:  ${restoredApproved}`);
   console.log(
     `  Approved specs unchanged: ${selectedCandidates.length - candidatesToEmit.length}`
   );

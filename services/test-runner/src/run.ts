@@ -7,16 +7,20 @@
  */
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
-import { dirname, join, resolve as resolvePath, sep } from "node:path";
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { dirname, resolve as resolvePath, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { storage, type Storage } from "../../../packages/storage/index.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SERVICE_ROOT = resolvePath(__dirname, "..");
 const REPO_ROOT = resolvePath(SERVICE_ROOT, "..", "..");
-const GENERATED_TESTS_DIR = resolvePath(REPO_ROOT, "generated-tests");
-const REPORTS_DIR = resolvePath(REPO_ROOT, "reports", "playwright");
-const REPO_REPORTS_DIR = resolvePath(REPO_ROOT, "reports");
+const WORKSPACE_ROOT = process.env.STORAGE_WORKSPACE_ROOT
+  ? resolvePath(process.env.STORAGE_WORKSPACE_ROOT)
+  : REPO_ROOT;
+const GENERATED_TESTS_DIR = resolvePath(WORKSPACE_ROOT, "generated-tests");
+const REPORTS_DIR = resolvePath(WORKSPACE_ROOT, "reports", "playwright");
+const REPO_REPORTS_DIR = resolvePath(WORKSPACE_ROOT, "reports");
 
 export type Project = "guest" | "customer" | "admin";
 // Path filters cut ACROSS personas: a positional Playwright argument matches
@@ -34,8 +38,6 @@ const PATH_FILTER_DIR: Record<PathFilter, string> = {
   failure: "failure-path",
 };
 
-const HITL_STORE = resolvePath(REPO_ROOT, "data", "hitl", "approvals.json");
-const ARTIFACT_MANIFEST = resolvePath(GENERATED_TESTS_DIR, ".artifacts.json");
 const SIGNATURE_STAMP = /flow_signature["'\s:=]+([0-9a-f]{64})/i;
 const STATUS_SIGNATURE_STAMP = /status_signature["'\s:=]+([\d,]+)/i;
 
@@ -87,29 +89,24 @@ export function exactApprovalMatches(
   );
 }
 
-function jsonEntries<T>(path: string): T[] {
-  if (!existsSync(path)) return [];
+async function recordEntries<T>(store: Storage): Promise<T[]> {
   try {
-    const parsed = JSON.parse(readFileSync(path, "utf8")) as { entries?: T[] } | T[];
+    const parsed = await store.records.readJson<{ entries?: T[] } | T[]>("hitl/approvals");
+    if (parsed === null) return [];
     return Array.isArray(parsed) ? parsed : Array.isArray(parsed.entries) ? parsed.entries : [];
   } catch {
     return [];
   }
 }
 
-function listSpecFiles(dir: string): string[] {
-  if (!existsSync(dir)) return [];
-  const files: string[] = [];
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) files.push(...listSpecFiles(full));
-    else if (entry.endsWith(".spec.ts")) files.push(full);
+async function manifestEntries<T>(store: Storage): Promise<T[]> {
+  try {
+    const parsed = await store.records.readJson<{ entries?: T[] } | T[]>("manifest");
+    if (parsed === null) return [];
+    return Array.isArray(parsed) ? parsed : Array.isArray(parsed.entries) ? parsed.entries : [];
+  } catch {
+    return [];
   }
-  return files;
-}
-
-function relativeSpecPath(path: string): string {
-  return path.slice(GENERATED_TESTS_DIR.length + 1).split(sep).join("/");
 }
 
 function targetMatches(path: string, target: Target): boolean {
@@ -123,9 +120,12 @@ function targetMatches(path: string, target: Target): boolean {
  * current source + body-plan hashes match an approved decision. `drafts` is the
  * explicit quarantine escape hatch and excludes discarded artifacts.
  */
-export function selectedSpecPaths(target: Target): string[] {
+export async function selectedSpecPaths(
+  target: Target,
+  store: Storage = storage
+): Promise<string[]> {
   const approvals = new Map(
-    jsonEntries<ApprovalEntry>(HITL_STORE)
+    (await recordEntries<ApprovalEntry>(store))
       .filter((entry) => typeof entry.flow_signature === "string")
       .map((entry) => [
         entry.review_id ??
@@ -136,7 +136,7 @@ export function selectedSpecPaths(target: Target): string[] {
       ])
   );
   const bodyPlans = new Map(
-    jsonEntries<ArtifactEntry>(ARTIFACT_MANIFEST)
+    (await manifestEntries<ArtifactEntry>(store))
       .filter((entry) => typeof entry.flow_signature === "string")
       .map((entry) => [
         entry.review_id ??
@@ -148,8 +148,16 @@ export function selectedSpecPaths(target: Target): string[] {
   );
 
   const selected: string[] = [];
-  for (const file of listSpecFiles(GENERATED_TESTS_DIR)) {
-    const source = readFileSync(file, "utf8");
+  const keys = (
+    await Promise.all(
+      PROJECTS.map((project) => store.blobs.list(`specs/${project}`))
+    )
+  ).flat();
+  for (const key of keys) {
+    if (!key.endsWith(".spec.ts")) continue;
+    const bytes = await store.blobs.get(key);
+    if (bytes === null) continue;
+    const source = bytes.toString("utf8");
     const signature = SIGNATURE_STAMP.exec(source)?.[1].toLowerCase();
     if (!signature) continue;
     const outcome = STATUS_SIGNATURE_STAMP.exec(source)?.[1] ?? "unknown";
@@ -159,7 +167,7 @@ export function selectedSpecPaths(target: Target): string[] {
     const manifest = bodyPlans.get(id) ?? bodyPlans.get(signature);
     const planHash = effectiveBodyPlanHash(source, sourceHash, manifest);
     const exactApproved = exactApprovalMatches(sourceHash, planHash, decision);
-    const rel = relativeSpecPath(file);
+    const rel = key.slice("specs/".length);
 
     if (target === "drafts") {
       if (!exactApproved && decision?.status !== "discarded") selected.push(rel);
@@ -315,7 +323,7 @@ export function buildArgs(target: Target, extraArgs: string[] = [], specPaths: s
   return args;
 }
 
-export function runPlaywright(options: RunOptions): RunResult {
+export async function runPlaywright(options: RunOptions): Promise<RunResult> {
   const { target, execute = true, extraArgs = [], directSpecPaths } = options;
   mkdirSync(REPORTS_DIR, { recursive: true });
 
@@ -342,7 +350,7 @@ export function runPlaywright(options: RunOptions): RunResult {
     }
     specPaths = direct.paths;
   } else {
-    specPaths = selectedSpecPaths(target);
+    specPaths = await selectedSpecPaths(target);
   }
   if (specPaths.length === 0) {
     const mode = target === "drafts" ? "draft" : "hash-matching approved";

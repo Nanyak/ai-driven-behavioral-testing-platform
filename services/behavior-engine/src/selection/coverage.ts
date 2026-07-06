@@ -16,17 +16,8 @@
  * filesystem access is best-effort and degrades to "nothing covered yet".
  */
 
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { storage, type Storage } from "../../../../packages/storage/index.js";
 import type { MinedFlow } from "./dedup.js";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const SERVICE_ROOT = resolve(__dirname, "..", "..");
-const REPO_ROOT = resolve(SERVICE_ROOT, "..", "..");
-
-const GENERATED_TESTS_DIR = resolve(REPO_ROOT, "generated-tests");
-const HITL_STORE = resolve(REPO_ROOT, "data", "hitl", "approvals.json");
 
 // Each generated test stamps its signature. The script-generator convention (ADR 0002) is
 // a machine-readable marker; we match it permissively so a small format change
@@ -37,23 +28,6 @@ const SIGNATURE_STAMP = /flow_signature["'\s:=]+([0-9a-f]{64})/i;
 // Older specs predating the stamp contribute a shape entry but no outcome.
 const STATUS_SIGNATURE_STAMP = /status_signature["'\s:=]+([\d,]+)/i;
 
-function listSpecFiles(dir: string): string[] {
-  if (!existsSync(dir)) {
-    return [];
-  }
-  const out: string[] = [];
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry);
-    const stat = statSync(full);
-    if (stat.isDirectory()) {
-      out.push(...listSpecFiles(full));
-    } else if (entry.endsWith(".spec.ts")) {
-      out.push(full);
-    }
-  }
-  return out;
-}
-
 interface TestCoverage {
   /** Every shape that has a spec — the shape-level coverage set. */
   sigs: Set<string>;
@@ -62,11 +36,21 @@ interface TestCoverage {
   outcomes: Map<string, Set<string>>;
 }
 
-function fromGeneratedTests(dir: string): TestCoverage {
+async function fromGeneratedTests(store: Storage): Promise<TestCoverage> {
   const sigs = new Set<string>();
   const outcomes = new Map<string, Set<string>>();
-  for (const file of listSpecFiles(dir)) {
-    const text = readFileSync(file, "utf8");
+  const keys = (
+    await Promise.all(
+      ["guest", "customer", "admin"].map((persona) =>
+        store.blobs.list(`specs/${persona}`)
+      )
+    )
+  ).flat();
+  for (const key of keys) {
+    if (!key.endsWith(".spec.ts")) continue;
+    const bytes = await store.blobs.get(key);
+    if (bytes === null) continue;
+    const text = bytes.toString("utf8");
     const sigMatch = SIGNATURE_STAMP.exec(text);
     if (!sigMatch) continue;
     const sig = sigMatch[1].toLowerCase();
@@ -97,44 +81,41 @@ interface HitlCoverage {
   decidedOutcomes: Map<string, Set<string>>;
 }
 
-function fromHitlStore(path: string): HitlCoverage {
+async function fromHitlStore(store: Storage): Promise<HitlCoverage> {
   const sigs = new Set<string>();
   const approvedOutcomes = new Map<string, Set<string>>();
   const decidedOutcomes = new Map<string, Set<string>>();
-  if (!existsSync(path)) {
-    return { sigs, approvedOutcomes, decidedOutcomes };
-  }
-  let parsed: unknown;
   try {
-    parsed = JSON.parse(readFileSync(path, "utf8"));
-  } catch {
-    return { sigs, approvedOutcomes, decidedOutcomes }; // malformed -> empty
-  }
-  const entries = Array.isArray(parsed)
-    ? parsed
-    : Array.isArray((parsed as { entries?: unknown }).entries)
-      ? (parsed as { entries: unknown[] }).entries
-      : [];
-  for (const entry of entries as Array<Record<string, unknown>>) {
-    const status = entry.status;
-    const signature = entry.flow_signature ?? entry.signature;
-    if (
-      typeof signature === "string" &&
-      (status === "approved" || status === "discarded" || status === "superseded")
-    ) {
-      const sig = signature.toLowerCase();
-      sigs.add(sig);
-      if (typeof entry.status_signature === "string") {
-        const decided = decidedOutcomes.get(sig) ?? new Set<string>();
-        decided.add(entry.status_signature);
-        decidedOutcomes.set(sig, decided);
-      }
-      if (status === "approved" && typeof entry.status_signature === "string") {
-        const set = approvedOutcomes.get(sig) ?? new Set<string>();
-        set.add(entry.status_signature);
-        approvedOutcomes.set(sig, set);
+    const parsed = await store.records.readJson<unknown>("hitl/approvals");
+    if (parsed === null) return { sigs, approvedOutcomes, decidedOutcomes };
+    const entries = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray((parsed as { entries?: unknown }).entries)
+        ? (parsed as { entries: unknown[] }).entries
+        : [];
+    for (const entry of entries as Array<Record<string, unknown>>) {
+      const status = entry.status;
+      const signature = entry.flow_signature ?? entry.signature;
+      if (
+        typeof signature === "string" &&
+        (status === "approved" || status === "discarded" || status === "superseded")
+      ) {
+        const sig = signature.toLowerCase();
+        sigs.add(sig);
+        if (typeof entry.status_signature === "string") {
+          const decided = decidedOutcomes.get(sig) ?? new Set<string>();
+          decided.add(entry.status_signature);
+          decidedOutcomes.set(sig, decided);
+        }
+        if (status === "approved" && typeof entry.status_signature === "string") {
+          const set = approvedOutcomes.get(sig) ?? new Set<string>();
+          set.add(entry.status_signature);
+          approvedOutcomes.set(sig, set);
+        }
       }
     }
+  } catch {
+    return { sigs, approvedOutcomes, decidedOutcomes }; // malformed -> empty
   }
   return { sigs, approvedOutcomes, decidedOutcomes };
 }
@@ -153,13 +134,17 @@ export interface CoverageManifest {
 }
 
 export interface CoverageSources {
-  generatedTestsDir?: string;
-  hitlStore?: string;
+  storage?: Storage;
 }
 
-export function buildCoverageManifest(sources: CoverageSources = {}): CoverageManifest {
-  const tests = fromGeneratedTests(sources.generatedTestsDir ?? GENERATED_TESTS_DIR);
-  const hitl = fromHitlStore(sources.hitlStore ?? HITL_STORE);
+export async function buildCoverageManifest(
+  sources: CoverageSources = {}
+): Promise<CoverageManifest> {
+  const store = sources.storage ?? storage;
+  const [tests, hitl] = await Promise.all([
+    fromGeneratedTests(store),
+    fromHitlStore(store),
+  ]);
   const signatures = new Set<string>([...tests.sigs, ...hitl.sigs]);
   return {
     signatures,

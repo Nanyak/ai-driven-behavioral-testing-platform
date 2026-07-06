@@ -12,9 +12,10 @@
  * nested JSON as a single field with keyword leaves — no conflicts, no field
  * explosion. The Phase 6/8 golden extractor reads them from `_source`.
  *
- * Run once before shipping bodies-on traffic:  npm run es:template
- * (Applying it only affects indices created afterwards — recreate the day's
- * index if it already exists with a conflicting mapping.)
+ * Compose installs this automatically through `elasticsearch-init`. Run
+ * `npm run es:template` when operating Elasticsearch outside Compose.
+ * Mapping changes affect indices created afterwards; ILM is also attached to
+ * existing behavior-log indices.
  */
 
 import { readFileSync, existsSync } from "fs";
@@ -42,11 +43,26 @@ function loadEnv() {
 }
 
 const env = loadEnv();
-const ES_URL = env.ELASTICSEARCH_URL || "http://localhost:9200";
+const ES_URL =
+  process.env.ELASTICSEARCH_URL || env.ELASTICSEARCH_URL || "http://localhost:9200";
 const TEMPLATE_PATH = resolve(ROOT, "infra/elasticsearch/behavior-logs-template.json");
+const ILM_POLICY_PATH = resolve(ROOT, "infra/elasticsearch/behavior-logs-ilm-policy.json");
 
 async function main() {
+  const policy = readFileSync(ILM_POLICY_PATH, "utf8");
   const template = readFileSync(TEMPLATE_PATH, "utf8");
+
+  const putPolicy = await fetch(`${ES_URL}/_ilm/policy/behavior-logs-retention`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: policy,
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!putPolicy.ok) {
+    console.error(`✗ Failed to install ILM policy: HTTP ${putPolicy.status}`);
+    console.error(await putPolicy.text());
+    process.exit(1);
+  }
 
   const put = await fetch(`${ES_URL}/_index_template/behavior-logs`, {
     method: "PUT",
@@ -60,8 +76,22 @@ async function main() {
     console.error(await put.text());
     process.exit(1);
   }
-  console.log("✓ Installed composable index template 'behavior-logs' (response_body/request_payload as flattened).");
-  console.log("  Note: applies to indices created from now on. To re-map today's index, delete it:");
+  const updateExisting = await fetch(
+    `${ES_URL}/behavior-logs-*/_settings?allow_no_indices=true`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ "index.lifecycle.name": "behavior-logs-retention" }),
+      signal: AbortSignal.timeout(10000),
+    }
+  );
+  if (!updateExisting.ok) {
+    console.error(`✗ Failed to apply ILM policy to existing indices: HTTP ${updateExisting.status}`);
+    console.error(await updateExisting.text());
+    process.exit(1);
+  }
+  console.log("✓ Installed 7-day ILM retention and the composable 'behavior-logs' index template.");
+  console.log("  Mapping changes apply to new indices. To re-map today's index, delete it:");
   console.log(`    curl -X DELETE "${ES_URL}/behavior-logs-*"`);
   console.log("  then restart Logstash to re-ship:  docker restart <logstash-container>");
 }

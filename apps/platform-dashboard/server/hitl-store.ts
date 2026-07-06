@@ -7,17 +7,12 @@
 
 import {
   existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  statSync,
-  unlinkSync,
-  writeFileSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
-import { dirname, join, resolve, sep } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { selectBusinessScenarios } from "../../../services/behavior-engine/src/selection/scenarios.js";
+import { storage } from "../../../packages/storage/index.js";
 
 /**
  * Locate the repo root by walking up until we find the monorepo markers. This is
@@ -48,26 +43,30 @@ function findRepoRoot(): string {
 
 export const REPO_ROOT = findRepoRoot();
 
-const CANDIDATES_DIR = resolve(
-  REPO_ROOT,
-  "services",
-  "behavior-engine",
-  "data",
-  "candidates"
-);
-const GENERATED_TESTS_DIR = resolve(REPO_ROOT, "generated-tests");
-const HITL_STORE = resolve(REPO_ROOT, "data", "hitl", "approvals.json");
+// Tracked snapshot of every approved spec's exact bytes. generated-tests/ is
+// gitignored (ephemeral) AND approved flows are skip-gated out of candidates, so
+// generate never re-emits them — it only PRESERVES the on-disk file. If that file
+// is lost (a cleaned tree, a checkout), the approval would dangle. Snapshotting the
+// approved bytes here lets generate restore it verbatim (hash-exact, approval stays
+// valid). Mirrors the spec's generated-tests sub-path so restore is a plain copy.
+/** Copy an approved flow's current on-disk spec into the tracked snapshot store. */
+async function snapshotApprovedSpec(testPath: string): Promise<void> {
+  const relative = testPath.replace(/^generated-tests[/\\]/, "");
+  const source = await storage.blobs.get(`specs/${relative}`);
+  if (source !== null) await storage.blobs.put(`approved-specs/${relative}`, source);
+}
+
+/** Drop an approved flow's snapshot (on delete), so a retired flow can't be
+ * silently restored by a later generate. */
+async function removeApprovedSnapshot(testPath: string): Promise<void> {
+  const relative = testPath.replace(/^generated-tests[/\\]/, "");
+  await storage.blobs.delete(`approved-specs/${relative}`);
+}
 // Advisory "these two versions are distinct scenarios, not an override" records.
 // Deliberately its OWN file — coverage.ts parses approvals.json and must not see
 // these presentation-only records (see readDismissedRelationships below).
-const DISMISSED_STORE = resolve(REPO_ROOT, "data", "hitl", "dismissed-relationships.json");
-const ARTIFACT_MANIFEST = resolve(GENERATED_TESTS_DIR, ".artifacts.json");
-const REPORT_HTML = resolve(REPO_ROOT, "reports", "report.html");
-const REPORT_JSON = resolve(REPO_ROOT, "reports", "report.json");
-const REPORTS_RUNS_DIR = resolve(REPO_ROOT, "reports", "runs");
-
-export function readReportHtml(): string | null {
-  return existsSync(REPORT_HTML) ? readFileSync(REPORT_HTML, "utf8") : null;
+export async function readReportHtml(): Promise<string | null> {
+  return (await storage.blobs.get("reports/report.html"))?.toString("utf8") ?? null;
 }
 
 export interface ReportRow {
@@ -99,20 +98,33 @@ function parseTotals(r: {
   };
 }
 
-export function listReports(): ReportRow[] {
-  if (!existsSync(REPORTS_RUNS_DIR)) {
-    return [];
+export async function listReports(): Promise<ReportRow[]> {
+  try {
+    const index = await storage.records.readJson<{ entries?: ReportRow[] }>(
+      "run-index"
+    );
+    if (index?.entries) {
+      return [...index.entries].sort(
+        (a, b) =>
+          (b.generated_at ?? "").localeCompare(a.generated_at ?? "") ||
+          b.slug.localeCompare(a.slug)
+      );
+    }
+  } catch {
+    // Existing local deployments may not have an index yet; scan report blobs.
   }
   const rows: ReportRow[] = [];
-  for (const file of readdirSync(REPORTS_RUNS_DIR)) {
-    if (!file.endsWith(".json")) continue;
+  for (const key of await storage.blobs.list("reports/runs")) {
+    if (!key.endsWith(".json")) continue;
     // The triage agent archives an advisory sidecar `<slug>.triage.json` next to
     // each run report; it is NOT a run (no totals/status, no matching .html), so
     // skip it here or it lists as a phantom 0/0/0 "run" with a dead view link.
-    if (file.endsWith(".triage.json")) continue;
-    const slug = file.slice(0, -".json".length);
+    if (key.endsWith(".triage.json")) continue;
+    const slug = key.slice("reports/runs/".length, -".json".length);
     try {
-      const r = JSON.parse(readFileSync(join(REPORTS_RUNS_DIR, file), "utf8")) as {
+      const bytes = await storage.blobs.get(key);
+      if (bytes === null) continue;
+      const r = JSON.parse(bytes.toString("utf8")) as {
         run_id?: string;
         generated_at?: string;
         status?: string;
@@ -131,25 +143,23 @@ export function listReports(): ReportRow[] {
   return rows;
 }
 
-export function readReportHtmlById(slug: string): string | null {
+export async function readReportHtmlById(slug: string): Promise<string | null> {
   // Sanitize so a crafted slug can't escape runs/ via path traversal.
   const safe = slug.replace(/[^A-Za-z0-9._-]/g, "-");
-  const path = join(REPORTS_RUNS_DIR, `${safe}.html`);
-  return existsSync(path) ? readFileSync(path, "utf8") : null;
+  return (await storage.blobs.get(`reports/runs/${safe}.html`))?.toString("utf8") ?? null;
 }
 
-export function readReportSummary(): {
+export async function readReportSummary(): Promise<{
   executed: number;
   passed: number;
   failed: number;
   skipped: number;
   status: "green" | "red" | "invalid";
-} | null {
-  if (!existsSync(REPORT_JSON)) {
-    return null;
-  }
+} | null> {
   try {
-    const r = JSON.parse(readFileSync(REPORT_JSON, "utf8")) as {
+    const bytes = await storage.blobs.get("reports/report.json");
+    if (bytes === null) return null;
+    const r = JSON.parse(bytes.toString("utf8")) as {
       status?: string;
       totals?: { executed?: number; passed?: number; failed?: number; skipped?: number };
     };
@@ -441,36 +451,10 @@ export interface FlowsPayload {
 }
 
 /** Candidate snapshots in chronological order (timestamped, lexicographically sortable). */
-function candidateFiles(): string[] {
-  if (!existsSync(CANDIDATES_DIR)) {
-    return [];
-  }
-  return readdirSync(CANDIDATES_DIR)
-    .filter((f) => f.startsWith("test-candidates-") && f.endsWith(".json"))
-    .sort()
-    .map((file) => join(CANDIDATES_DIR, file));
-}
-
-/** Newest `test-candidates-*.json` by filename. */
-function newestCandidatesFile(): string | null {
-  return candidateFiles().at(-1) ?? null;
-}
-
-/** Recursively list `*.spec.ts` files under a dir; [] if absent. */
-function listSpecFiles(dir: string): string[] {
-  if (!existsSync(dir)) {
-    return [];
-  }
-  const out: string[] = [];
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) {
-      out.push(...listSpecFiles(full));
-    } else if (entry.endsWith(".spec.ts")) {
-      out.push(full);
-    }
-  }
-  return out;
+async function candidateFiles(): Promise<string[]> {
+  return (await storage.blobs.list("candidates"))
+    .filter((key) => key.startsWith("candidates/test-candidates-"))
+    .sort();
 }
 
 /** The stamp the resolver-agent leaves on a spec it repaired (script-generator repair/). */
@@ -504,11 +488,13 @@ function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function manifestByReview(): Map<string, ManifestEntry> {
+async function manifestByReview(): Promise<Map<string, ManifestEntry>> {
   const map = new Map<string, ManifestEntry>();
-  if (!existsSync(ARTIFACT_MANIFEST)) return map;
   try {
-    const parsed = JSON.parse(readFileSync(ARTIFACT_MANIFEST, "utf8")) as { entries?: ManifestEntry[] };
+    const parsed = await storage.records.readJson<{ entries?: ManifestEntry[] }>(
+      "manifest"
+    );
+    if (parsed === null) return map;
     for (const entry of parsed.entries ?? []) {
       if (typeof entry.flow_signature === "string") {
         const id =
@@ -527,11 +513,21 @@ function manifestByReview(): Map<string, ManifestEntry> {
 }
 
 /** Map outcome-aware review id -> its on-disk spec (path + agent-repair flag). */
-function specsByReview(): Map<string, SpecRef> {
+async function specsByReview(): Promise<Map<string, SpecRef>> {
   const map = new Map<string, SpecRef>();
-  const manifests = manifestByReview();
-  for (const file of listSpecFiles(GENERATED_TESTS_DIR)) {
-    const text = readFileSync(file, "utf8");
+  const manifests = await manifestByReview();
+  const keys = (
+    await Promise.all(
+      ["guest", "customer", "admin"].map((persona) =>
+        storage.blobs.list(`specs/${persona}`)
+      )
+    )
+  ).flat();
+  for (const key of keys) {
+    if (!key.endsWith(".spec.ts")) continue;
+    const bytes = await storage.blobs.get(key);
+    if (bytes === null) continue;
+    const text = bytes.toString("utf8");
     const match = SIGNATURE_STAMP.exec(text);
     if (match) {
       const signature = match[1].toLowerCase();
@@ -552,7 +548,7 @@ function specsByReview(): Map<string, SpecRef> {
             }
           : baselineBodyPlan;
       map.set(id, {
-        path: file.slice(REPO_ROOT.length + 1),
+        path: `generated-tests/${key.slice("specs/".length)}`,
         repairedByAgent,
         source: text,
         specHash,
@@ -593,17 +589,20 @@ export interface ArtifactReview {
 }
 
 /** Exact executable source + redacted body plan, loaded lazily by review version. */
-export function artifactReview(signature: string, statusSignature = ""): ArtifactReview | null {
+export async function artifactReview(
+  signature: string,
+  statusSignature = ""
+): Promise<ArtifactReview | null> {
   const sig = signature.toLowerCase();
   const id = reviewId(sig, statusSignature);
-  const specs = specsByReview();
+  const specs = await specsByReview();
   const spec =
     specs.get(id) ??
     (statusSignature === ""
       ? [...specs.entries()].find(([key]) => key.startsWith(`${sig}:`))?.[1]
       : undefined);
   if (!spec) return null;
-  const decision = readDecisionHistory().get(id);
+  const decision = (await readDecisionHistory()).get(id);
   const approved = decision?.status === "approved" ? decision : null;
   const matches =
     approved === null
@@ -634,8 +633,6 @@ export function artifactReview(signature: string, statusSignature = ""): Artifac
 
 /* ---- Resolver-agent repair report (reports/resolver-repair.json) ---- */
 
-const REPAIR_REPORT = resolve(REPO_ROOT, "reports", "resolver-repair.json");
-
 interface RepairOutcomeRecord {
   signature: string;
   flowName: string;
@@ -647,11 +644,12 @@ interface RepairOutcomeRecord {
 }
 
 /** Latest durable successful repair per lowercased flow signature. Empty when absent. */
-function repairOutcomesBySignature(): Map<string, RepairOutcomeRecord> {
+async function repairOutcomesBySignature(): Promise<Map<string, RepairOutcomeRecord>> {
   const map = new Map<string, RepairOutcomeRecord>();
-  if (!existsSync(REPAIR_REPORT)) return map;
   try {
-    const doc = JSON.parse(readFileSync(REPAIR_REPORT, "utf8")) as {
+    const bytes = await storage.blobs.get("reports/resolver-repair.json");
+    if (bytes === null) return map;
+    const doc = JSON.parse(bytes.toString("utf8")) as {
       outcomes?: RepairOutcomeRecord[];
       repair_history?: RepairOutcomeRecord[];
     };
@@ -682,8 +680,8 @@ export interface RepairDiff {
 }
 
 /** The before/after sources for a repaired flow, for the review diff. Null if none. */
-export function repairDiff(signature: string): RepairDiff | null {
-  const o = repairOutcomesBySignature().get(signature.toLowerCase());
+export async function repairDiff(signature: string): Promise<RepairDiff | null> {
+  const o = (await repairOutcomesBySignature()).get(signature.toLowerCase());
   if (!o || o.result !== "repaired" || !o.beforeSource || !o.afterSource) return null;
   return {
     signature: signature.toLowerCase(),
@@ -701,75 +699,78 @@ export function repairDiff(signature: string): RepairDiff | null {
  * "delete this test from the browser" action — distinct from approve/discard, which never
  * touch files. Returns a tagged result; the route maps it to an HTTP status.
  */
-export function deleteTestFile(
+export async function deleteTestFile(
   relPath: string
-): { deleted: true } | { deleted: false; reason: "invalid" | "out_of_scope" | "not_found" } {
+): Promise<
+  { deleted: true } | { deleted: false; reason: "invalid" | "out_of_scope" | "not_found" }
+> {
   if (typeof relPath !== "string" || relPath.trim().length === 0) {
     return { deleted: false, reason: "invalid" };
   }
-  const target = resolve(REPO_ROOT, relPath);
-  if (!target.startsWith(GENERATED_TESTS_DIR + sep)) {
+  const normalized = relPath.replace(/\\/g, "/");
+  if (
+    !normalized.startsWith("generated-tests/") ||
+    normalized.split("/").some((part) => part === "." || part === "..")
+  ) {
     return { deleted: false, reason: "out_of_scope" };
   }
-  if (!existsSync(target)) {
+  const key = `specs/${normalized.slice("generated-tests/".length)}`;
+  if ((await storage.blobs.get(key)) === null) {
     return { deleted: false, reason: "not_found" };
   }
-  unlinkSync(target);
+  await storage.blobs.delete(key);
   return { deleted: true };
 }
 
 /** Read the complete outcome-versioned decision history. */
-export function readDecisionHistory(): Map<string, DecisionEntry> {
+export async function readDecisionHistory(): Promise<Map<string, DecisionEntry>> {
   const map = new Map<string, DecisionEntry>();
-  if (!existsSync(HITL_STORE)) {
-    return map;
-  }
-  let parsed: unknown;
   try {
-    parsed = JSON.parse(readFileSync(HITL_STORE, "utf8"));
+    const parsed = await storage.records.readJson<unknown>("hitl/approvals");
+    if (parsed === null) return map;
+    const entries = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray((parsed as { entries?: unknown }).entries)
+        ? (parsed as { entries: DecisionEntry[] }).entries
+        : [];
+    for (const raw of entries as Array<Record<string, unknown>>) {
+      const signature = raw.flow_signature ?? raw.signature;
+      const status = raw.status;
+      if (
+        typeof signature === "string" &&
+        (status === "approved" || status === "discarded" || status === "superseded")
+      ) {
+        const sig = signature.toLowerCase();
+        const str = (v: unknown) => (typeof v === "string" ? v : undefined);
+        const outcome = str(raw.status_signature) ?? "";
+        const id = str(raw.review_id) ?? reviewId(sig, outcome);
+        const decision: DecisionEntry = {
+          review_id: id,
+          flow_signature: sig,
+          status,
+          test_path: str(raw.test_path),
+          decided_by: str(raw.decided_by),
+          decided_at: str(raw.decided_at),
+          flow_name: str(raw.flow_name),
+          persona: str(raw.persona),
+          route_key: str(raw.route_key),
+          status_signature: outcome,
+          step_count: typeof raw.step_count === "number" ? raw.step_count : undefined,
+          spec_hash: str(raw.spec_hash),
+          body_plan_hash: str(raw.body_plan_hash),
+          body_rule_sources: Array.isArray(raw.body_rule_sources)
+            ? raw.body_rule_sources.filter((v): v is string => typeof v === "string")
+            : undefined,
+          superseded_at: str(raw.superseded_at),
+          superseded_by: str(raw.superseded_by),
+          scenario_key: str(raw.scenario_key),
+        };
+        decision.scenario_key ??= inferDecisionScenarioKey(decision);
+        map.set(id, decision);
+      }
+    }
   } catch {
     return map; // malformed store -> treated as empty, never fatal.
-  }
-  const entries = Array.isArray(parsed)
-    ? parsed
-    : Array.isArray((parsed as { entries?: unknown }).entries)
-      ? (parsed as { entries: DecisionEntry[] }).entries
-      : [];
-  for (const raw of entries as Array<Record<string, unknown>>) {
-    const signature = raw.flow_signature ?? raw.signature;
-    const status = raw.status;
-    if (
-      typeof signature === "string" &&
-      (status === "approved" || status === "discarded" || status === "superseded")
-    ) {
-      const sig = signature.toLowerCase();
-      const str = (v: unknown) => (typeof v === "string" ? v : undefined);
-      const outcome = str(raw.status_signature) ?? "";
-      const id = str(raw.review_id) ?? reviewId(sig, outcome);
-      const decision: DecisionEntry = {
-        review_id: id,
-        flow_signature: sig,
-        status,
-        test_path: str(raw.test_path),
-        decided_by: str(raw.decided_by),
-        decided_at: str(raw.decided_at),
-        flow_name: str(raw.flow_name),
-        persona: str(raw.persona),
-        route_key: str(raw.route_key),
-        status_signature: outcome,
-        step_count: typeof raw.step_count === "number" ? raw.step_count : undefined,
-        spec_hash: str(raw.spec_hash),
-        body_plan_hash: str(raw.body_plan_hash),
-        body_rule_sources: Array.isArray(raw.body_rule_sources)
-          ? raw.body_rule_sources.filter((v): v is string => typeof v === "string")
-          : undefined,
-        superseded_at: str(raw.superseded_at),
-        superseded_by: str(raw.superseded_by),
-        scenario_key: str(raw.scenario_key),
-      };
-      decision.scenario_key ??= inferDecisionScenarioKey(decision);
-      map.set(id, decision);
-    }
   }
   return map;
 }
@@ -778,9 +779,9 @@ export function readDecisionHistory(): Map<string, DecisionEntry> {
  * Compatibility projection used by existing callers: one active decision per
  * journey. An active approval wins; otherwise the latest discard is returned.
  */
-export function readDecisions(): Map<string, DecisionEntry> {
+export async function readDecisions(): Promise<Map<string, DecisionEntry>> {
   const projected = new Map<string, DecisionEntry>();
-  const entries = [...readDecisionHistory().values()]
+  const entries = [...(await readDecisionHistory()).values()]
     .filter((entry) => entry.status !== "superseded")
     .sort((a, b) => (a.decided_at ?? "").localeCompare(b.decided_at ?? ""));
   for (const entry of entries) {
@@ -802,7 +803,7 @@ export function readDecisions(): Map<string, DecisionEntry> {
  * Writes the store in the `{ entries: [...] }` shape coverage.ts parses, creating
  * `data/hitl/` if needed.
  */
-export function upsertDecision(input: {
+export async function upsertDecision(input: {
   review_id?: string;
   flow_signature: string;
   status: Decision;
@@ -819,7 +820,7 @@ export function upsertDecision(input: {
   scenario_key?: string;
   /** Opt-in "Replace": approved baseline review id(s) to mark superseded in this write. */
   supersede_review_ids?: string[];
-}): DecisionEntry {
+}): Promise<DecisionEntry> {
   const sig = input.flow_signature.toLowerCase();
   const outcome = input.status_signature ?? "";
   const id = input.review_id ?? reviewId(sig, outcome);
@@ -832,7 +833,7 @@ export function upsertDecision(input: {
       route_key: input.route_key,
       status_signature: outcome,
     });
-  const decisions = readDecisionHistory();
+  const decisions = await readDecisionHistory();
   const now = new Date().toISOString();
   // Explicit, opt-in supersession ONLY. A plain Approve coexists with any related
   // baseline; the operator must choose "Replace <baseline>", which names the exact
@@ -869,9 +870,14 @@ export function upsertDecision(input: {
   };
   decisions.set(id, entry);
 
-  mkdirSync(dirname(HITL_STORE), { recursive: true });
   const entries = [...decisions.values()];
-  writeFileSync(HITL_STORE, `${JSON.stringify({ entries }, null, 2)}\n`, "utf8");
+  await storage.records.writeJson("hitl/approvals", { entries });
+
+  // Snapshot the exact approved bytes so generate can restore the spec if the
+  // gitignored generated-tests/ tree is ever cleaned (see APPROVED_SPECS_DIR).
+  if (entry.status === "approved" && entry.test_path) {
+    await snapshotApprovedSpec(entry.test_path);
+  }
   return entry;
 }
 
@@ -881,31 +887,31 @@ export function upsertDecision(input: {
  * retired — the "delete the approved flow" action. Path-scoped spec removal reuses
  * deleteTestFile. Returns a tagged result the route maps to an HTTP status.
  */
-export function deleteDecision(
+export async function deleteDecision(
   reviewId: string
-):
+): Promise<
   | { deleted: true; spec_deleted: boolean; test_path: string | null }
-  | { deleted: false; reason: "invalid" | "not_found" } {
+  | { deleted: false; reason: "invalid" | "not_found" }
+> {
   if (typeof reviewId !== "string" || reviewId.trim().length === 0) {
     return { deleted: false, reason: "invalid" };
   }
-  const decisions = readDecisionHistory();
+  const decisions = await readDecisionHistory();
   const entry = decisions.get(reviewId);
   if (!entry) {
     return { deleted: false, reason: "not_found" };
   }
   decisions.delete(reviewId);
-  mkdirSync(dirname(HITL_STORE), { recursive: true });
-  writeFileSync(
-    HITL_STORE,
-    `${JSON.stringify({ entries: [...decisions.values()] }, null, 2)}\n`,
-    "utf8"
-  );
+  await storage.records.writeJson("hitl/approvals", {
+    entries: [...decisions.values()],
+  });
   // Prefer the spec actually on disk for this review; fall back to the recorded path.
-  const testPath = specsByReview().get(reviewId)?.path ?? entry.test_path ?? null;
+  const testPath = (await specsByReview()).get(reviewId)?.path ?? entry.test_path ?? null;
   let specDeleted = false;
   if (testPath) {
-    specDeleted = deleteTestFile(testPath).deleted;
+    specDeleted = (await deleteTestFile(testPath)).deleted;
+    // Drop the tracked snapshot too, so a retired flow isn't restored on next generate.
+    await removeApprovedSnapshot(testPath);
   }
   return { deleted: true, spec_deleted: specDeleted, test_path: testPath };
 }
@@ -937,23 +943,24 @@ function relationshipKey(a: string, b: string): string {
 }
 
 /** Read dismissed pairings as a set of normalized pair keys. Empty when absent. */
-export function readDismissedRelationships(): Set<string> {
+export async function readDismissedRelationships(): Promise<Set<string>> {
   const set = new Set<string>();
-  if (!existsSync(DISMISSED_STORE)) return set;
-  let parsed: unknown;
   try {
-    parsed = JSON.parse(readFileSync(DISMISSED_STORE, "utf8"));
+    const parsed = await storage.records.readJson<unknown>(
+      "hitl/dismissed-relationships"
+    );
+    if (parsed === null) return set;
+    const entries = Array.isArray((parsed as { dismissed?: unknown }).dismissed)
+      ? (parsed as { dismissed: DismissedRelationship[] }).dismissed
+      : [];
+    for (const entry of entries) {
+      const [a, b] = entry.review_ids ?? [];
+      if (typeof a === "string" && typeof b === "string") {
+        set.add(relationshipKey(a, b));
+      }
+    }
   } catch {
     return set; // malformed -> treated as empty, never fatal
-  }
-  const entries = Array.isArray((parsed as { dismissed?: unknown }).dismissed)
-    ? (parsed as { dismissed: DismissedRelationship[] }).dismissed
-    : [];
-  for (const entry of entries) {
-    const [a, b] = entry.review_ids ?? [];
-    if (typeof a === "string" && typeof b === "string") {
-      set.add(relationshipKey(a, b));
-    }
   }
   return set;
 }
@@ -963,26 +970,24 @@ export function readDismissedRelationships(): Set<string> {
  * `loadFlows` stops flagging the pairing as `conflicts_with_approved`. Idempotent:
  * re-dismissing the same pairing is a no-op. Touches NO spec and NO approval.
  */
-export function dismissRelationship(input: {
+export async function dismissRelationship(input: {
   review_id: string;
   baseline_review_id: string;
   dismissed_by?: string;
-}): { dismissed: true } | { dismissed: false; reason: "invalid" } {
+}): Promise<{ dismissed: true } | { dismissed: false; reason: "invalid" }> {
   const a = input.review_id?.trim();
   const b = input.baseline_review_id?.trim();
   if (!a || !b || a.toLowerCase() === b.toLowerCase()) {
     return { dismissed: false, reason: "invalid" };
   }
   const records: DismissedRelationship[] = [];
-  if (existsSync(DISMISSED_STORE)) {
-    try {
-      const parsed = JSON.parse(readFileSync(DISMISSED_STORE, "utf8")) as {
-        dismissed?: DismissedRelationship[];
-      };
-      records.push(...(parsed.dismissed ?? []));
-    } catch {
-      /* malformed -> start fresh, never fatal */
-    }
+  try {
+    const parsed = await storage.records.readJson<{
+      dismissed?: DismissedRelationship[];
+    }>("hitl/dismissed-relationships");
+    records.push(...(parsed?.dismissed ?? []));
+  } catch {
+    /* malformed -> start fresh, never fatal */
   }
   const key = relationshipKey(a, b);
   const exists = records.some(
@@ -995,8 +1000,9 @@ export function dismissRelationship(input: {
       dismissed_at: new Date().toISOString(),
       dismissed_by: input.dismissed_by ?? "operator",
     });
-    mkdirSync(dirname(DISMISSED_STORE), { recursive: true });
-    writeFileSync(DISMISSED_STORE, `${JSON.stringify({ dismissed: records }, null, 2)}\n`, "utf8");
+    await storage.records.writeJson("hitl/dismissed-relationships", {
+      dismissed: records,
+    });
   }
   return { dismissed: true };
 }
@@ -1066,8 +1072,8 @@ function stepsFromBodyPlan(bodyPlan: unknown): FlowStep[] {
  * so a re-mine overrides matching journeys in place, appends new ones, and keeps
  * dropped ones visible — never silently orphaning a generated spec.
  */
-export function loadFlows(): FlowsPayload {
-  const files = candidateFiles();
+export async function loadFlows(): Promise<FlowsPayload> {
+  const files = await candidateFiles();
   const latestFile = files.at(-1) ?? null;
   const observations = new Map<string, CandidateObservation>();
   let latestRunId: string | null = null;
@@ -1078,7 +1084,9 @@ export function loadFlows(): FlowsPayload {
   for (const file of files) {
     let doc: { run_id?: string; generated_at?: string; candidates?: RawCandidate[] };
     try {
-      doc = JSON.parse(readFileSync(file, "utf8")) as typeof doc;
+      const bytes = await storage.blobs.get(file);
+      if (bytes === null) continue;
+      doc = JSON.parse(bytes.toString("utf8")) as typeof doc;
     } catch {
       continue;
     }
@@ -1102,10 +1110,10 @@ export function loadFlows(): FlowsPayload {
     }
   }
 
-  const decisions = readDecisionHistory();
+  const decisions = await readDecisionHistory();
   // Pairings the operator has marked "distinct scenarios, not an override" — used
   // below to suppress the advisory conflict flag for exactly those pairs.
-  const dismissedRelationships = readDismissedRelationships();
+  const dismissedRelationships = await readDismissedRelationships();
   const approvedSignatures = new Set(
     [...decisions.values()]
       .filter((entry) => entry.status === "approved")
@@ -1115,8 +1123,8 @@ export function loadFlows(): FlowsPayload {
     latestCandidates.map((candidate) => ({ ...candidate, steps: candidate.steps ?? [] })),
     approvedSignatures
   );
-  const specs = specsByReview();
-  const repairs = repairOutcomesBySignature();
+  const specs = await specsByReview();
+  const repairs = await repairOutcomesBySignature();
   const activeReviewIds = new Set<string>();
   const flows: ReviewFlow[] = [];
 
@@ -1430,7 +1438,9 @@ export function loadFlows(): FlowsPayload {
 
   return {
     run_id: latestRunId,
-    source_candidates: latestFile ? latestFile.slice(REPO_ROOT.length + 1) : null,
+    source_candidates: latestFile
+      ? `services/behavior-engine/data/candidates/${latestFile.slice("candidates/".length)}.json`
+      : null,
     generated_at: latestGeneratedAt,
     flows,
     prior_decisions: priorDecisions,

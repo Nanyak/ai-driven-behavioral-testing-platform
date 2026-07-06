@@ -24,15 +24,19 @@
  * for a flow and renders them deterministically. No LLM call happens at generate
  * time — generation stays deterministic and offline-runnable.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { dirname, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  storage,
+  type Storage,
+  type StoredInvariant,
+} from "../../../../packages/storage/index.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 /** Repo root, derived from this module's location so paths are CWD-independent
  * (the invariant CLI can be spawned from anywhere — e.g. `npm --prefix …`). */
 export const REPO_ROOT = resolvePath(__dirname, "..", "..", "..", "..");
-export const INVARIANTS_ARTIFACT = resolvePath(REPO_ROOT, "data", "invariants", "invariants.json");
 
 /**
  * Matchers an invariant may use. Deliberately a small, closed set — each maps to
@@ -89,6 +93,8 @@ export function isApprovedTemplateName(value: unknown): value is ApprovedTemplat
 }
 
 interface BaseInvariant {
+  /** Deterministic database identity. Optional only for legacy JSON seeds. */
+  id?: string;
   /** The emitted step title this attaches to, e.g. "POST /store/carts/{id}/complete". */
   stepTitle: string;
   /** One-line behavioral rationale — emitted as the assertion label so a failure reads clearly. */
@@ -189,25 +195,77 @@ export function isValidInvariant(value: unknown): value is Invariant {
   return true;
 }
 
-const EMPTY_ARTIFACT: InvariantsArtifact = { generated_at: "", flows: {} };
-
-/** Load the invariants artifact, or an empty one when absent/malformed (never throws). */
-export function loadInvariants(path: string = INVARIANTS_ARTIFACT): InvariantsArtifact {
-  if (!existsSync(path)) return EMPTY_ARTIFACT;
-  try {
-    const parsed = JSON.parse(readFileSync(path, "utf8")) as InvariantsArtifact;
-    if (typeof parsed !== "object" || parsed === null || typeof parsed.flows !== "object") {
-      return EMPTY_ARTIFACT;
-    }
-    return parsed;
-  } catch {
-    return EMPTY_ARTIFACT;
-  }
+function identityPart(value: unknown): string {
+  return value === undefined ? "" : JSON.stringify(value);
 }
 
-export function saveInvariants(artifact: InvariantsArtifact, path: string = INVARIANTS_ARTIFACT): void {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(artifact, null, 2)}\n`);
+/** Stable row identity: re-proposal updates the same logical invariant. */
+export function invariantId(flowSignature: string, invariant: Invariant): string {
+  return createHash("sha256")
+    .update(
+      [
+        flowSignature,
+        invariant.stepTitle,
+        invariant.kind ?? "field",
+        invariant.path,
+        isFieldInvariant(invariant) ? invariant.matcher : "",
+        isFieldInvariant(invariant) ? identityPart(invariant.expected) : "",
+        isTemplateInvariant(invariant) ? invariant.template : "",
+      ].join("|")
+    )
+    .digest("hex");
+}
+
+export function storedInvariant(
+  flowSignature: string,
+  flowName: string,
+  cacheKey: string,
+  proposedAt: string,
+  invariant: Invariant
+): StoredInvariant {
+  const id = invariantId(flowSignature, invariant);
+  return {
+    id,
+    flow_signature: flowSignature,
+    flow_name: flowName,
+    cache_key: cacheKey,
+    step_title: invariant.stepTitle,
+    source: invariant.source,
+    polarity: invariant.polarity ?? null,
+    kind: invariant.kind ?? "field",
+    verified: false,
+    payload: { ...invariant, id, verified: false } as unknown as Record<string, unknown>,
+    proposed_at: proposedAt,
+    verified_at: null,
+  };
+}
+
+/** Reconstruct the legacy artifact shape consumed by deterministic generation. */
+export async function loadInvariants(
+  store: Storage = storage,
+  verifiedOnly = false
+): Promise<InvariantsArtifact> {
+  const rows: StoredInvariant[] = await store.invariants.list({ verifiedOnly });
+  const artifact: InvariantsArtifact = { generated_at: "", flows: {} };
+  for (const row of rows) {
+    const candidate = {
+      ...row.payload,
+      id: row.id || undefined,
+      verified: row.verified,
+    };
+    if (!isValidInvariant(candidate)) continue;
+    const flow = artifact.flows[row.flow_signature] ?? {
+      flow_name: row.flow_name ?? row.flow_signature,
+      cache_key: row.cache_key ?? undefined,
+      proposed_at: row.proposed_at ?? undefined,
+      invariants: [],
+    };
+    flow.invariants.push(candidate);
+    artifact.flows[row.flow_signature] = flow;
+    const timestamp = row.verified_at ?? row.proposed_at ?? "";
+    if (timestamp > artifact.generated_at) artifact.generated_at = timestamp;
+  }
+  return artifact;
 }
 
 /**

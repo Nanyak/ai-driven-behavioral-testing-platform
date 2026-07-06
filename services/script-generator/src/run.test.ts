@@ -16,6 +16,7 @@ import { join } from "node:path";
 import { loadAugmentedSpecs } from "../../golden/src/oas-source.js";
 import { manifestEntry } from "./artifacts.js";
 import { buildFlowPlan, type FlowPlan, type OasSpecs } from "./resolve.js";
+import { makeLocalStorage } from "../../../packages/storage/index.js";
 import {
   approvedOutcomes,
   cleanPersonaFolderPreservingApproved,
@@ -25,8 +26,8 @@ import {
 } from "./run.js";
 
 let passed = 0;
-function check(name: string, fn: () => void): void {
-  fn();
+async function check(name: string, fn: () => void | Promise<void>): Promise<void> {
+  await fn();
   passed++;
   console.log(`  ok  ${name}`);
 }
@@ -37,7 +38,7 @@ const SIG_OTHER = "b".repeat(64);
 const spec = (sig: string, outcome: string): string =>
   `// flow_signature: ${sig}\n// status_signature: ${outcome}\ntest("x", async () => {});\n`;
 
-check("changed outcomes get a separate deterministic draft filename", () => {
+await check("changed outcomes get a separate deterministic draft filename", () => {
   assert.equal(versionedSpecFilename(SIG_APPROVED, "200,200,200", false), "aaaaaaaaaaaa.spec.ts");
   const draft = versionedSpecFilename(SIG_APPROVED, "200,200,500", true);
   assert.match(draft, /^aaaaaaaaaaaa-[0-9a-f]{8}\.spec\.ts$/);
@@ -45,9 +46,10 @@ check("changed outcomes get a separate deterministic draft filename", () => {
 });
 
 // 1. approvedOutcomes reads blessed outcomes (approved only) from the HITL store.
-check("approvedOutcomes reads approved status_signatures from the store", () => {
+await check("approvedOutcomes reads approved status_signatures from the store", async () => {
   const dir = mkdtempSync(join(tmpdir(), "gen-"));
-  const store = join(dir, "approvals.json");
+  const store = join(dir, "data", "hitl", "approvals.json");
+  mkdirSync(join(dir, "data", "hitl"), { recursive: true });
   writeFileSync(
     store,
     JSON.stringify({
@@ -57,12 +59,12 @@ check("approvedOutcomes reads approved status_signatures from the store", () => 
       ],
     })
   );
-  const map = approvedOutcomes(store);
+  const map = await approvedOutcomes(makeLocalStorage(dir));
   assert.deepEqual([...(map.get(SIG_APPROVED) ?? [])], ["200,200,200"]);
   assert.equal(map.has(SIG_OTHER), false, "discarded entries are not blessed baselines");
 });
 
-check("an existing exact approved artifact is never re-emitted from a stale candidate file", () => {
+await check("an existing exact approved artifact is never re-emitted from a stale candidate file", () => {
   const candidate = {
     signature: SIG_APPROVED,
     steps: [
@@ -88,9 +90,9 @@ check("an existing exact approved artifact is never re-emitted from a stale cand
 });
 
 // 2. The clean preserves both the active oracle and an undecided draft.
-check("clean preserves the blessed oracle and pending draft", () => {
+await check("clean preserves the blessed oracle and pending draft", async () => {
   const dir = mkdtempSync(join(tmpdir(), "gen-"));
-  const personaDir = join(dir, "customer");
+  const personaDir = join(dir, "generated-tests", "customer");
   mkdirSync(join(personaDir, "happy-path"), { recursive: true });
   mkdirSync(join(personaDir, "failure-path"), { recursive: true });
   const oracle = join(personaDir, "happy-path", "aaaaaaaaaaaa.spec.ts");
@@ -99,10 +101,11 @@ check("clean preserves the blessed oracle and pending draft", () => {
   writeFileSync(stale, spec(SIG_OTHER, "200,401"));
 
   const approved = new Map([[SIG_APPROVED, new Set(["200,200,200"])]]);
-  const preserved = cleanPersonaFolderPreservingApproved(
-    personaDir,
+  const preserved = await cleanPersonaFolderPreservingApproved(
+    "customer",
     approved,
-    new Map()
+    new Map(),
+    makeLocalStorage(dir)
   );
 
   assert.equal(preserved, 2);
@@ -110,34 +113,36 @@ check("clean preserves the blessed oracle and pending draft", () => {
   assert.equal(existsSync(stale), true, "undecided draft survives until review");
 });
 
-check("clean preserves an undecided draft absent from latest selected scenarios", () => {
+await check("clean preserves an undecided draft absent from latest selected scenarios", async () => {
   const dir = mkdtempSync(join(tmpdir(), "gen-"));
-  const personaDir = join(dir, "customer");
+  const personaDir = join(dir, "generated-tests", "customer");
   mkdirSync(join(personaDir, "failure-path"), { recursive: true });
   const stale = join(personaDir, "failure-path", "bbbbbbbbbbbb.spec.ts");
   writeFileSync(stale, spec(SIG_OTHER, "200,401"));
 
-  const preserved = cleanPersonaFolderPreservingApproved(
-    personaDir,
+  const preserved = await cleanPersonaFolderPreservingApproved(
+    "customer",
     new Map(),
-    new Map()
+    new Map(),
+    makeLocalStorage(dir)
   );
   assert.equal(preserved, 1);
   assert.equal(existsSync(stale), true, "a later mine cannot silently discard pending work");
 });
 
-check("clean removes a draft only after explicit discard", () => {
+await check("clean removes a draft only after explicit discard", async () => {
   const dir = mkdtempSync(join(tmpdir(), "gen-"));
-  const personaDir = join(dir, "customer");
+  const personaDir = join(dir, "generated-tests", "customer");
   mkdirSync(join(personaDir, "failure-path"), { recursive: true });
   const draft = join(personaDir, "failure-path", "bbbbbbbbbbbb.spec.ts");
   writeFileSync(draft, spec(SIG_OTHER, "200,401"));
 
   const id = `${SIG_OTHER}:200,401`;
-  const preserved = cleanPersonaFolderPreservingApproved(
-    personaDir,
+  const preserved = await cleanPersonaFolderPreservingApproved(
+    "customer",
     new Map(),
-    new Map([[id, "discarded"]])
+    new Map([[id, "discarded"]]),
+    makeLocalStorage(dir)
   );
   assert.equal(preserved, 0);
   assert.equal(existsSync(draft), false, "explicit discard retires the exact draft");
@@ -145,9 +150,9 @@ check("clean removes a draft only after explicit discard", () => {
 
 // 3. RETIREMENT: once a DIFFERENT outcome is approved for the same journey, the
 //    old-outcome spec is stale and must be dropped so the new oracle can regenerate.
-check("clean retires a stale oracle whose blessed outcome changed", () => {
+await check("clean retires a stale oracle whose blessed outcome changed", async () => {
   const dir = mkdtempSync(join(tmpdir(), "gen-"));
-  const personaDir = join(dir, "customer");
+  const personaDir = join(dir, "generated-tests", "customer");
   mkdirSync(join(personaDir, "happy-path"), { recursive: true });
   const staleOracle = join(personaDir, "happy-path", "aaaaaaaaaaaa.spec.ts");
   writeFileSync(staleOracle, spec(SIG_APPROVED, "200,200,200")); // old blessed 200
@@ -155,14 +160,19 @@ check("clean retires a stale oracle whose blessed outcome changed", () => {
   // Operator has since approved the drift: the blessed outcome is now 200,200,500.
   const approved = new Map([[SIG_APPROVED, new Set(["200,200,500"])]]);
   const decisions = new Map([[`${SIG_APPROVED}:200,200,200`, "superseded"]]);
-  const preserved = cleanPersonaFolderPreservingApproved(personaDir, approved, decisions);
+  const preserved = await cleanPersonaFolderPreservingApproved(
+    "customer",
+    approved,
+    decisions,
+    makeLocalStorage(dir)
+  );
 
   assert.equal(preserved, 0, "stale oracle is not preserved");
   assert.equal(existsSync(staleOracle), false, "old-outcome spec is retired");
 });
 
 // 4. Bodies-off runs still get a real spec-sourced golden before emission.
-check("ensureGoldenResponses writes an OAS golden for a documented happy path", () => {
+await check("ensureGoldenResponses writes an OAS golden for a documented happy path", () => {
   const dir = mkdtempSync(join(tmpdir(), "goldens-"));
   const specs = loadAugmentedSpecs();
   mkdirSync(dir, { recursive: true });
@@ -208,7 +218,7 @@ check("ensureGoldenResponses writes an OAS golden for a documented happy path", 
 });
 
 // 5. An observed schema enriches the corrected OAS instead of bypassing it.
-check("ensureGoldenResponses merges existing observed evidence into OAS", () => {
+await check("ensureGoldenResponses merges existing observed evidence into OAS", () => {
   const dir = mkdtempSync(join(tmpdir(), "goldens-"));
   const path = join(dir, "get-store-products-200.json");
   mkdirSync(dir, { recursive: true });
@@ -250,7 +260,7 @@ check("ensureGoldenResponses merges existing observed evidence into OAS", () => 
 });
 
 // 6. Observed evidence is the fallback when no OAS operation/status exists.
-check("ensureGoldenResponses reuses observed-only fallback for an undocumented response", () => {
+await check("ensureGoldenResponses reuses observed-only fallback for an undocumented response", () => {
   const dir = mkdtempSync(join(tmpdir(), "goldens-"));
   const path = join(dir, "get-store-not-in-oas-200.json");
   mkdirSync(dir, { recursive: true });
@@ -288,7 +298,7 @@ check("ensureGoldenResponses reuses observed-only fallback for an undocumented r
 });
 
 // 7. An undocumented/unobserved happy response cannot degrade to status-only.
-check("ensureGoldenResponses fails closed when no schema source exists", () => {
+await check("ensureGoldenResponses fails closed when no schema source exists", () => {
   const dir = mkdtempSync(join(tmpdir(), "goldens-"));
   const specs = loadAugmentedSpecs();
   assert.throws(
@@ -309,7 +319,7 @@ check("ensureGoldenResponses fails closed when no schema source exists", () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-check("artifact manifest hashes a redacted body plan and exact source", () => {
+await check("artifact manifest hashes a redacted body plan and exact source", () => {
   const plan: FlowPlan = {
     steps: [
       {
@@ -342,7 +352,7 @@ check("artifact manifest hashes a redacted body plan and exact source", () => {
   assert.equal(entry.body_plan_hash.length, 64);
 });
 
-check("typical optionals use masked presence without consuming masked values or shapes", () => {
+await check("typical optionals use masked presence without consuming masked values or shapes", () => {
   const specs = {
     store: {
       openapi: "3.0.0",

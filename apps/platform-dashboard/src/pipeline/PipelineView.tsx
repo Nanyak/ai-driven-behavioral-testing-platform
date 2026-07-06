@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle,
+  DatabaseZap,
   FlaskConical,
   Loader2,
   Pickaxe,
@@ -40,17 +41,31 @@ interface StageDef {
 
 const STAGES: StageDef[] = [
   {
+    job: "ingest",
+    title: "Ingest logs",
+    icon: DatabaseZap,
+    blurb: "Query captured Elasticsearch traffic and build session flows plus golden responses.",
+  },
+  {
     job: "mine",
     title: "Mine flows",
     icon: Pickaxe,
     blurb: "Cluster ingested traffic into ranked behavior flows (test candidates).",
   },
   {
+    job: "invariants:propose",
+    title: "Propose invariants",
+    icon: Sparkles,
+    blurb:
+      "Refresh changed endpoint digests and propose body-level invariants for changed flows.",
+    guarded: true,
+  },
+  {
     job: "invariants:verify",
-    title: "Invariants",
+    title: "Verify invariants",
     icon: ShieldCheck,
     blurb:
-      "Propose behavioral invariants (body-level oracles) for changed flows, and bake only those that held on the last trusted baseline run (reports/playwright/normalized.json).",
+      "Bake only proposed invariants that held on the last trusted normalized test run.",
     guarded: true,
   },
   {

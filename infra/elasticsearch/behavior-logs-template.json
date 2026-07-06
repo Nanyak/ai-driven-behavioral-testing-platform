@@ -3,7 +3,8 @@
   "priority": 200,
   "template": {
     "settings": {
-      "number_of_replicas": 0
+      "number_of_replicas": 0,
+      "index.lifecycle.name": "behavior-logs-retention"
     },
     "mappings": {
       "properties": {

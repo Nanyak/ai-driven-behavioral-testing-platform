@@ -24,8 +24,11 @@ import { verifySpec, type StepOutcome } from "./verify.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolvePath(__dirname, "..", "..", "..", "..");
-const GENERATED_TESTS_DIR = resolvePath(REPO_ROOT, "generated-tests");
-const REPAIR_REPORT = resolvePath(REPO_ROOT, "reports", "resolver-repair.json");
+const WORKSPACE_ROOT = process.env.STORAGE_WORKSPACE_ROOT
+  ? resolvePath(process.env.STORAGE_WORKSPACE_ROOT)
+  : REPO_ROOT;
+const GENERATED_TESTS_DIR = resolvePath(WORKSPACE_ROOT, "generated-tests");
+const REPAIR_REPORT = resolvePath(WORKSPACE_ROOT, "reports", "resolver-repair.json");
 
 const PROVENANCE = "// repaired-by: resolver-agent";
 
@@ -247,7 +250,7 @@ async function repairOne(
     finalFailures: [],
   };
 
-  let verdict = verifySpec(spec.relPath, absPath);
+  let verdict = await verifySpec(spec.relPath, absPath);
   base.expectedSignature = verdict.expectedSignature;
 
   if (verdict.fixme) return { ...base, result: "skipped-fixme", attempts: 0 };
@@ -326,7 +329,7 @@ async function repairOne(
       writeFileSync(absPath, original);
       continue;
     }
-    verdict = verifySpec(spec.relPath, absPath);
+    verdict = await verifySpec(spec.relPath, absPath);
     if (verdict.matched) {
       // Keep the before/after sources so the dashboard can show the review diff
       // (what the agent changed) even after a later deterministic regen.

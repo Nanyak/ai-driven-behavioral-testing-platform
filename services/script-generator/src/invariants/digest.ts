@@ -22,7 +22,10 @@ import { stepTitle, workflowSourceHash } from "./codebase.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolvePath(__dirname, "..", "..", "..", "..");
-export const DIGEST_DIR = resolvePath(REPO_ROOT, "data", "endpoint-behavior");
+const WORKSPACE_ROOT = process.env.STORAGE_WORKSPACE_ROOT
+  ? resolvePath(process.env.STORAGE_WORKSPACE_ROOT)
+  : REPO_ROOT;
+export const DIGEST_DIR = resolvePath(WORKSPACE_ROOT, "data", "endpoint-behavior");
 
 /** Filesystem-safe slug for an endpoint, e.g.
  * "POST /store/carts/{id}/complete" -> "post__store_carts_id_complete". */

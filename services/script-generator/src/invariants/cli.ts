@@ -36,7 +36,7 @@ import { loadCandidates, type Candidate } from "../load.js";
 import type { OasSpecs } from "../resolve.js";
 import { readGateContract, stepTitle } from "./codebase.js";
 import { digestBodyFor } from "./digest.js";
-import { evaluateInvariant, verifyInvariants } from "./evaluate.js";
+import { evaluateInvariant } from "./evaluate.js";
 import {
   buildInvariantPrompt,
   flowCacheKey,
@@ -45,12 +45,13 @@ import {
   type ProposalContext,
 } from "./propose.js";
 import {
+  invariantId,
   loadInvariants,
   REPO_ROOT,
-  saveInvariants,
+  storedInvariant,
   type Invariant,
-  type InvariantsArtifact,
 } from "./types.js";
+import { storage } from "../../../../packages/storage/index.js";
 
 /** Build, per flow_signature, the captured response body for each step title from
  * a known-good normalized.json run (test-runner collect output). */
@@ -131,9 +132,39 @@ async function main(): Promise<void> {
   const verifyPath = verifyArg
     ? isAbsolute(verifyArg)
       ? verifyArg
-      : resolvePath(REPO_ROOT, verifyArg)
+      : resolvePath(process.env.STORAGE_WORKSPACE_ROOT ?? REPO_ROOT, verifyArg)
     : undefined;
   const force = args.includes("--force");
+
+  if (verifyIdx >= 0 && !verifyPath) {
+    throw new Error("--verify requires a normalized report path");
+  }
+
+  // Verification is deliberately a separate, incremental operation. It never
+  // loads candidates, computes cache keys, or invokes the proposal agent.
+  if (verifyPath) {
+    const knownGood = bodiesFromRun(verifyPath);
+    const existing = await loadInvariants();
+    const heldIds: string[] = [];
+    let evaluated = 0;
+    for (const [flowSignature, flow] of Object.entries(existing.flows)) {
+      const bodies = knownGood.get(flowSignature);
+      if (!bodies) continue;
+      for (const invariant of flow.invariants) {
+        if (!bodies.has(invariant.stepTitle)) continue;
+        evaluated += 1;
+        if (evaluateInvariant(bodies.get(invariant.stepTitle), invariant).pass) {
+          heldIds.push(invariant.id ?? invariantId(flowSignature, invariant));
+        }
+      }
+    }
+    const updated = await storage.invariants.markVerified(heldIds);
+    console.log("\nInvariant verification complete.");
+    console.log(`  Invariants evaluated: ${evaluated}`);
+    console.log(`  Held on baseline:     ${heldIds.length}`);
+    console.log(`  Rows marked verified: ${updated}`);
+    return;
+  }
 
   const specs: OasSpecs = loadAugmentedSpecs() as { store: OasDocument; admin: OasDocument };
   const candidates = loadCandidates().candidates.filter((c) => {
@@ -145,13 +176,10 @@ async function main(): Promise<void> {
 
   ensureAnthropicKey();
   const agent = makeClaudeAgent();
-  const knownGood = verifyPath ? bodiesFromRun(verifyPath) : null;
 
-  const existing = loadInvariants();
-  const artifact: InvariantsArtifact = { generated_at: new Date().toISOString(), flows: {} };
+  const existing = await loadInvariants();
 
   let proposed = 0;
-  let verified = 0;
   let cached = 0;
 
   // Partition first: a template-cache hit (identical prompt inputs) reuses the
@@ -163,37 +191,15 @@ async function main(): Promise<void> {
     const cacheKey = flowCacheKey(candidate, specs, ctx);
     const prior = existing.flows[candidate.signature];
     if (!force && prior && prior.cache_key === cacheKey) {
-      // The cache skips the LLM proposal, NOT the (cheap, pure) verification: an
-      // invariant proposed before a matching baseline existed must still bake once
-      // one appears (the one-cycle-lag close). Re-verify the cached proposal
-      // against the CURRENT baseline, but only flip a flag when there's real
-      // evidence — a step with no captured body keeps its prior state, so a flaky
-      // run that misses a step can't silently un-bake a good invariant.
-      let invariants = prior.invariants;
-      if (knownGood) {
-        const bodies = knownGood.get(candidate.signature) ?? new Map<string, unknown>();
-        invariants = prior.invariants.map((inv) =>
-          bodies.has(inv.stepTitle) ? { ...inv, verified: evaluateInvariant(bodies.get(inv.stepTitle), inv).pass } : inv
-        );
-        verified += invariants.filter((inv) => inv.verified).length;
-      }
-      artifact.flows[candidate.signature] = { ...prior, invariants };
       cached++;
       continue;
     }
     misses.push({ candidate, ctx, cacheKey });
   }
 
-  // Persist the cache-hit baseline before any (slow) agent call, so an
-  // interrupted run never loses already-known invariants.
-  saveInvariants(artifact);
-
   // Propose for misses with BOUNDED CONCURRENCY: each flow's proposal is
-  // independent (the agent is stateless per call, own scratch dir), and the
-  // artifact is keyed by signature, so N in flight is safe. The artifact is
-  // re-saved after EACH flow finishes — Node is single-threaded, so the
-  // mutate-then-write runs without interleaving, and a killed run keeps every
-  // flow that completed. Tune with INVARIANT_CONCURRENCY (default 4).
+  // independent. Each completed flow is replaced in one storage transaction;
+  // unrelated flows and cache hits are never rewritten.
   const concurrency = Math.max(1, Number(process.env.INVARIANT_CONCURRENCY) || 4);
   let cursor = 0;
   let agentErrors = 0;
@@ -203,34 +209,38 @@ async function main(): Promise<void> {
       const polarity = flowPolarity(candidate);
       console.log(`Proposing ${polarity}-path invariants for [${candidate.flow_name}]…`);
       const result = await proposeForFlow(candidate, specs, agent, ctx);
-      if (result.failed) agentErrors++;
-      let invariants = result.invariants;
-      proposed += invariants.length;
-      if (knownGood) {
-        const bodies = knownGood.get(candidate.signature) ?? new Map<string, unknown>();
-        invariants = verifyInvariants(invariants, bodies);
-        verified += invariants.filter((i) => i.verified).length;
+      if (result.failed) {
+        agentErrors++;
+        continue;
       }
-      artifact.flows[candidate.signature] = {
+      const invariants = result.invariants;
+      proposed += invariants.length;
+      const proposedAt = new Date().toISOString();
+      await storage.invariants.replaceFlow({
+        flow_signature: candidate.signature,
         flow_name: candidate.flow_name,
         cache_key: cacheKey,
-        proposed_at: new Date().toISOString(),
-        invariants,
-      };
-      saveInvariants(artifact); // incremental persist — survives an interrupted run
+        proposed_at: proposedAt,
+        invariants: invariants.map((invariant) =>
+          storedInvariant(
+            candidate.signature,
+            candidate.flow_name,
+            cacheKey,
+            proposedAt,
+            invariant
+          )
+        ),
+      });
     }
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, misses.length) }, () => worker()));
 
-  saveInvariants(artifact);
   console.log(`\nInvariant proposal complete.`);
   console.log(`  Flows processed:     ${candidates.length}`);
   console.log(`  Reused from cache:   ${cached}`);
   console.log(`  Agent calls:         ${misses.length} (${agentErrors} failed)`);
   console.log(`  Invariants proposed: ${proposed}`);
-  if (knownGood) {
-    console.log(`  Verified (baked):    ${verified}`);
-  } else if (proposed > 0) {
+  if (proposed > 0) {
     console.log(`  (proposals written as verified:false — re-run with --verify <normalized.json> to bake)`);
   }
 

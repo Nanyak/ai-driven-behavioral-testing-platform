@@ -39,10 +39,10 @@ function printSummary(result: NormalizedRunResult, target: Target): void {
   }
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const target = parseTarget(process.argv[2]);
 
-  const run = runPlaywright({ target });
+  const run = await runPlaywright({ target });
   if (run.stdout) process.stdout.write(run.stdout);
   if (run.stderr) process.stderr.write(run.stderr);
 
@@ -61,7 +61,7 @@ function main(): void {
 
   printSummary(result, target);
 
-  const { report, jsonPath, htmlPath } = writeReports(result, REPO_REPORTS_DIR);
+  const { report, jsonPath, htmlPath } = await writeReports(result, REPO_REPORTS_DIR);
   console.log(`\n${formatReportSummary(report)}`);
 
   console.log(`\n  Playwright JSON:   ${run.jsonReportPath}`);
@@ -74,4 +74,7 @@ function main(): void {
   process.exit(exitStatus);
 }
 
-main();
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : error);
+  process.exit(1);
+});

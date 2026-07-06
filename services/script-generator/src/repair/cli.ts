@@ -17,9 +17,12 @@ import {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolvePath(__dirname, "..", "..", "..", "..");
-const GENERATED_TESTS_DIR = resolvePath(REPO_ROOT, "generated-tests");
+const WORKSPACE_ROOT = process.env.STORAGE_WORKSPACE_ROOT
+  ? resolvePath(process.env.STORAGE_WORKSPACE_ROOT)
+  : REPO_ROOT;
+const GENERATED_TESTS_DIR = resolvePath(WORKSPACE_ROOT, "generated-tests");
 const ARTIFACT_MANIFEST = resolvePath(GENERATED_TESTS_DIR, ".artifacts.json");
-const HITL_STORE = resolvePath(REPO_ROOT, "data", "hitl", "approvals.json");
+const HITL_STORE = resolvePath(WORKSPACE_ROOT, "data", "hitl", "approvals.json");
 
 interface ManifestEntry {
   flow_signature?: string;

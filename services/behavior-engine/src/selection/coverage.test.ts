@@ -18,10 +18,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { applySkipGate, buildCoverageManifest, type CoverageManifest } from "./coverage.js";
 import type { CandidateStep, MinedFlow } from "./dedup.js";
+import { makeLocalStorage } from "../../../../packages/storage/index.js";
 
 let passed = 0;
-function check(name: string, fn: () => void): void {
-  fn();
+async function check(name: string, fn: () => void | Promise<void>): Promise<void> {
+  await fn();
   passed++;
   console.log(`  ok  ${name}`);
 }
@@ -63,27 +64,27 @@ const manifest = (): CoverageManifest => ({
 });
 
 // 1. A new shape (not covered) always survives the gate.
-check("new shape is kept", () => {
+await check("new shape is kept", () => {
   const { kept, skipped } = applySkipGate([flow("b".repeat(64), checkoutSteps(200))], manifest());
   assert.equal(kept.length, 1);
   assert.equal(skipped.length, 0);
 });
 
 // 2. Blessed outcome whose oracle already exists is skipped (stable).
-check("blessed outcome with an existing oracle is skipped", () => {
+await check("blessed outcome with an existing oracle is skipped", () => {
   const { kept, skipped } = applySkipGate([flow(SIG, checkoutSteps(200))], manifest());
   assert.equal(skipped.length, 1);
   assert.equal(kept.length, 0);
 });
 
 // 3. Same journey, blessed outcome differs (200 -> 500) — the regression survives.
-check("drifted outcome is kept (regression surfaces)", () => {
+await check("drifted outcome is kept (regression surfaces)", () => {
   const { kept, skipped } = applySkipGate([flow(SIG, checkoutSteps(500))], manifest());
   assert.equal(kept.length, 1, "regression must be kept");
   assert.equal(skipped.length, 0);
 });
 
-check("a previously discarded drift outcome stays skipped", () => {
+await check("a previously discarded drift outcome stays skipped", () => {
   const m = manifest();
   m.decidedOutcomes.get(SIG)?.add("200,200,500");
   const { kept, skipped } = applySkipGate([flow(SIG, checkoutSteps(500))], m);
@@ -91,7 +92,7 @@ check("a previously discarded drift outcome stays skipped", () => {
   assert.equal(skipped.length, 1);
 });
 
-check("a different outcome after a discard becomes a new review version", () => {
+await check("a different outcome after a discard becomes a new review version", () => {
   const m: CoverageManifest = {
     signatures: new Set([SIG]),
     approvedOutcomes: new Map(),
@@ -109,7 +110,7 @@ check("a different outcome after a discard becomes a new review version", () => 
 //    generated yet (no spec asserts it) is KEPT — even after a re-mine — so the
 //    generator can still emit the new oracle. Here 500 was just approved but the
 //    only spec on disk still asserts the old 200.
-check("blessed outcome with no oracle yet is kept (ordering gap closed)", () => {
+await check("blessed outcome with no oracle yet is kept (ordering gap closed)", () => {
   const m: CoverageManifest = {
     signatures: new Set([SIG]),
     approvedOutcomes: new Map([[SIG, new Set(["200,200,500"])]]),
@@ -125,7 +126,7 @@ check("blessed outcome with no oracle yet is kept (ordering gap closed)", () => 
 
 // 5. No approved baseline -> shape-level coverage (unchanged): a shape with a spec
 //    is skipped regardless of outcome.
-check("covered shape with no approved baseline is skipped (shape-level)", () => {
+await check("covered shape with no approved baseline is skipped (shape-level)", () => {
   const m: CoverageManifest = {
     signatures: new Set([SIG]),
     approvedOutcomes: new Map(),
@@ -142,9 +143,10 @@ check("covered shape with no approved baseline is skipped (shape-level)", () => 
 // 6. Integration: buildCoverageManifest reads the blessed outcome from a real HITL
 //    store AND the oracle outcome from a real stamped spec; the gate then skips the
 //    stable flow but surfaces a drift. Proves the full FS wiring, not just the algebra.
-check("buildCoverageManifest wires approved + spec outcomes from disk", () => {
+await check("buildCoverageManifest wires approved + spec outcomes from disk", async () => {
   const dir = mkdtempSync(join(tmpdir(), "cov-"));
-  const hitlStore = join(dir, "approvals.json");
+  const hitlStore = join(dir, "data", "hitl", "approvals.json");
+  mkdirSync(join(dir, "data", "hitl"), { recursive: true });
   writeFileSync(
     hitlStore,
     JSON.stringify({
@@ -157,7 +159,7 @@ check("buildCoverageManifest wires approved + spec outcomes from disk", () => {
     join(testsDir, "spec.spec.ts"),
     `// flow_signature: ${SIG}\n// status_signature: 200,200,200\ntest("x", async () => {});\n`
   );
-  const m = buildCoverageManifest({ generatedTestsDir: join(dir, "generated-tests"), hitlStore });
+  const m = await buildCoverageManifest({ storage: makeLocalStorage(dir) });
   assert.deepEqual([...(m.approvedOutcomes.get(SIG) ?? [])], ["200,200,200"]);
   assert.deepEqual([...(m.specOutcomes.get(SIG) ?? [])], ["200,200,200"]);
 

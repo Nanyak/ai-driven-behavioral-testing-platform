@@ -20,6 +20,7 @@ import {
   isFieldInvariant,
   isTemplateInvariant,
   isValidInvariant,
+  invariantId,
   verifiedInvariantsByStep,
   type FieldInvariant,
   type Invariant,
@@ -199,6 +200,13 @@ check("template invariants render approved helper calls", () => {
 });
 
 console.log("invariants: artifact lookup");
+check("invariantId is deterministic and changes with identity fields", () => {
+  const first = invariantId("flow", inv());
+  assert.equal(first, invariantId("flow", inv()));
+  assert.equal(first.length, 64);
+  assert.notEqual(first, invariantId("flow", inv({ expected: "cart" })));
+  assert.notEqual(first, invariantId("other-flow", inv()));
+});
 check("verifiedInvariantsByStep groups verified-only by step title", () => {
   const artifact: InvariantsArtifact = {
     generated_at: "t",

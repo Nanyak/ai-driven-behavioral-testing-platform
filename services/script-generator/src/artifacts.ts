@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve as resolvePath } from "node:path";
+import { storage, type Storage } from "../../../packages/storage/index.js";
 import type { BodyPlan, FlowPlan, SynthesizedBody } from "./resolve.js";
 
 export type BodyRuleSource = "openapi" | "observed" | "profile";
@@ -149,27 +148,27 @@ export function manifestEntry(
   };
 }
 
-function readManifest(path: string): GenerationManifest | null {
-  if (!existsSync(path)) return null;
+async function readManifest(store: Storage): Promise<GenerationManifest | null> {
   try {
-    const parsed = JSON.parse(readFileSync(path, "utf8")) as GenerationManifest;
-    return parsed.version === 1 && Array.isArray(parsed.entries) ? parsed : null;
+    const value = await store.records.readJson<GenerationManifest>("manifest");
+    if (value === null) return null;
+    return value.version === 1 && Array.isArray(value.entries) ? value : null;
   } catch {
     return null;
   }
 }
 
-export function writeGenerationManifest(
-  generatedTestsDir: string,
-  newEntries: GenerationManifestEntry[]
-): void {
-  const path = resolvePath(generatedTestsDir, ".artifacts.json");
-  const prior = readManifest(path)?.entries ?? [];
+export async function writeGenerationManifest(
+  newEntries: GenerationManifestEntry[],
+  store: Storage = storage
+): Promise<void> {
+  const prior = (await readManifest(store))?.entries ?? [];
   const byReview = new Map<string, GenerationManifestEntry>();
 
   for (const entry of prior) {
-    if (existsSync(resolvePath(generatedTestsDir, entry.test_path))) {
-      const source = readFileSync(resolvePath(generatedTestsDir, entry.test_path), "utf8");
+    const bytes = await store.blobs.get(`specs/${entry.test_path}`);
+    if (bytes !== null) {
+      const source = bytes.toString("utf8");
       const inferredStatus =
         entry.status_signature ||
         /status_signature["'\s:=]+([\d,]+)/i.exec(source)?.[1] ||
@@ -196,5 +195,5 @@ export function writeGenerationManifest(
     generated_at: new Date().toISOString(),
     entries: [...byReview.values()].sort((a, b) => a.test_path.localeCompare(b.test_path)),
   };
-  writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  await store.records.writeJson("manifest", manifest);
 }

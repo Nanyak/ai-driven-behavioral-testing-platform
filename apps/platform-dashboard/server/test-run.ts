@@ -19,12 +19,14 @@ export function getTestRunStatus(): RunStatus {
   return getJobStatus();
 }
 
-export function startTestRun(target: RunTarget): { started: boolean; reason?: string } {
+export async function startTestRun(
+  target: RunTarget
+): Promise<{ started: boolean; reason?: string }> {
   const job = `test:${target}` as const;
   // isJobId guards the registry; target is already validated by the route.
   if (!isJobId(job)) {
     return { started: false, reason: `unknown suite target: ${target}` };
   }
-  const result = startJob(job);
+  const result = await startJob(job);
   return result.started ? { started: true } : { started: false, reason: result.reason };
 }

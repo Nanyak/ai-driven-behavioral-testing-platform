@@ -10,7 +10,17 @@ import { aggregateRequestBodyEvidence } from "../../behavior-engine/src/body-evi
 import { loadSessions, type SessionFlow } from "../../behavior-engine/src/io/sessions.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const CANDIDATES_DIR = resolvePath(__dirname, "..", "..", "behavior-engine", "data", "candidates");
+const REPO_ROOT = resolvePath(__dirname, "..", "..", "..");
+const WORKSPACE_ROOT = process.env.STORAGE_WORKSPACE_ROOT
+  ? resolvePath(process.env.STORAGE_WORKSPACE_ROOT)
+  : REPO_ROOT;
+const CANDIDATES_DIR = resolvePath(
+  WORKSPACE_ROOT,
+  "services",
+  "behavior-engine",
+  "data",
+  "candidates"
+);
 
 export type Persona = "guest_shopper" | "registered_customer" | "admin_operator";
 

@@ -39,13 +39,13 @@ export function hitlApiPlugin(): Plugin {
   return {
     name: "hitl-review-api",
     configureServer(server) {
-      server.middlewares.use("/api/flows", (req, res, next) => {
+      server.middlewares.use("/api/flows", async (req, res, next) => {
         if (req.method !== "GET") {
           next();
           return;
         }
         try {
-          sendJson(res, 200, loadFlows());
+          sendJson(res, 200, await loadFlows());
         } catch (error) {
           sendJson(res, 500, { error: error instanceof Error ? error.message : "load failed" });
         }
@@ -53,7 +53,7 @@ export function hitlApiPlugin(): Plugin {
 
       // Lazy artifact payload: source can be large, so keep it out of /api/flows.
       // The response also carries the redacted body plan and exact approval hashes.
-      server.middlewares.use("/api/artifacts/review", (req, res, next) => {
+      server.middlewares.use("/api/artifacts/review", async (req, res, next) => {
         if (req.method !== "GET") {
           next();
           return;
@@ -65,7 +65,7 @@ export function hitlApiPlugin(): Plugin {
           sendJson(res, 400, { error: "signature query param is required" });
           return;
         }
-        const artifact = artifactReview(signature, statusSignature);
+        const artifact = await artifactReview(signature, statusSignature);
         if (!artifact) {
           sendJson(res, 404, { error: "generated artifact not found for this flow" });
           return;
@@ -75,7 +75,7 @@ export function hitlApiPlugin(): Plugin {
 
       // The before/after sources for a resolver-agent-repaired flow, so the review
       // panel can show what the agent changed in the arrange/setup.
-      server.middlewares.use("/api/repair/diff", (req, res, next) => {
+      server.middlewares.use("/api/repair/diff", async (req, res, next) => {
         if (req.method !== "GET") {
           next();
           return;
@@ -85,7 +85,7 @@ export function hitlApiPlugin(): Plugin {
           sendJson(res, 400, { error: "signature query param is required" });
           return;
         }
-        const diff = repairDiff(signature);
+        const diff = await repairDiff(signature);
         if (!diff) {
           sendJson(res, 404, { error: "no agent repair recorded for this flow" });
           return;
@@ -93,14 +93,14 @@ export function hitlApiPlugin(): Plugin {
         sendJson(res, 200, diff);
       });
 
-      server.middlewares.use("/api/summary", (req, res, next) => {
+      server.middlewares.use("/api/summary", async (req, res, next) => {
         if (req.method !== "GET") {
           next();
           return;
         }
         try {
-          const flows = loadFlows();
-          sendJson(res, 200, { flows: flows.counts, report: readReportSummary() });
+          const [flows, report] = await Promise.all([loadFlows(), readReportSummary()]);
+          sendJson(res, 200, { flows: flows.counts, report });
         } catch (error) {
           sendJson(res, 500, { error: error instanceof Error ? error.message : "summary failed" });
         }
@@ -108,13 +108,13 @@ export function hitlApiPlugin(): Plugin {
 
       // Registered before /api/reports because /api/reports's prefix match would
       // otherwise shadow this more specific route.
-      server.middlewares.use("/api/reports/view", (req, res, next) => {
+      server.middlewares.use("/api/reports/view", async (req, res, next) => {
         if (req.method !== "GET") {
           next();
           return;
         }
         const run = new URL(req.url ?? "", "http://localhost").searchParams.get("run");
-        const html = run ? readReportHtmlById(run) : null;
+        const html = run ? await readReportHtmlById(run) : null;
         if (html === null) {
           res.statusCode = 404;
           res.setHeader("Content-Type", "text/html");
@@ -126,24 +126,24 @@ export function hitlApiPlugin(): Plugin {
         res.end(html);
       });
 
-      server.middlewares.use("/api/reports", (req, res, next) => {
+      server.middlewares.use("/api/reports", async (req, res, next) => {
         if (req.method !== "GET") {
           next();
           return;
         }
         try {
-          sendJson(res, 200, { reports: listReports() });
+          sendJson(res, 200, { reports: await listReports() });
         } catch (error) {
           sendJson(res, 500, { error: error instanceof Error ? error.message : "list failed" });
         }
       });
 
-      server.middlewares.use("/api/report", (req, res, next) => {
+      server.middlewares.use("/api/report", async (req, res, next) => {
         if (req.method !== "GET") {
           next();
           return;
         }
-        const html = readReportHtml();
+        const html = await readReportHtml();
         if (html === null) {
           res.statusCode = 404;
           res.setHeader("Content-Type", "text/html");
@@ -172,7 +172,7 @@ export function hitlApiPlugin(): Plugin {
               sendJson(res, 400, { error: "review_id (string) is required" });
               return;
             }
-            const result = deleteDecision(body.review_id);
+            const result = await deleteDecision(body.review_id);
             if (result.deleted) {
               sendJson(res, 200, result);
               return;
@@ -226,7 +226,7 @@ export function hitlApiPlugin(): Plugin {
               return;
             }
             const outcome = body.status_signature ?? "";
-            const artifact = artifactReview(signature, outcome);
+            const artifact = await artifactReview(signature, outcome);
             if (status === "approved" && (!artifact || !artifact.body_plan_hash)) {
               sendJson(res, 409, {
                 error:
@@ -249,9 +249,9 @@ export function hitlApiPlugin(): Plugin {
             // Read the baseline's recorded spec BEFORE the upsert marks it superseded,
             // so we can delete exactly that runnable source afterward.
             const baselineToReplace = supersedeId
-              ? readDecisionHistory().get(supersedeId) ?? null
+              ? (await readDecisionHistory()).get(supersedeId) ?? null
               : null;
-            const entry = upsertDecision({
+            const entry = await upsertDecision({
               review_id: body.review_id,
               flow_signature: signature,
               status,
@@ -274,7 +274,7 @@ export function hitlApiPlugin(): Plugin {
               baselineToReplace?.test_path &&
               baselineToReplace.test_path !== artifact?.test_path
             ) {
-              deleteTestFile(baselineToReplace.test_path);
+              await deleteTestFile(baselineToReplace.test_path);
             }
             // "Approve as new" (not a Replace): record that this approved outcome and the
             // named baseline are DISTINCT scenarios, so future mines stop flagging the
@@ -286,7 +286,7 @@ export function hitlApiPlugin(): Plugin {
               typeof body.distinct_from_review_id === "string" &&
               body.distinct_from_review_id.trim().length > 0
             ) {
-              dismissRelationship({
+              await dismissRelationship({
                 review_id: entry.review_id ?? "",
                 baseline_review_id: body.distinct_from_review_id.trim(),
               });
@@ -317,7 +317,7 @@ export function hitlApiPlugin(): Plugin {
               sendJson(res, 400, { error: "test_path (string) is required" });
               return;
             }
-            const result = deleteTestFile(body.test_path);
+            const result = await deleteTestFile(body.test_path);
             if (result.deleted) {
               sendJson(res, 200, { deleted: true, test_path: body.test_path });
               return;
@@ -358,7 +358,7 @@ export function hitlApiPlugin(): Plugin {
               });
               return;
             }
-            const result = startTestRun(target);
+            const result = await startTestRun(target);
             if (!result.started) {
               sendJson(res, 409, { error: result.reason ?? "busy", status: getTestRunStatus() });
               return;
@@ -388,11 +388,12 @@ export function hitlApiPlugin(): Plugin {
             const body = (await readBody(req)) as { job?: string; params?: JobParams };
             if (!isJobId(body.job)) {
               sendJson(res, 400, {
-                error: "job must be one of: mine, generate, repair, triage, test:<target>",
+                error:
+                  "job must be one of: ingest, mine, invariants:propose, invariants:verify, generate, repair, triage, test:<target>",
               });
               return;
             }
-            const result = startJob(body.job, body.params ?? {});
+            const result = await startJob(body.job, body.params ?? {});
             if (!result.started) {
               sendJson(res, result.code, { error: result.reason, status: getJobStatus() });
               return;

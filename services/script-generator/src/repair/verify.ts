@@ -64,7 +64,10 @@ function findTest(tests: NormalizedTest[], relPath: string): NormalizedTest | un
  * `relPath` is repo-relative to generated-tests/, e.g.
  * `admin/happy-path/9814b5a0bf73.spec.ts`.
  */
-export function verifySpec(relPath: string, absSpecPath: string): VerifyResult {
+export async function verifySpec(
+  relPath: string,
+  absSpecPath: string
+): Promise<VerifyResult> {
   const source = existsSync(absSpecPath) ? readFileSync(absSpecPath, "utf8") : "";
   const expectedSignature = STATUS_SIGNATURE_HEADER.exec(source)?.[1] ?? null;
   const fixme = source.includes("test.fixme(");
@@ -86,7 +89,7 @@ export function verifySpec(relPath: string, absSpecPath: string): VerifyResult {
   // Repair verification happens before HITL approval by design. Execute this
   // exact quarantined draft through the runner's validated internal bypass;
   // normal suite runs remain approval-gated.
-  const run = runPlaywright({
+  const run = await runPlaywright({
     target: personaOf(relPath),
     directSpecPaths: [relPath],
   });

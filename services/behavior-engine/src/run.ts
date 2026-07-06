@@ -17,7 +17,6 @@
  * source tag. Those reach only validate.ts, after flows/personas exist.
  */
 
-import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -34,6 +33,7 @@ import { annotateFlows, llmEnabled, MODEL as NAMING_MODEL } from "./naming/namin
 import { buildValidationReport } from "./validation/validate.js";
 import { PERSONA_SOURCE, PERSONAS, type Persona } from "./classification/persona.js";
 import { aggregateRequestBodyEvidence } from "./body-evidence.js";
+import { storage } from "../../../packages/storage/index.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SERVICE_ROOT = resolve(__dirname, "..");
@@ -378,7 +378,7 @@ async function main(): Promise<void> {
   const { kept: ranked, cappedOut } = capRankedPerPersona(rankedAll);
   log(`[behavior-engine] per-persona cap: ${rankedAll.length} -> ${ranked.length} (capped ${cappedOut})`);
 
-  const manifest = buildCoverageManifest();
+  const manifest = await buildCoverageManifest();
   const { kept, skipped } = applySkipGate(ranked, manifest);
   log(
     `[behavior-engine] skip gate: ${skipped.length} skipped_existing ` +
@@ -428,8 +428,6 @@ async function main(): Promise<void> {
 
   const validation = buildValidationReport(runId, sessions, prefixspan, args.minSupport);
 
-  mkdirSync(CANDIDATES_DIR, { recursive: true });
-  mkdirSync(VALIDATION_DIR, { recursive: true });
   const candidatesPath = resolve(CANDIDATES_DIR, `test-candidates-${runId}.json`);
   const validationPath = resolve(VALIDATION_DIR, `classification-report-${runId}.json`);
 
@@ -438,9 +436,10 @@ async function main(): Promise<void> {
   ) as Record<Persona, number>;
   const edgeCandidates = candidates.filter((c) => c.attributes.has_errors);
 
-  writeFileSync(
-    candidatesPath,
-    `${JSON.stringify(
+  await storage.blobs.put(
+    `candidates/test-candidates-${runId}`,
+    Buffer.from(
+      `${JSON.stringify(
       {
         run_id: runId,
         source_file: file,
@@ -460,10 +459,14 @@ async function main(): Promise<void> {
       },
       null,
       2
-    )}\n`,
-    "utf8"
+      )}\n`,
+      "utf8"
+    )
   );
-  writeFileSync(validationPath, `${JSON.stringify(validation, null, 2)}\n`, "utf8");
+  await storage.blobs.put(
+    `validation/classification-report-${runId}`,
+    Buffer.from(`${JSON.stringify(validation, null, 2)}\n`, "utf8")
+  );
 
   const cls = validation.classification;
   const gates = {

@@ -12,6 +12,8 @@
  * downstream invariant proposals non-reproducible.
  */
 import { makeClaudeAgent } from "../repair/agent.js";
+import { readFileSync } from "node:fs";
+import { resolve as resolvePath } from "node:path";
 import {
   mappedEndpoints,
   readSource,
@@ -24,6 +26,7 @@ import {
   renderDigestFile,
   saveDigestFile,
 } from "./digest.js";
+import { REPO_ROOT } from "./types.js";
 
 function parseTitle(title: string): { method: string; endpoint: string } {
   const space = title.indexOf(" ");
@@ -32,6 +35,17 @@ function parseTitle(title: string): { method: string; endpoint: string } {
 
 async function main(): Promise<void> {
   const force = process.argv.includes("--force");
+  if (!process.env.ANTHROPIC_API_KEY) {
+    try {
+      const match = /^ANTHROPIC_API_KEY=(.*)$/m.exec(
+        readFileSync(resolvePath(REPO_ROOT, ".env"), "utf8")
+      );
+      const value = match?.[1]?.trim().replace(/^["']|["']$/g, "");
+      if (value) process.env.ANTHROPIC_API_KEY = value;
+    } catch {
+      // The agent invocation below reports a missing credential clearly.
+    }
+  }
   const agent = makeClaudeAgent();
 
   let regenerated = 0;

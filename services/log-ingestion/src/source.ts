@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
+import { resolve } from "node:path";
 import type { RawLogDoc } from "./types.js";
 
 interface ESHit<T> {
@@ -84,6 +85,31 @@ function rangeFilter(window: TimeWindow): unknown {
   return { range: { timestamp: { gte: window.from, lte: window.to } } };
 }
 
+function unwrapCapturedValue(value: unknown): unknown {
+  if (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.keys(value).length === 1 &&
+    "__behavior_raw_value" in value
+  ) {
+    return (value as { __behavior_raw_value: unknown }).__behavior_raw_value;
+  }
+  return value;
+}
+
+function normalizeCapturedValues(doc: RawLogDoc): RawLogDoc {
+  return {
+    ...doc,
+    ...("request_payload" in doc
+      ? { request_payload: unwrapCapturedValue(doc.request_payload) }
+      : {}),
+    ...("response_body" in doc
+      ? { response_body: unwrapCapturedValue(doc.response_body) }
+      : {}),
+  };
+}
+
 export async function fetchFromElasticsearch(
   client: ESClient,
   index: string,
@@ -119,7 +145,7 @@ export async function fetchFromElasticsearch(
         break;
       }
       for (const hit of hits) {
-        docs.push(hit._source);
+        docs.push(normalizeCapturedValues(hit._source));
       }
       const last = hits[hits.length - 1];
       if (!last.sort || hits.length < PAGE_SIZE) {
@@ -155,4 +181,12 @@ export function readFromFile(path: string, window: TimeWindow): RawLogDoc[] {
     docs.push(doc);
   }
   return docs;
+}
+
+export function readFromDirectory(path: string, window: TimeWindow): RawLogDoc[] {
+  const files = readdirSync(path, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && /\.(?:jsonl|log)$/.test(entry.name))
+    .map((entry) => resolve(path, entry.name))
+    .sort();
+  return files.flatMap((file) => readFromFile(file, window));
 }

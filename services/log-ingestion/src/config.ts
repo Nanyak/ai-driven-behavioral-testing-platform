@@ -6,6 +6,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const SERVICE_ROOT = resolve(__dirname, "..");
 const REPO_ROOT = resolve(SERVICE_ROOT, "..", "..");
+const WORKSPACE_ROOT = process.env.STORAGE_WORKSPACE_ROOT
+  ? resolve(process.env.STORAGE_WORKSPACE_ROOT)
+  : REPO_ROOT;
 
 function parseEnvFile(path: string): Record<string, string> {
   if (!existsSync(path)) {
@@ -63,7 +66,7 @@ export function loadConfig(): IngestConfig {
     esUrl: get("ELASTICSEARCH_URL", "http://localhost:9200").replace(/\/+$/, ""),
     esIndex: get("ELASTICSEARCH_INDEX", "behavior-logs-*"),
     windowHours: getInt("INGEST_WINDOW_HOURS", 24),
-    sessionsDir: resolve(REPO_ROOT, "data", "sessions"),
-    goldenDir: resolve(REPO_ROOT, "golden-responses"),
+    sessionsDir: resolve(WORKSPACE_ROOT, "data", "sessions"),
+    goldenDir: resolve(WORKSPACE_ROOT, "golden-responses"),
   };
 }

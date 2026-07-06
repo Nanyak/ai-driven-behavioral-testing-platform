@@ -9,8 +9,9 @@
  * pipeline's busy state (slice-level suite control stays in the Test Runner view).
  */
 export type PipelineJob =
+  | "ingest"
   | "mine"
-  | "invariants"
+  | "invariants:propose"
   | "invariants:verify"
   | "generate"
   | "repair"

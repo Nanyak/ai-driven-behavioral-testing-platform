@@ -24,6 +24,23 @@ services:
       timeout: 5s
       retries: 20
 
+  platform-postgres:
+    logging: *default-logging
+    image: postgres:15
+    environment:
+      POSTGRES_DB: ${PLATFORM_POSTGRES_DB:-behavior_platform}
+      POSTGRES_USER: ${PLATFORM_POSTGRES_USER:-platform}
+      POSTGRES_PASSWORD: ${PLATFORM_POSTGRES_PASSWORD:-platform}
+    ports:
+      - "${PLATFORM_POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - platform_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   redis:
     logging: *default-logging
     image: redis:7
@@ -36,6 +53,40 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+
+  minio:
+    logging: *default-logging
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "${MINIO_PORT:-9100}:9000"
+      - "${MINIO_CONSOLE_PORT:-9101}:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET: ${S3_BUCKET:-platwright}
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD;
+      mc mb --ignore-existing local/$$S3_BUCKET;
+      mc version enable local/$$S3_BUCKET;
+      "
 
   medusa:
     logging: *default-logging
@@ -100,8 +151,23 @@ services:
     depends_on:
       medusa:
         condition: service_healthy
+      platform-postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      filebeat:
+        condition: service_started
     environment:
       MEDUSA_BACKEND_URL: http://medusa:9000
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
+      DATABASE_URL: postgres://${PLATFORM_POSTGRES_USER:-platform}:${PLATFORM_POSTGRES_PASSWORD:-platform}@platform-postgres:5432/${PLATFORM_POSTGRES_DB:-behavior_platform}
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET: ${S3_BUCKET:-platwright}
+      S3_FORCE_PATH_STYLE: "true"
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      ELASTICSEARCH_INDEX: ${ELASTICSEARCH_INDEX:-behavior-logs-*}
       # The generated specs are API-only Playwright (request context) — they never launch a
       # browser, so skip the browser download on install. Saves time/space and dodges the fact
       # that Playwright's browser binaries aren't supported on alpine/musl.
@@ -122,10 +188,13 @@ services:
       && (test -d node_modules/.bin || npm ci)
       && (test -d /workspace/generated-tests/node_modules/.bin || npm --prefix /workspace/generated-tests ci)
       && (test -d /workspace/services/test-runner/node_modules/.bin || npm --prefix /workspace/services/test-runner ci)
+      && (test -d /workspace/services/log-ingestion/node_modules/.bin || npm --prefix /workspace/services/log-ingestion ci)
       && (test -d /workspace/services/behavior-engine/node_modules/.bin || npm --prefix /workspace/services/behavior-engine ci)
       && (test -d /workspace/services/script-generator/node_modules/.bin || npm --prefix /workspace/services/script-generator ci)
       && (test -d /workspace/services/golden/node_modules/.bin || npm --prefix /workspace/services/golden ci)
+      && (test -d /workspace/packages/storage/node_modules/.bin || npm --prefix /workspace/packages/storage ci)
       && (command -v claude >/dev/null || npm i -g @anthropic-ai/claude-code)
+      && npm --prefix /workspace run storage:bootstrap
       && npm run dev"
     ports:
       - "5173:5173"
@@ -136,6 +205,7 @@ services:
       # test-runner; mount both so the run resolves in-container.
       - ./package.json:/workspace/package.json:ro
       - ./services/test-runner:/workspace/services/test-runner
+      - ./services/log-ingestion:/workspace/services/log-ingestion
       # The pipeline jobs run these services in-container: mine (behavior-engine, writes its
       # data/candidates — hence RW, not the old :ro data-only mount), generate + repair
       # (script-generator, which imports services/golden for the OAS). HITL review (/api/flows)
@@ -143,6 +213,7 @@ services:
       - ./services/behavior-engine:/workspace/services/behavior-engine
       - ./services/script-generator:/workspace/services/script-generator
       - ./services/golden:/workspace/services/golden
+      - ./packages:/workspace/packages
       # RW (was :ro): the run writes Playwright results + reports, and the delete button
       # unlinks specs under generated-tests/.
       - ./generated-tests:/workspace/generated-tests
@@ -157,14 +228,61 @@ services:
       # persisted across restarts; these shadow any host node_modules.
       - generated_tests_node_modules:/workspace/generated-tests/node_modules
       - test_runner_node_modules:/workspace/services/test-runner/node_modules
+      - log_ingestion_node_modules:/workspace/services/log-ingestion/node_modules
       - behavior_engine_node_modules:/workspace/services/behavior-engine/node_modules
       - script_generator_node_modules:/workspace/services/script-generator/node_modules
       - golden_node_modules:/workspace/services/golden/node_modules
+      - storage_node_modules:/workspace/packages/storage/node_modules
       # The globally-installed `claude` CLI (NPM_CONFIG_PREFIX) for the repair job, persisted.
       - claude_cli_global:/workspace/.npm-global
 
+  platform-db-backup:
+    profiles: ["backups"]
+    image: postgres:15
+    depends_on:
+      platform-postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${PLATFORM_POSTGRES_PASSWORD:-platform}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
+    volumes:
+      - platform_postgres_backups:/backups
+    entrypoint: >
+      /bin/sh -c "while true; do
+      stamp=$$(date -u +%Y%m%dT%H%M%SZ);
+      pg_dump -h platform-postgres -U ${PLATFORM_POSTGRES_USER:-platform}
+      -d ${PLATFORM_POSTGRES_DB:-behavior_platform}
+      -Fc -f /backups/platform-$$stamp.dump;
+      find /backups -type f -mtime +$$BACKUP_RETENTION_DAYS -delete;
+      sleep 86400;
+      done"
+
+  object-store-backup:
+    profiles: ["backups"]
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET: ${S3_BUCKET:-platwright}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
+    volumes:
+      - minio_backups:/backups
+    entrypoint: >
+      /bin/sh -c "mc alias set local http://minio:9000
+      $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD;
+      while true; do
+      stamp=$$(date -u +%Y%m%dT%H%M%SZ);
+      mkdir -p /backups/$$stamp;
+      mc mirror --overwrite local/$$S3_BUCKET /backups/$$stamp;
+      find /backups -mindepth 1 -maxdepth 1 -type d
+      -mtime +$$BACKUP_RETENTION_DAYS -exec rm -rf {} +;
+      sleep 86400;
+      done"
+
   elasticsearch:
-    profiles: ["elk"]
     logging: *default-logging
     image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
     environment:
@@ -184,6 +302,30 @@ services:
       retries: 10
       start_period: 60s
 
+  elasticsearch-init:
+    image: curlimages/curl:8.12.1
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    volumes:
+      - ./infra/elasticsearch/behavior-logs-ilm-policy.json:/config/ilm-policy.json:ro
+      - ./infra/elasticsearch/behavior-logs-template.json:/config/index-template.json:ro
+    entrypoint: >
+      /bin/sh -c "
+      curl --fail --silent --show-error
+      -X PUT http://elasticsearch:9200/_ilm/policy/behavior-logs-retention
+      -H 'Content-Type: application/json'
+      --data-binary @/config/ilm-policy.json;
+      curl --fail --silent --show-error
+      -X PUT http://elasticsearch:9200/_index_template/behavior-logs
+      -H 'Content-Type: application/json'
+      --data-binary @/config/index-template.json;
+      curl --fail --silent --show-error
+      -X PUT 'http://elasticsearch:9200/behavior-logs-*/_settings?allow_no_indices=true'
+      -H 'Content-Type: application/json'
+      --data '{\"index.lifecycle.name\":\"behavior-logs-retention\"}';
+      "
+
   kibana:
     profiles: ["elk"]
     image: docker.elastic.co/kibana/kibana:8.13.4
@@ -196,7 +338,6 @@ services:
         condition: service_healthy
 
   logstash:
-    profiles: ["elk"]
     logging: *default-logging
     image: docker.elastic.co/logstash/logstash:8.13.4
     environment:
@@ -206,11 +347,10 @@ services:
       - ./infra/logstash/pipeline:/usr/share/logstash/pipeline:ro
       - ./logs:/workspace/logs:ro
     depends_on:
-      elasticsearch:
-        condition: service_healthy
+      elasticsearch-init:
+        condition: service_completed_successfully
 
   filebeat:
-    profiles: ["elk"]
     logging: *default-logging
     image: docker.elastic.co/beats/filebeat:8.13.4
     user: root
@@ -220,19 +360,26 @@ services:
       - ./logs:/workspace/logs:ro
       - filebeat_registry:/usr/share/filebeat/data
     depends_on:
-      - logstash
+      logstash:
+        condition: service_started
 
 volumes:
   postgres_data:
+  platform_postgres_data:
   redis_data:
+  minio_data:
   medusa_node_modules:
   storefront_node_modules:
   platform_dashboard_node_modules:
   generated_tests_node_modules:
   test_runner_node_modules:
+  log_ingestion_node_modules:
   behavior_engine_node_modules:
   script_generator_node_modules:
   golden_node_modules:
+  storage_node_modules:
   claude_cli_global:
+  platform_postgres_backups:
+  minio_backups:
   elasticsearch_data:
   filebeat_registry:

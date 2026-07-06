@@ -4,6 +4,7 @@ import { loadConfig } from "./config.js";
 import {
   ESClient,
   fetchFromElasticsearch,
+  readFromDirectory,
   readFromFile,
   type TimeWindow,
 } from "./source.js";
@@ -19,6 +20,7 @@ interface Args {
   from?: string;
   to?: string;
   file?: string;
+  dir?: string;
   quiet: boolean;
 }
 
@@ -35,6 +37,9 @@ function parseArgs(argv: string[]): Args {
         break;
       case "--file":
         args.file = argv[++i];
+        break;
+      case "--dir":
+        args.dir = argv[++i];
         break;
       case "--quiet":
         args.quiet = true;
@@ -62,6 +67,10 @@ async function loadDocs(args: Args, window: TimeWindow): Promise<RawLogDoc[]> {
     const base = process.env.INIT_CWD ?? process.cwd();
     return readFromFile(resolve(base, args.file), window);
   }
+  if (args.dir) {
+    const base = process.env.INIT_CWD ?? process.cwd();
+    return readFromDirectory(resolve(base, args.dir), window);
+  }
   const client = new ESClient(config.esUrl);
   if (!(await client.ping())) {
     throw new Error(
@@ -85,9 +94,23 @@ async function main(): Promise<void> {
   };
 
   log(`[ingest] window ${window.from} .. ${window.to}`);
-  log(`[ingest] source ${args.file ? `file:${args.file}` : `es:${config.esUrl}`}`);
+  log(
+    `[ingest] source ${
+      args.file
+        ? `file:${args.file}`
+        : args.dir
+          ? `dir:${args.dir}`
+          : `es:${config.esUrl}`
+    }`
+  );
 
   const docs = await loadDocs(args, window);
+  if (docs.length === 0) {
+    throw new Error(
+      `No Medusa logs found in ${window.from} .. ${window.to}. ` +
+        `Check Filebeat/Logstash delivery, ELASTICSEARCH_INDEX, or widen the ingest window.`
+    );
+  }
   log(`[ingest] fetched ${docs.length} raw log docs`);
 
   const { buckets, droppedNoSession, droppedDashboardProbe } = groupBySession(docs);
