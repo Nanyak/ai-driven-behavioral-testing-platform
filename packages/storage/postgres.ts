@@ -46,9 +46,14 @@ function string(value: unknown): string | null {
 }
 
 function databaseUrl(): string {
-  const url = process.env.DATABASE_URL;
+  // Prefer the platform-dedicated var so the storage DB never collides with the
+  // SUT's DATABASE_URL (Medusa). Fall back to DATABASE_URL for environments (e.g.
+  // prod) that only set one Postgres URL.
+  const url = process.env.PLATFORM_DATABASE_URL ?? process.env.DATABASE_URL;
   if (!url) {
-    throw new Error("DATABASE_URL is required when STORAGE_BACKEND=remote");
+    throw new Error(
+      "PLATFORM_DATABASE_URL (or DATABASE_URL) is required when STORAGE_BACKEND=remote"
+    );
   }
   return url;
 }

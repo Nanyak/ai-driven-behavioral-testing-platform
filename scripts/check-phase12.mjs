@@ -31,6 +31,7 @@ const SERVICE = resolve(ROOT, "services", "test-runner");
 const GREEN = resolve(SERVICE, "fixtures", "baseline-green.normalized.json");
 const RED = resolve(SERVICE, "fixtures", "regressed-red.normalized.json");
 const MIDDLEWARE = resolve(ROOT, "apps", "medusa", "apps", "backend", "src", "api", "middlewares.ts");
+const FAULTS = resolve(ROOT, "apps", "medusa", "apps", "backend", "src", "api", "regression-faults.ts");
 const REGRESSED_ENDPOINT = "POST /store/carts/{id}/complete";
 
 let passed = 0;
@@ -129,20 +130,27 @@ function main() {
   if (green.status === "green") ok("revert restores GREEN (red -> green is reproducible)");
   else fail("reversibility", green.status);
 
-  // [2] The injection mechanism is reversible + off by default.
+  // [2] The injection mechanism is reversible + off by default. The toggle now
+  // spans two files: middlewares.ts gates on the completion endpoint and
+  // dispatches; regression-faults.ts owns the catalog + injection (reads the env
+  // var, 500s for carts_complete_500). Verify the property across both.
   console.log("\n[2] Medusa regression toggle: reversible, OFF by default");
-  if (!existsSync(MIDDLEWARE)) {
-    fail("middlewares.ts present", MIDDLEWARE);
+  if (!existsSync(MIDDLEWARE) || !existsSync(FAULTS)) {
+    fail("middleware + fault-catalog present", `${MIDDLEWARE}, ${FAULTS}`);
   } else {
-    const src = readFileSync(MIDDLEWARE, "utf8");
-    const reads = src.includes('process.env.REGRESSION_DEMO');
-    const defaultsOff = /regressionDemoFault[\s\S]*?next\(\)/.test(src);
-    const targetsComplete = src.includes('endsWith("/complete")');
-    const returns500 = /res\.status\(500\)/.test(src);
-    if (reads && defaultsOff && targetsComplete && returns500) {
-      ok("toggle keyed on REGRESSION_DEMO, defaults to next(), 500s POST .../complete");
+    const mw = readFileSync(MIDDLEWARE, "utf8");
+    const fx = readFileSync(FAULTS, "utf8");
+    const reads = fx.includes('process.env.REGRESSION_DEMO');
+    // defaults off: the middleware dispatch calls next() when no fault is active.
+    const defaultsOff = /regressionDemoFault[\s\S]*?next\(\)/.test(mw);
+    const targetsComplete = mw.includes('endsWith("/complete")');
+    const returns500 = /res\.status\(500\)/.test(fx);
+    // The catalog carries >=4 named faults (the report's Bảng 19 classes).
+    const catalog = /REGRESSION_FAULT_IDS[\s\S]*?carts_complete_500[\s\S]*?complete_missing_order[\s\S]*?order_total_mismatch[\s\S]*?order_status_completed/.test(fx);
+    if (reads && defaultsOff && targetsComplete && returns500 && catalog) {
+      ok("toggle keyed on REGRESSION_DEMO, defaults to next(), 500s POST .../complete, 4-fault catalog");
     } else {
-      fail("toggle wiring", `reads=${reads} defaultsOff=${defaultsOff} targetsComplete=${targetsComplete} returns500=${returns500}`);
+      fail("toggle wiring", `reads=${reads} defaultsOff=${defaultsOff} targetsComplete=${targetsComplete} returns500=${returns500} catalog=${catalog}`);
     }
   }
 

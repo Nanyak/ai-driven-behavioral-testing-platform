@@ -51,6 +51,8 @@
     "test:failure": "npm --prefix services/test-runner run run -- failure",
     "test:drafts": "npm --prefix services/test-runner run run -- drafts",
     "triage": "npm --prefix services/test-runner run triage",
+    "eval:regression": "npm --prefix services/test-runner run eval --",
+    "eval:test": "npm --prefix services/test-runner run test:eval",
     "compose:up": "docker-compose up -d --build",
     "compose:down": "docker-compose down",
     "compose:logs": "docker-compose logs -f medusa",

@@ -1880,6 +1880,42 @@ select:focus-visible {
   }
 }
 
+/* ── Regression Evaluation view ─────────────────────────────────────────── */
+.eval-view {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.eval-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+.eval-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.eval-kpi-label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted-fg, #888);
+}
+.eval-kpi-value {
+  font-size: 1.9rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.eval-kpi-target {
+  font-size: 1.2rem;
+  font-family: ui-monospace, monospace;
+}
+
 /* ── Overview / Home (R4) + Trend (F1) ──────────────────────────────────── */
 .overview {
   display: flex;

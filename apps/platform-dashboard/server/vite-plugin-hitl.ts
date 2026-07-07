@@ -7,6 +7,8 @@ import {
   listReports,
   loadFlows,
   readDecisionHistory,
+  readEvalMetricsHtml,
+  readEvalMetricsSummary,
   readReportHtml,
   readReportHtmlById,
   readReportSummary,
@@ -153,6 +155,38 @@ export function hitlApiPlugin(): Plugin {
         res.statusCode = 200;
         res.setHeader("Content-Type", "text/html");
         res.end(html);
+      });
+
+      // Regression-evaluation metrics. /view serves the rendered HTML for the
+      // iframe; registered before /api/eval so its prefix match wins (same
+      // ordering rule as reports/view vs reports).
+      server.middlewares.use("/api/eval/view", async (req, res, next) => {
+        if (req.method !== "GET") {
+          next();
+          return;
+        }
+        const html = await readEvalMetricsHtml();
+        if (html === null) {
+          res.statusCode = 404;
+          res.setHeader("Content-Type", "text/html");
+          res.end("<h1>No evaluation yet</h1><p>Run <code>npm run eval:regression -- --target customer</code> to seed faults and measure the suite's detection rate.</p>");
+          return;
+        }
+        res.statusCode = 200;
+        res.setHeader("Content-Type", "text/html");
+        res.end(html);
+      });
+
+      server.middlewares.use("/api/eval", async (req, res, next) => {
+        if (req.method !== "GET") {
+          next();
+          return;
+        }
+        try {
+          sendJson(res, 200, { summary: await readEvalMetricsSummary() });
+        } catch (error) {
+          sendJson(res, 500, { error: error instanceof Error ? error.message : "read failed" });
+        }
       });
 
       // Registered before /api/decisions because that prefix would otherwise

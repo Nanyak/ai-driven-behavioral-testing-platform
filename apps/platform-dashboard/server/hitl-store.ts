@@ -69,6 +69,51 @@ export async function readReportHtml(): Promise<string | null> {
   return (await storage.blobs.get("reports/report.html"))?.toString("utf8") ?? null;
 }
 
+/** Regression-evaluation metrics HTML, published by `npm run eval:regression`
+ * to the blob store (services/test-runner/src/eval/cli.ts). Null until a run
+ * exists. Served verbatim by /api/eval/view. */
+export async function readEvalMetricsHtml(): Promise<string | null> {
+  return (await storage.blobs.get("reports/eval/metrics.html"))?.toString("utf8") ?? null;
+}
+
+export interface EvalMetricsSummary {
+  generated_at: string | null;
+  target: string | null;
+  regression_detection_rate: number;
+  measurable_faults: number;
+  caught: number;
+  executability_rate: number | null;
+  baseline_clean: boolean | null;
+}
+
+/** Compact KPI projection of the eval metrics for the Overview strip. Null when
+ * no run has been published yet. */
+export async function readEvalMetricsSummary(): Promise<EvalMetricsSummary | null> {
+  try {
+    const bytes = await storage.blobs.get("reports/eval/metrics.json");
+    if (bytes === null) return null;
+    const m = JSON.parse(bytes.toString("utf8")) as {
+      generated_at?: string;
+      target?: string;
+      regression_detection_rate?: number;
+      measurable_faults?: number;
+      faults?: Array<{ caught?: boolean }>;
+      baseline?: { executability_rate?: number; clean?: boolean } | null;
+    };
+    return {
+      generated_at: m.generated_at ?? null,
+      target: m.target ?? null,
+      regression_detection_rate: m.regression_detection_rate ?? 0,
+      measurable_faults: m.measurable_faults ?? 0,
+      caught: (m.faults ?? []).filter((f) => f.caught).length,
+      executability_rate: m.baseline?.executability_rate ?? null,
+      baseline_clean: m.baseline?.clean ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export interface ReportRow {
   run_id: string;
   /** Filename stem, also the id used by /api/reports/view?run=<slug>. */

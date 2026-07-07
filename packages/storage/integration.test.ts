@@ -5,7 +5,9 @@ import { makeRemoteStorage } from "./remote.js";
 
 const store = makeRemoteStorage();
 await store.records.readJson("manifest");
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new Pool({
+  connectionString: process.env.PLATFORM_DATABASE_URL ?? process.env.DATABASE_URL,
+});
 await pool.query(
   "truncate table decisions, dismissed_relationships, run_index, manifest, storage_metadata, invariants"
 );

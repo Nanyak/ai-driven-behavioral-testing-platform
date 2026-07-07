@@ -14,6 +14,7 @@ import {
   GATE_UNAUTHORIZED_STATUS
 } from "./gate-contract"
 import { reduceValue } from "./body-redaction"
+import { activeRegressionFault, applyCompletionFault } from "./regression-faults"
 
 const ensuredLogDirectories = new Set<string>()
 
@@ -445,29 +446,26 @@ function requireCustomerAuth(
 /**
  * Regression-demo fault injector (reversible, OFF by default).
  *
- * Does nothing unless `REGRESSION_DEMO` is set, so production/CI behavior is
- * unchanged unless the demo explicitly opts in. Scenario A (response-code regression): when
- * `REGRESSION_DEMO=carts_complete_500`, make checkout completion return 500
- * instead of its documented 200, so the frozen golden baseline flags a
- * regression on `POST /store/carts/{id}/complete`. Registered AFTER
- * `requireCustomerAuth` so only an authenticated customer reaches the fault —
- * the failure is a behavioral regression, not an auth rejection. Unset the env
- * var to flip the report red -> green live, no redeploy.
+ * Does nothing unless `REGRESSION_DEMO` names a known fault, so production/CI
+ * behavior is unchanged unless the demo explicitly opts in. The catalog + the
+ * actual injection live in regression-faults.ts (one source of truth, also read
+ * by the evaluation harness); here we only gate on the completion endpoint and
+ * dispatch. Registered AFTER `requireCustomerAuth` so only an authenticated
+ * customer reaches the fault — the failure is a behavioral regression, not an
+ * auth rejection. Unset the env var (and recreate the process) to flip the
+ * report red -> green.
  */
 function regressionDemoFault(
   req: MedusaRequest,
   res: MedusaResponse,
   next: MedusaNextFunction
 ) {
-  if (process.env.REGRESSION_DEMO === "carts_complete_500" && req.path.endsWith("/complete")) {
-    res.status(500).json({
-      type: "regression_demo",
-      message: "Injected fault (regression demo): POST /store/carts/{id}/complete forced to 500."
-    })
+  const fault = activeRegressionFault()
+  if (fault === null || !req.path.endsWith("/complete")) {
+    next()
     return
   }
-
-  next()
+  applyCompletionFault(fault, req, res, next)
 }
 
 export default defineMiddlewares({

@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import {
   FileJson,
   FlaskConical,
+  Gauge,
   LayoutDashboard,
   Moon,
   PanelLeftClose,
@@ -17,6 +18,7 @@ import { ReportsView } from "./reports/ReportsView.js";
 import { TestRunnerView } from "./runner/TestRunnerView.js";
 import { PipelineView } from "./pipeline/PipelineView.js";
 import { OverviewView } from "./overview/OverviewView.js";
+import { EvaluationView } from "./evaluation/EvaluationView.js";
 import {
   CHECK_LABELS,
   checkAdminAuth,
@@ -39,6 +41,7 @@ const NAV: Array<{ key: ViewKey; label: string; icon: typeof Route }> = [
   { key: "pipeline", label: "Pipeline", icon: Workflow },
   { key: "runner", label: "Test Runner", icon: PlayCircle },
   { key: "reports", label: "Reports", icon: FileJson },
+  { key: "evaluation", label: "Evaluation", icon: Gauge },
 ];
 
 function App() {
@@ -210,6 +213,19 @@ function App() {
               self-contained report; the newest is selected by default.
             </p>
             <ReportsView />
+          </section>
+        ) : view === "evaluation" ? (
+          <section className="review-section" aria-label="Regression evaluation">
+            <div className="workbench-heading">
+              <Gauge size={22} aria-hidden="true" />
+              <h1>Regression Evaluation</h1>
+            </div>
+            <p className="review-intro">
+              We seed known backend faults (wrong status, missing field, wrong total, wrong order
+              status) and measure how many the generated suite catches — plus baseline
+              executability. Published by <code>npm run eval:regression</code>.
+            </p>
+            <EvaluationView />
           </section>
         ) : (
           <OverviewView

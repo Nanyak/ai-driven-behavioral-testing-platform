@@ -1,7 +1,7 @@
 // Shared types + status-check probes, reused by the shell (main.tsx) and the
 // Overview page. Endpoint shapes are unchanged — this is a refactor extraction.
 
-export type ViewKey = "overview" | "review" | "pipeline" | "runner" | "reports";
+export type ViewKey = "overview" | "review" | "pipeline" | "runner" | "reports" | "evaluation";
 
 export type CheckState = "checking" | "online" | "offline";
 
