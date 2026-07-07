@@ -2,9 +2,9 @@
   "endpoint": "GET /admin/returns",
   "expected_status": 200,
   "expected_schema": {
-    "offset": "number",
     "count": "number",
     "limit": "number",
+    "offset": "number",
     "returns": "array"
   },
   "ignore_fields": [
@@ -21,7 +21,28 @@
     "trace_id",
     "session_id"
   ],
-  "schema_source": "observed",
+  "schema_source": "openapi+observed",
+  "oas_operation_id": "GetReturns",
+  "oas_ref": null,
+  "oas_version": "2.15.5",
+  "value_rules": [
+    {
+      "path": "returns[].canceled_at",
+      "kind": "format",
+      "format": "date-time"
+    },
+    {
+      "path": "returns[].status",
+      "kind": "enum",
+      "values": [
+        "canceled",
+        "requested",
+        "received",
+        "partially_received",
+        "open"
+      ]
+    }
+  ],
   "captured_at": "2026-07-05T13:15:12.075Z",
   "source_sessions": [
     "sess-adminRefund-03c835be-8ceb-415c-a973-add2098bbf55",

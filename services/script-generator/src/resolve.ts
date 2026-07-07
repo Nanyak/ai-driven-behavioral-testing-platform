@@ -203,6 +203,39 @@ function nonexistentIdFor(varName: string): string {
 // return-lifecycle bootstrap to read a line-item id without a second round-trip.
 const ADMIN_PENDING_ORDERS_WITH_ITEMS = "/admin/orders?status[]=pending&order=-created_at&fields=*items";
 
+// A best-effort pair that clears a stale OPEN return left on the resolved admin
+// order by an earlier partial run. `POST /admin/orders/{id}/fulfillments` and
+// `POST /admin/returns` BOTH 400 ("Order ... already has an existing active
+// order change") once a prior return-lifecycle run created a draft return on the
+// order but never confirmed it — an accumulating poison that pins these flows
+// red across reruns, and which no server-side list filter can screen out (the
+// order-change relation can't be inlined on the orders list). So heal it in
+// flow: the GET binds the stale open return's id (undefined when the order is
+// clean — the `status[]=open` filter yields an empty list), then the DELETE
+// removes it. The DELETE is best-effort so a clean order (a 404 on
+// `/admin/returns/undefined`) never fails the flow. Emitted BEFORE the mutating
+// step so the order carries no active change when it runs. A successful full
+// lifecycle self-cleans (its receive/confirm confirms the change), so this only
+// ever fires against residue from runs that failed partway.
+function clearStaleOpenReturnCalls(): ResolveStep[] {
+  return [
+    {
+      bindTo: "staleReturnId",
+      method: "GET",
+      endpoint: "/admin/returns?order_id={orderId}&status[]=open&fields=id,status",
+      extract: "",
+      select: { collection: "returns", predicate: "it.status === 'open'", field: "id" },
+    },
+    {
+      bindTo: "staleReturnCleared",
+      method: "DELETE",
+      endpoint: "/admin/returns/{staleReturnId}",
+      extract: "",
+      bestEffort: true,
+    },
+  ];
+}
+
 function standaloneResolverFor(
   varName: string,
   auth: AuthRequirement,
@@ -277,6 +310,10 @@ function standaloneResolverFor(
           { bindTo: "orderId", method: "GET", endpoint: ADMIN_PENDING_ORDERS_WITH_ITEMS, extract: "orders[1].id" },
           { bindTo: "lineItemId", method: "GET", endpoint: ADMIN_PENDING_ORDERS_WITH_ITEMS, extract: "orders[1].items[0].id" },
           { bindTo: "stockLocationId", method: "GET", endpoint: "/admin/stock-locations", extract: "stock_locations[0].id" },
+          // Clear any leftover draft return so the fulfillment seed AND the
+          // subsequent POST /admin/returns don't 400 on a residual active order
+          // change (see clearStaleOpenReturnCalls).
+          ...clearStaleOpenReturnCalls(),
           {
             bindTo: "fulfillmentSeed",
             method: "POST",
@@ -301,18 +338,24 @@ function standaloneResolverFor(
       // server-side "uncancelable" filter. This bakes the fix the AI agent would
       // have authored into the deterministic emit (no agent needed next run).
       return auth === ADMIN
-        ? [{
-            bindTo: varName,
-            method: "GET",
-            endpoint: "/admin/orders?status[]=pending&order=-created_at&fields=id,status,canceled_at,*fulfillments",
-            extract: "",
-            select: {
-              collection: "orders",
-              predicate: "!it.canceled_at && (it.fulfillments?.length ?? 0) === 0",
-              field: "id",
-              fromEnd: cancelFlow,
+        ? [
+            {
+              bindTo: varName,
+              method: "GET",
+              endpoint: "/admin/orders?status[]=pending&order=-created_at&fields=id,status,canceled_at,*fulfillments",
+              extract: "",
+              select: {
+                collection: "orders",
+                predicate: "!it.canceled_at && (it.fulfillments?.length ?? 0) === 0",
+                field: "id",
+                fromEnd: cancelFlow,
+              },
             },
-          }]
+            // Even a not-yet-fulfilled order can carry a stale draft return from a
+            // prior partial run, which 400s the fulfillment/cancel that follows;
+            // clear it before mutating (see clearStaleOpenReturnCalls).
+            ...clearStaleOpenReturnCalls(),
+          ]
         : [{ bindTo: varName, method: "GET", endpoint: "/store/orders", extract: "orders[0].id" }];
     case "cartId":
       // A bootstrapped cart must be NON-EMPTY: a mined checkout flow frequently

@@ -558,7 +558,16 @@ export default defineConfig({
   outputDir: "test-results/artifacts",
   timeout: 30_000,
   expect: { timeout: 10_000 },
-  fullyParallel: true,
+  // The whole suite exercises ONE shared, mutable live Medusa. The admin
+  // order-mutation flows (fulfillment / return-lifecycle / cancellation) all draw
+  // from the same pending-orders pool, and each resolves-then-mutates an order in
+  // several steps. Run in parallel, a sibling spec can fulfill, return, or cancel
+  // the very order another just resolved, poisoning it mid-flow ("already has an
+  // existing active order change") — which surfaced as the FAILING admin spec
+  // rotating run-to-run. Serialize (workers: 1) so each flow owns the SUT for its
+  // duration; the suite is tiny so the wall-clock cost is a few seconds.
+  fullyParallel: false,
+  workers: 1,
   retries: 0,
   projects: [
     { name: "guest", testDir: "guest" },
