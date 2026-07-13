@@ -3,10 +3,8 @@
 /**
  * Phase 12 verification: Regression Demonstration
  *
- * Phase 12 is a live demo (inject a fault in Medusa, re-run, watch the report go
- * red — see the runbook in docs/phase-12-implementation-plan.md and
- * services/test-runner/README.md). This check proves, OFFLINE, the two things
- * the demo depends on:
+ * Phase 12 is a report-regression demonstration. This check proves, OFFLINE,
+ * the fixture-based detection and attribution behavior:
  *
  *   [1] The detection + attribution logic: a baseline-green normalized run
  *       builds a GREEN report; the same flow with POST /store/carts/{id}/complete
@@ -14,14 +12,10 @@
  *       the right persona, flow, and endpoint — and leaves the unaffected guest
  *       flow green. Rebuilding the baseline returns to green (reversibility).
  *
- *   [2] The injection mechanism: the Medusa regression toggle exists, is keyed
- *       on REGRESSION_DEMO, defaults to off (calls next()), and targets the
- *       checkout-completion endpoint with a 500 — i.e. it is reversible by an
- *       env var, never on in normal operation.
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -30,8 +24,6 @@ const ROOT = resolve(__dirname, "..");
 const SERVICE = resolve(ROOT, "services", "test-runner");
 const GREEN = resolve(SERVICE, "fixtures", "baseline-green.normalized.json");
 const RED = resolve(SERVICE, "fixtures", "regressed-red.normalized.json");
-const MIDDLEWARE = resolve(ROOT, "apps", "medusa", "apps", "backend", "src", "api", "middlewares.ts");
-const FAULTS = resolve(ROOT, "apps", "medusa", "apps", "backend", "src", "api", "regression-faults.ts");
 const REGRESSED_ENDPOINT = "POST /store/carts/{id}/complete";
 
 let passed = 0;
@@ -130,30 +122,6 @@ function main() {
   if (green.status === "green") ok("revert restores GREEN (red -> green is reproducible)");
   else fail("reversibility", green.status);
 
-  // [2] The injection mechanism is reversible + off by default. The toggle now
-  // spans two files: middlewares.ts gates on the completion endpoint and
-  // dispatches; regression-faults.ts owns the catalog + injection (reads the env
-  // var, 500s for carts_complete_500). Verify the property across both.
-  console.log("\n[2] Medusa regression toggle: reversible, OFF by default");
-  if (!existsSync(MIDDLEWARE) || !existsSync(FAULTS)) {
-    fail("middleware + fault-catalog present", `${MIDDLEWARE}, ${FAULTS}`);
-  } else {
-    const mw = readFileSync(MIDDLEWARE, "utf8");
-    const fx = readFileSync(FAULTS, "utf8");
-    const reads = fx.includes('process.env.REGRESSION_DEMO');
-    // defaults off: the middleware dispatch calls next() when no fault is active.
-    const defaultsOff = /regressionDemoFault[\s\S]*?next\(\)/.test(mw);
-    const targetsComplete = mw.includes('endsWith("/complete")');
-    const returns500 = /res\.status\(500\)/.test(fx);
-    // The catalog carries >=4 named faults (the report's Bảng 19 classes).
-    const catalog = /REGRESSION_FAULT_IDS[\s\S]*?carts_complete_500[\s\S]*?complete_missing_order[\s\S]*?order_total_mismatch[\s\S]*?order_status_completed/.test(fx);
-    if (reads && defaultsOff && targetsComplete && returns500 && catalog) {
-      ok("toggle keyed on REGRESSION_DEMO, defaults to next(), 500s POST .../complete, 4-fault catalog");
-    } else {
-      fail("toggle wiring", `reads=${reads} defaultsOff=${defaultsOff} targetsComplete=${targetsComplete} returns500=${returns500} catalog=${catalog}`);
-    }
-  }
-
   summary();
 }
 
@@ -168,7 +136,6 @@ function summary() {
     process.exit(1);
   }
   console.log("\nAll Phase 12 checks passed.");
-  console.log("Live demo: see docs/phase-12-implementation-plan.md (REGRESSION_DEMO=carts_complete_500).");
 }
 
 main();

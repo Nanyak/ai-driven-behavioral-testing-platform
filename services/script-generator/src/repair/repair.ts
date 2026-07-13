@@ -15,6 +15,7 @@ import { spawnSync } from "node:child_process";
 import { dirname, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
+import { storage } from "../../../../packages/storage/index.js";
 import { loadAugmentedSpecs } from "../../../golden/src/oas-source.js";
 import type { OasSpecs } from "../resolve.js";
 import { makeClaudeAgent, type RepairAgent } from "./agent.js";
@@ -230,6 +231,24 @@ function generatedSuiteTypecheckFailure(): string | null {
     "generated-tests TypeScript compilation failed";
 }
 
+/**
+ * Publish the repaired source to the blob store so the runnable artifact matches
+ * the on-disk fix. On the local backend `specs/<rel>` maps back to
+ * generated-tests/<rel> (idempotent re-write); on the remote backend this is what
+ * stops the repaired spec from being stranded on local disk while MinIO — and every
+ * downstream reader (approval snapshot, suite selection, hash match) — keeps the
+ * pre-repair copy. Best-effort: a blob failure is surfaced, never fatal to the run.
+ */
+async function publishRepairedSpec(relPath: string, source: string): Promise<void> {
+  try {
+    await storage.blobs.put(`specs/${relPath}`, Buffer.from(source, "utf8"));
+  } catch (err) {
+    console.warn(
+      `  (repaired spec ${relPath} not published to blob store: ${err instanceof Error ? err.message : String(err)})`
+    );
+  }
+}
+
 /** Repair one spec end-to-end. Mutates the file on disk; restores the original on failure. */
 async function repairOne(
   spec: EmittedSpec,
@@ -331,6 +350,9 @@ async function repairOne(
     }
     verdict = await verifySpec(spec.relPath, absPath);
     if (verdict.matched) {
+      // Push the repaired source to the blob store so the runnable/approvable
+      // artifact is the fixed one, not the pre-repair copy generate wrote.
+      await publishRepairedSpec(spec.relPath, stamped);
       // Keep the before/after sources so the dashboard can show the review diff
       // (what the agent changed) even after a later deterministic regen.
       return {

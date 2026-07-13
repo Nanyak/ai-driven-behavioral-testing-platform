@@ -1,0 +1,12 @@
+flowchart LR
+  live["<b>Live response</b><br/>status + JSON body"]
+  oas["<b>OpenAPI schema</b><br/>authoritative contract"]
+  observed["<b>Observed schema</b><br/>bodies-on log evidence"]
+  rules["<b>Ignore / value rules</b><br/>dynamic IDs,<br/>timestamps, tokens"]
+  compare["<b>compareResponse()</b><br/>schemaDiff + valueDiff"]
+  result["<b>Deterministic pass / fail</b><br/>attach golden diff"]
+  oas --> rules
+  observed --> rules
+  rules --> compare
+  live --> compare
+  compare --> result

@@ -1,7 +1,3 @@
-// Regression-evaluation view: KPI strip from GET /api/eval + the rendered
-// metrics report embedded from /api/eval/view (same iframe pattern as Reports).
-// Published by `npm run eval:regression` (services/test-runner/src/eval), which
-// seeds known backend faults and measures the suite's detection rate.
 import { useEffect, useState } from "react";
 import { ExternalLink, Gauge } from "lucide-react";
 import { EmptyState, Skeleton } from "../ui/primitives.js";
@@ -9,11 +5,14 @@ import { EmptyState, Skeleton } from "../ui/primitives.js";
 interface EvalSummary {
   generated_at: string | null;
   target: string | null;
-  regression_detection_rate: number;
-  measurable_faults: number;
+  mutation_score: number;
+  total_mutants: number;
   caught: number;
+  survived: number;
+  inconclusive: number;
   executability_rate: number | null;
   baseline_clean: boolean | null;
+  survivors: Array<{ endpoint: string; status: number; operator: string; path: string | null; id: string }>;
 }
 
 const EVAL_VIEW_URL = "/api/eval/view";
@@ -68,25 +67,31 @@ export function EvaluationView() {
       <EmptyState icon={<Gauge size={20} aria-hidden="true" />}>
         <strong>No evaluation run yet</strong>
         <p className="muted">
-          Run <code>npm run eval:regression -- --target customer</code> to seed known faults and
-          measure how many the suite catches.
+          Run <code>npm run eval:mutate -- --target customer</code> to measure mutation coverage.
         </p>
       </EmptyState>
     );
   }
 
-  const detected = summary.regression_detection_rate >= 1 && summary.measurable_faults > 0;
+  const strongScore = summary.mutation_score >= 0.8 && summary.total_mutants > 0;
 
   return (
     <div className="eval-view">
       <div className="eval-kpis">
         <div className="eval-kpi">
-          <span className="eval-kpi-label">Regression detection</span>
-          <span className={`eval-kpi-value ${detected ? "t-pass" : "t-fail"}`}>
-            {pct(summary.regression_detection_rate)}
+          <span className="eval-kpi-label">Mutation score</span>
+          <span className={`eval-kpi-value ${strongScore ? "t-pass" : "t-fail"}`}>
+            {pct(summary.mutation_score)}
           </span>
           <span className="muted">
-            {summary.caught}/{summary.measurable_faults} seeded faults caught
+            {summary.caught} killed / {summary.survived} survived
+          </span>
+        </div>
+        <div className="eval-kpi">
+          <span className="eval-kpi-label">Mutants</span>
+          <span className="eval-kpi-value">{summary.total_mutants}</span>
+          <span className="muted">
+            {summary.inconclusive} inconclusive
           </span>
         </div>
         <div className="eval-kpi">
@@ -103,16 +108,48 @@ export function EvaluationView() {
         </div>
       </div>
 
+      <div className="eval-survivors">
+        <h2>Survivors</h2>
+        {summary.survivors.length === 0 ? (
+          <p className="muted">No surviving measurable mutants.</p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Endpoint</th>
+                <th>Status</th>
+                <th>Operator</th>
+                <th>Path</th>
+              </tr>
+            </thead>
+            <tbody>
+              {summary.survivors.slice(0, 12).map((survivor) => (
+                <tr key={survivor.id}>
+                  <td>
+                    <code>{survivor.endpoint}</code>
+                  </td>
+                  <td>{survivor.status}</td>
+                  <td>{survivor.operator}</td>
+                  <td>
+                    <code>{survivor.path ?? "<status>"}</code>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
       <div className="report-viewer">
         <div className="report-viewer-bar">
           <span className="muted">
-            <Gauge size={13} aria-hidden="true" /> Regression evaluation report
+            <Gauge size={13} aria-hidden="true" /> Mutation evaluation report
           </span>
           <a href={EVAL_VIEW_URL} target="_blank" rel="noreferrer" className="report-open">
             Open in new tab <ExternalLink size={13} aria-hidden="true" />
           </a>
         </div>
-        <iframe title="regression evaluation metrics" src={EVAL_VIEW_URL} className="report-frame" />
+        <iframe title="mutation evaluation metrics" src={EVAL_VIEW_URL} className="report-frame" />
       </div>
     </div>
   );

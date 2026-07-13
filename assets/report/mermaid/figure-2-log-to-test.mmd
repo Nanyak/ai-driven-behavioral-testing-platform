@@ -1,0 +1,10 @@
+flowchart LR
+  log["<b>Structured log</b><br/>timestamp, method,<br/>endpoint, status"]
+  clean["<b>Normalize &amp; clean</b><br/>mask id, drop noise,<br/>collapse retry"]
+  session["<b>SessionFlow</b><br/>group by session_id,<br/>sort by time"]
+  mine["<b>Mine candidates</b><br/>support, persona,<br/>priority"]
+  plan["<b>Flow plan</b><br/>steps +<br/>expected status"]
+  oracle["<b>Golden sync</b><br/>OpenAPI +<br/>observed schema"]
+  spec["<b>Generated spec</b><br/>.spec.ts +<br/>fixtures"]
+  approved["<b>HITL approval</b><br/>approved specs<br/>preserved"]
+  log --> clean --> session --> mine --> plan --> oracle --> spec --> approved

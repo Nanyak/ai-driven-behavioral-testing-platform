@@ -157,7 +157,7 @@ export function hitlApiPlugin(): Plugin {
         res.end(html);
       });
 
-      // Regression-evaluation metrics. /view serves the rendered HTML for the
+      // Mutation-evaluation metrics. /view serves the rendered HTML for the
       // iframe; registered before /api/eval so its prefix match wins (same
       // ordering rule as reports/view vs reports).
       server.middlewares.use("/api/eval/view", async (req, res, next) => {
@@ -169,7 +169,7 @@ export function hitlApiPlugin(): Plugin {
         if (html === null) {
           res.statusCode = 404;
           res.setHeader("Content-Type", "text/html");
-          res.end("<h1>No evaluation yet</h1><p>Run <code>npm run eval:regression -- --target customer</code> to seed faults and measure the suite's detection rate.</p>");
+          res.end("<h1>No evaluation yet</h1><p>Run <code>npm run eval:mutate -- --target customer</code> to measure mutation coverage.</p>");
           return;
         }
         res.statusCode = 200;

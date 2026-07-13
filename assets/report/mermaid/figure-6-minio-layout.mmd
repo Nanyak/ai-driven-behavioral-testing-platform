@@ -1,0 +1,18 @@
+flowchart TB
+  store[("<b>Kho đối tượng</b><br/>lưu trữ tương thích S3")]
+  subgraph tests ["Sản phẩm kiểm thử"]
+    direction LR
+    aspecs["<b>Bộ kiểm thử<br/>đã phê duyệt</b>"]
+    specs["<b>Bộ kiểm thử<br/>hiện hành</b>"]
+    goldens["<b>Lược đồ<br/>tham chiếu</b>"]
+    reports["<b>Báo cáo<br/>kết quả</b>"]
+  end
+  subgraph pipeline ["Dữ liệu quy trình"]
+    direction LR
+    sessions["<b>Luồng phiên<br/>người dùng</b>"]
+    candidates["<b>Luồng hành vi<br/>ứng viên</b>"]
+    validation["<b>Kết quả<br/>đánh giá</b>"]
+    endpoint["<b>Ghi chú<br/>điểm cuối</b>"]
+  end
+  store --> tests
+  store --> pipeline

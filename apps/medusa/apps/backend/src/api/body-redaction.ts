@@ -11,6 +11,7 @@ const MAX_DEPTH = 4
 export const MASKED_VALUE = "[masked]"
 
 type ReductionMode = "normal" | "mask-leaves"
+export type SensitiveKeyKind = "scalar" | "container"
 
 const SENSITIVE_SCALAR_TOKENS = new Set([
   "password",
@@ -36,7 +37,7 @@ const SENSITIVE_SCALAR_TOKENS = new Set([
   "address"
 ])
 
-function normalizedKeyParts(key: string): string[] {
+export function normalizedKeyParts(key: string): string[] {
   return key
     .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
     .toLowerCase()
@@ -49,7 +50,7 @@ function hasSingularOrPluralPart(parts: string[], part: string): boolean {
   return parts.includes(part) || parts.includes(plural)
 }
 
-function isSensitiveScalarKey(key: string): boolean {
+export function isSensitiveScalarKey(key: string): boolean {
   const parts = normalizedKeyParts(key)
   const normalized = parts.join("_")
 
@@ -101,24 +102,25 @@ function isSensitiveScalarKey(key: string): boolean {
   return false
 }
 
-function isSensitiveContainerKey(key: string): boolean {
+export function isSensitiveContainerKey(key: string): boolean {
   const parts = normalizedKeyParts(key)
   const normalized = parts.join("_")
+  const isPaymentScoped = hasSingularOrPluralPart(parts, "payment")
 
   if (
     hasSingularOrPluralPart(parts, "address") ||
     hasSingularOrPluralPart(parts, "credential") ||
     hasSingularOrPluralPart(parts, "cookie") ||
-    hasSingularOrPluralPart(parts, "session")
+    (!isPaymentScoped && hasSingularOrPluralPart(parts, "session"))
   ) {
     return true
   }
 
-  if (normalized === "payment" || normalized === "payments") {
+  if (normalized === "payment") {
     return true
   }
   if (
-    hasSingularOrPluralPart(parts, "payment") &&
+    isPaymentScoped &&
     parts.some((part) =>
       ["details", "data", "payload", "method", "methods", "instrument", "instruments"].includes(
         part
@@ -170,6 +172,16 @@ function isSensitiveContainerKey(key: string): boolean {
     hasSingularOrPluralPart(parts, "paper") &&
     parts.some((part) => ["payload", "data", "content", "document"].includes(part))
   )
+}
+
+export function classifySensitiveKey(key: string): SensitiveKeyKind | null {
+  if (isSensitiveContainerKey(key)) {
+    return "container"
+  }
+  if (isSensitiveScalarKey(key)) {
+    return "scalar"
+  }
+  return null
 }
 
 function truncateString(value: string): string {

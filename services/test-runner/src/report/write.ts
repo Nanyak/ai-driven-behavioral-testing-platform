@@ -2,6 +2,7 @@
 // accumulates instead of every run clobbering the single latest file. The
 // canonical `report.json` / `report.html` remain the "latest" pointer (read by
 // check:phase11/14 and the dashboard's /api/report).
+import { mkdir, writeFile } from "node:fs/promises";
 import { resolve as resolvePath } from "node:path";
 import { storage, type Storage } from "../../../../packages/storage/index.js";
 import type { NormalizedRunResult } from "../collect.js";
@@ -35,7 +36,10 @@ export async function writeReports(
 
   const jsonPath = resolvePath(reportsDir, "report.json");
   const htmlPath = resolvePath(reportsDir, "report.html");
+  await mkdir(reportsDir, { recursive: true });
   await Promise.all([
+    writeFile(jsonPath, json, "utf8"),
+    writeFile(htmlPath, html, "utf8"),
     store.blobs.put("reports/report.json", Buffer.from(json, "utf8")),
     store.blobs.put("reports/report.html", Buffer.from(html, "utf8")),
   ]);
@@ -44,7 +48,10 @@ export async function writeReports(
   const slug = runSlug(report.run_id);
   const archiveJsonPath = resolvePath(runsDir, `${slug}.json`);
   const archiveHtmlPath = resolvePath(runsDir, `${slug}.html`);
+  await mkdir(runsDir, { recursive: true });
   await Promise.all([
+    writeFile(archiveJsonPath, json, "utf8"),
+    writeFile(archiveHtmlPath, html, "utf8"),
     store.blobs.put(`reports/runs/${slug}.json`, Buffer.from(json, "utf8")),
     store.blobs.put(`reports/runs/${slug}.html`, Buffer.from(html, "utf8")),
   ]);

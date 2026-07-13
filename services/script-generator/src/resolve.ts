@@ -167,6 +167,10 @@ type ResolveStep = {
   method: string;
   endpoint: string;
   extract: string;
+  /** Optional per-call auth override for mixed setup flows (for example an
+   * admin cancellation spec that creates a fresh order through store checkout,
+   * then cancels it as admin). Defaults to the consuming step's auth. */
+  auth?: AuthRequirement;
   /** See ResolveCall.select — predicate selection from a list response. */
   select?: { collection: string; predicate: string; field: string; fromEnd?: boolean };
   body?: SynthesizedBody;
@@ -236,6 +240,101 @@ function clearStaleOpenReturnCalls(): ResolveStep[] {
   ];
 }
 
+function freshCancelableOrderCalls(): ResolveStep[] {
+  const customerAuth = "customer-token" as const;
+  return [
+    { auth: customerAuth, bindTo: "regionId", method: "GET", endpoint: "/store/regions", extract: "regions[0].id" },
+    { auth: customerAuth, bindTo: "regionCountry", method: "GET", endpoint: "/store/regions", extract: "regions[0].countries[0].iso_2" },
+    {
+      auth: customerAuth,
+      bindTo: "cartId",
+      method: "POST",
+      endpoint: "/store/carts",
+      extract: "cart.id",
+      body: { region_id: { kind: "runtime", ref: "regionId" } },
+    },
+    { auth: customerAuth, bindTo: "variantId", method: "GET", endpoint: "/store/products", extract: "products[0].variants[0].id" },
+    {
+      auth: customerAuth,
+      bindTo: "cartSeed",
+      method: "POST",
+      endpoint: "/store/carts/{cartId}/line-items",
+      extract: "",
+      body: {
+        variant_id: { kind: "runtime", ref: "variantId" },
+        quantity: { kind: "literal", value: 1 },
+      },
+    },
+    {
+      auth: customerAuth,
+      bindTo: "cartAddressSet",
+      method: "POST",
+      endpoint: "/store/carts/{cartId}",
+      extract: "",
+      body: {
+        email: { kind: "raw", expr: "email" },
+        shipping_address: {
+          kind: "raw",
+          expr:
+            "{ first_name: \"Test\", last_name: \"User\", address_1: \"1 Test St\", city: \"Copenhagen\", country_code: scope.regionCountry, postal_code: \"1000\" }",
+        },
+        billing_address: {
+          kind: "raw",
+          expr:
+            "{ first_name: \"Test\", last_name: \"User\", address_1: \"1 Test St\", city: \"Copenhagen\", country_code: scope.regionCountry, postal_code: \"1000\" }",
+        },
+      },
+    },
+    {
+      auth: customerAuth,
+      bindTo: "shippingOptionId",
+      method: "GET",
+      endpoint: "/store/shipping-options",
+      extract: "shipping_options[0].id",
+      query: { cart_id: { kind: "runtime", ref: "cartId" } },
+    },
+    {
+      auth: customerAuth,
+      bindTo: "shippingMethodSet",
+      method: "POST",
+      endpoint: "/store/carts/{cartId}/shipping-methods",
+      extract: "",
+      body: { option_id: { kind: "runtime", ref: "shippingOptionId" } },
+    },
+    {
+      auth: customerAuth,
+      bindTo: "paymentCollectionId",
+      method: "POST",
+      endpoint: "/store/payment-collections",
+      extract: "payment_collection.id",
+      body: { cart_id: { kind: "runtime", ref: "cartId" } },
+    },
+    {
+      auth: customerAuth,
+      bindTo: "paymentProviderId",
+      method: "GET",
+      endpoint: "/store/payment-providers",
+      extract: "payment_providers[0].id",
+      query: { region_id: { kind: "runtime", ref: "regionId" } },
+    },
+    {
+      auth: customerAuth,
+      bindTo: "paymentSessionSet",
+      method: "POST",
+      endpoint: "/store/payment-collections/{paymentCollectionId}/payment-sessions",
+      extract: "",
+      body: { provider_id: { kind: "runtime", ref: "paymentProviderId" } },
+    },
+    {
+      auth: customerAuth,
+      bindTo: "orderId",
+      method: "POST",
+      endpoint: "/store/carts/{cartId}/complete",
+      extract: "order.id",
+    },
+  ];
+}
+
 function standaloneResolverFor(
   varName: string,
   auth: AuthRequirement,
@@ -294,6 +393,14 @@ function standaloneResolverFor(
       // in /store. // VERIFY: the seed has a "Default Sales Channel".
       return [{ bindTo: varName, method: "GET", endpoint: "/admin/sales-channels", extract: "sales_channels[0].id" }];
     case "orderId":
+      if (auth === ADMIN && cancelFlow) {
+        // Cancellation must own a fresh, not-yet-fulfilled order. Selecting from
+        // the shared pending-order pool is stateful and eventually degrades into
+        // fulfilled orders only (then cancel 400s). Create a tiny store checkout
+        // under a throwaway customer and bind the new order id for the admin
+        // cancel step that follows.
+        return freshCancelableOrderCalls();
+      }
       if (auth === ADMIN && fulfilledOrder) {
         // Return-lifecycle bootstrap: a return requires a FULFILLED order
         // ("Cannot request to return more items than what was fulfilled"), but
@@ -327,7 +434,7 @@ function standaloneResolverFor(
           },
         ];
       }
-      // ADMIN: pick a genuinely CANCELABLE order. Filtering to `status[]=pending`
+      // ADMIN fallback: pick a genuinely CANCELABLE order. Filtering to `status[]=pending`
       // is not enough — a pending order can carry a partial fulfillment, and
       // `POST /admin/orders/{id}/cancel` 400s ("All fulfillments must be canceled
       // first") on those, exactly the residual the resolver-agent repair couldn't
@@ -1143,7 +1250,7 @@ export function buildFlowPlan(
       if (!chain) return false;
       for (const call of chain) {
         if (scope.has(call.bindTo)) continue; // a chained prerequisite already resolved earlier in this flow
-        resolveCalls.push({ ...call, auth });
+        resolveCalls.push({ ...call, auth: call.auth ?? auth });
         scope.add(call.bindTo);
       }
       return true;

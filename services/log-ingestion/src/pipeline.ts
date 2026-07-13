@@ -6,6 +6,7 @@
 
 import { createHash } from "node:crypto";
 
+import { classifySensitiveKey } from "../../../apps/medusa/apps/backend/src/api/body-redaction";
 import type {
   BodyArrayFeature,
   BodyArrayLengthBucket,
@@ -248,12 +249,14 @@ const SAFE_STRING_FIELD_NAMES = new Set([
   "locale",
   "mode",
   "payment_status",
+  "provider_id",
   "state",
   "status",
   "type",
 ]);
 
 const SAFE_NUMBER_FIELD_NAMES = new Set([
+  "amount",
   "count",
   "limit",
   "offset",
@@ -269,28 +272,10 @@ const MASKED_VALUE_PATTERNS: RegExp[] = [
   /^<\s*(?:masked|redacted|hidden)\s*>$/i,
 ];
 
-const SENSITIVE_FIELD_PATTERNS: RegExp[] = [
-  /(?:^|_)(?:password|passwd|pwd|passcode)(?:_|$)/i,
-  /(?:^|_)(?:secret|token)(?:_|$)/i,
-  /(?:^|_)authorization(?:_|$)/i,
+const EXTRA_UNSAFE_SCALAR_FIELD_PATTERNS: RegExp[] = [
   /^auth$/i,
-  /(?:^|_)(?:cookie|session|csrf|jwt|credential|credentials)(?:_|$)/i,
-  /(?:^|_)(?:email|phone)(?:_|$)/i,
-  /(?:^|_)address(?:es)?(?:_|$)/i,
   /^name$/i,
-  /^(?:first|last)_name$/i,
   /^ip_address$/i,
-  /(?:^|_)(?:ssn|tin|pan|cvv|cvc)(?:_|$)/i,
-  /^api_key$/i,
-  /^card(?:s|_number|_token|_details|_data|_payload)?$/i,
-  /^(?:(?:bank|customer|user|merchant)_)?account(?:s|_number|_details|_data|_payload)?$/i,
-  /^payment(?:s|_details|_data|_payload|_method|_methods|_method_data|_instrument|_instruments)?$/i,
-  /^(?:(?:identity|tax)_)?documents?(?:_number|_payload|_data|_content|_file|_files)?$/i,
-  /^paper(?:s|_payload|_data|_content|_document)?$/i,
-];
-
-const UNSAFE_SCALAR_FIELD_PATTERNS: RegExp[] = [
-  ...SENSITIVE_FIELD_PATTERNS,
   /^id$/i,
   /_id$/i,
   /uuid/i,
@@ -406,6 +391,21 @@ function hasPatternMatch(path: string, patterns: RegExp[]): boolean {
   );
 }
 
+function hasSensitiveKeyPath(path: string): boolean {
+  return pathFieldNames(path).some((fieldName) => classifySensitiveKey(fieldName) !== null);
+}
+
+function hasUnsafeScalarPath(path: string): boolean {
+  const fieldName = lastFieldName(path);
+  const paymentBehaviorProvider =
+    fieldName === "provider_id" &&
+    (path.includes(".payment_sessions[]") || path.includes(".payments[]"));
+  if (paymentBehaviorProvider) {
+    return hasSensitiveKeyPath(path);
+  }
+  return hasSensitiveKeyPath(path) || hasPatternMatch(path, EXTRA_UNSAFE_SCALAR_FIELD_PATTERNS);
+}
+
 function isMaskedValue(value: unknown): boolean {
   if (typeof value !== "string") {
     return false;
@@ -514,7 +514,7 @@ function maybeAddSafeScalarHint(
   value: unknown,
   type: BodyPrimitiveType
 ): void {
-  if (hasPatternMatch(path, UNSAFE_SCALAR_FIELD_PATTERNS)) {
+  if (hasUnsafeScalarPath(path)) {
     return;
   }
 
@@ -556,7 +556,7 @@ function visitBodyValue(
   const type = primitiveType(value);
   if (type) {
     addPrimitiveTypePath(acc, path, type);
-    if (isMaskedValue(value) || hasPatternMatch(path, SENSITIVE_FIELD_PATTERNS)) {
+    if (isMaskedValue(value) || hasSensitiveKeyPath(path)) {
       addMaskedFieldPath(acc, path);
       return;
     }
@@ -580,7 +580,7 @@ function visitBodyValue(
     for (const key of Object.keys(value as Record<string, unknown>).sort()) {
       const pathForKey = childPath(path, key);
       addFieldPath(acc, pathForKey);
-      if (hasPatternMatch(pathForKey, SENSITIVE_FIELD_PATTERNS)) {
+      if (hasSensitiveKeyPath(pathForKey)) {
         addMaskedFieldPath(acc, pathForKey);
       }
       visitBodyValue(

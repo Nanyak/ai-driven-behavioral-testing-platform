@@ -1,0 +1,35 @@
+erDiagram
+  DECISIONS {
+    uuid review_id PK
+    text flow_signature
+    text status
+    jsonb payload
+  }
+  MANIFEST {
+    uuid review_id PK
+    jsonb payload
+  }
+  RUN_INDEX {
+    text slug PK
+    text status
+    jsonb totals
+  }
+  INVARIANTS {
+    uuid id PK
+    text flow_signature
+    bool verified
+    jsonb payload
+  }
+  DISMISSED_RELATIONSHIPS {
+    text pair_key PK
+    jsonb payload
+  }
+  STORAGE_METADATA {
+    text key PK
+    jsonb payload
+  }
+  DECISIONS ||--o| MANIFEST : "review_id"
+  DECISIONS ||--o{ RUN_INDEX : "run history"
+  DECISIONS ||--o{ INVARIANTS : "flow_signature"
+  INVARIANTS ||--o{ DISMISSED_RELATIONSHIPS : "flow pair"
+  MANIFEST ||--o{ STORAGE_METADATA : "metadata"

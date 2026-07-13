@@ -270,7 +270,11 @@ function renderSetupInvariants(bodyVar: string, invariants: Invariant[]): string
 }
 
 function needsCustomerAuth(plan: FlowPlan): boolean {
-  return plan.steps.some((s) => s.auth === "customer-token");
+  return plan.steps.some(
+    (s) =>
+      s.auth === "customer-token" ||
+      s.resolveCalls.some((call) => call.auth === "customer-token")
+  );
 }
 
 function needsAdminFixture(plan: FlowPlan): boolean {

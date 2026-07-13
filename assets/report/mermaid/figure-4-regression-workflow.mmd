@@ -1,0 +1,10 @@
+flowchart LR
+  mine["<b>Mine</b><br/>behavior<br/>candidates"]
+  review["<b>Review</b><br/>dashboard<br/>HITL approve"]
+  generate["<b>Generate</b><br/>Playwright<br/>API specs"]
+  run["<b>Run</b><br/>test:all /<br/>persona target"]
+  normalize["<b>Normalize</b><br/>Playwright JSON<br/>to normalized"]
+  report["<b>Report</b><br/>green / red /<br/>invalid"]
+  triage["<b>Triage sidecar</b><br/>advisory only"]
+  persist["<b>Persist</b><br/>PostgreSQL +<br/>MinIO"]
+  mine --> review --> generate --> run --> normalize --> report --> triage --> persist

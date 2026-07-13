@@ -215,15 +215,15 @@ function App() {
             <ReportsView />
           </section>
         ) : view === "evaluation" ? (
-          <section className="review-section" aria-label="Regression evaluation">
+          <section className="review-section" aria-label="Mutation evaluation">
             <div className="workbench-heading">
               <Gauge size={22} aria-hidden="true" />
-              <h1>Regression Evaluation</h1>
+              <h1>Mutation Evaluation</h1>
             </div>
             <p className="review-intro">
-              We seed known backend faults (wrong status, missing field, wrong total, wrong order
-              status) and measure how many the generated suite catches — plus baseline
-              executability. Published by <code>npm run eval:regression</code>.
+              Mutants are derived from golden responses and applied by a proxy in front of the SUT.
+              Survivors identify endpoint fields the generated suite does not catch yet. Published
+              by <code>npm run eval:mutate</code>.
             </p>
             <EvaluationView />
           </section>

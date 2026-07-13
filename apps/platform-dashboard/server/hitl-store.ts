@@ -69,45 +69,54 @@ export async function readReportHtml(): Promise<string | null> {
   return (await storage.blobs.get("reports/report.html"))?.toString("utf8") ?? null;
 }
 
-/** Regression-evaluation metrics HTML, published by `npm run eval:regression`
- * to the blob store (services/test-runner/src/eval/cli.ts). Null until a run
- * exists. Served verbatim by /api/eval/view. */
+/** Mutation-evaluation metrics HTML, published by `npm run eval:mutate`. Null
+ * until a run exists. Served verbatim by /api/eval/view. */
 export async function readEvalMetricsHtml(): Promise<string | null> {
-  return (await storage.blobs.get("reports/eval/metrics.html"))?.toString("utf8") ?? null;
+  return (await storage.blobs.get("reports/eval/mutation-metrics.html"))?.toString("utf8") ?? null;
 }
 
 export interface EvalMetricsSummary {
   generated_at: string | null;
   target: string | null;
-  regression_detection_rate: number;
-  measurable_faults: number;
+  mutation_score: number;
+  total_mutants: number;
   caught: number;
+  survived: number;
+  inconclusive: number;
   executability_rate: number | null;
   baseline_clean: boolean | null;
+  survivors: Array<{ endpoint: string; status: number; operator: string; path: string | null; id: string }>;
 }
 
 /** Compact KPI projection of the eval metrics for the Overview strip. Null when
  * no run has been published yet. */
 export async function readEvalMetricsSummary(): Promise<EvalMetricsSummary | null> {
   try {
-    const bytes = await storage.blobs.get("reports/eval/metrics.json");
+    const bytes = await storage.blobs.get("reports/eval/mutation-metrics.json");
     if (bytes === null) return null;
     const m = JSON.parse(bytes.toString("utf8")) as {
       generated_at?: string;
       target?: string;
-      regression_detection_rate?: number;
-      measurable_faults?: number;
-      faults?: Array<{ caught?: boolean }>;
-      baseline?: { executability_rate?: number; clean?: boolean } | null;
+      mutation_score?: number;
+      total_mutants?: number;
+      killed?: number;
+      survived?: number;
+      inconclusive?: number;
+      executability_rate?: number;
+      baseline_clean?: boolean;
+      survivors?: Array<{ endpoint: string; status: number; operator: string; path: string | null; id: string }>;
     };
     return {
       generated_at: m.generated_at ?? null,
       target: m.target ?? null,
-      regression_detection_rate: m.regression_detection_rate ?? 0,
-      measurable_faults: m.measurable_faults ?? 0,
-      caught: (m.faults ?? []).filter((f) => f.caught).length,
-      executability_rate: m.baseline?.executability_rate ?? null,
-      baseline_clean: m.baseline?.clean ?? null,
+      mutation_score: m.mutation_score ?? 0,
+      total_mutants: m.total_mutants ?? 0,
+      caught: m.killed ?? 0,
+      survived: m.survived ?? 0,
+      inconclusive: m.inconclusive ?? 0,
+      executability_rate: m.executability_rate ?? null,
+      baseline_clean: m.baseline_clean ?? null,
+      survivors: m.survivors ?? [],
     };
   } catch {
     return null;

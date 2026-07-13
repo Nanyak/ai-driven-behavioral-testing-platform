@@ -14,7 +14,6 @@ import {
   GATE_UNAUTHORIZED_STATUS
 } from "./gate-contract"
 import { reduceValue } from "./body-redaction"
-import { activeRegressionFault, applyCompletionFault } from "./regression-faults"
 
 const ensuredLogDirectories = new Set<string>()
 
@@ -443,31 +442,6 @@ function requireCustomerAuth(
   res.status(GATE_UNAUTHORIZED_STATUS).json(GATE_UNAUTHORIZED_BODY)
 }
 
-/**
- * Regression-demo fault injector (reversible, OFF by default).
- *
- * Does nothing unless `REGRESSION_DEMO` names a known fault, so production/CI
- * behavior is unchanged unless the demo explicitly opts in. The catalog + the
- * actual injection live in regression-faults.ts (one source of truth, also read
- * by the evaluation harness); here we only gate on the completion endpoint and
- * dispatch. Registered AFTER `requireCustomerAuth` so only an authenticated
- * customer reaches the fault — the failure is a behavioral regression, not an
- * auth rejection. Unset the env var (and recreate the process) to flip the
- * report red -> green.
- */
-function regressionDemoFault(
-  req: MedusaRequest,
-  res: MedusaResponse,
-  next: MedusaNextFunction
-) {
-  const fault = activeRegressionFault()
-  if (fault === null || !req.path.endsWith("/complete")) {
-    next()
-    return
-  }
-  applyCompletionFault(fault, req, res, next)
-}
-
 export default defineMiddlewares({
   routes: [
     {
@@ -493,15 +467,6 @@ export default defineMiddlewares({
       matcher: GATE_MATCHERS[1],
       method: [...GATE_METHODS],
       middlewares: [requireCustomerAuth]
-    },
-    // Regression-demo fault injector — OFF unless REGRESSION_DEMO is set.
-    // Placed AFTER the gate so it only fires for authenticated customers
-    // (a real checkout that now 500s), making the failure a behavioral
-    // regression rather than an auth rejection.
-    {
-      matcher: GATE_MATCHERS[0],
-      method: ["POST"],
-      middlewares: [regressionDemoFault]
     }
   ]
 })

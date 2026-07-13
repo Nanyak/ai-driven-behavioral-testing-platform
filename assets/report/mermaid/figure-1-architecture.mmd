@@ -1,0 +1,16 @@
+flowchart LR
+  traffic["<b>Traffic Source</b><br/>demo user journeys<br/>API clients"]
+  sut["<b>System Under Test</b><br/>backend/API<br/>structured logging"]
+  logstore[("<b>Log Store</b><br/>structured API logs")]
+
+  platform["<b>Behavioral Testing Platform</b><br/>log ingestion · behavior mining<br/>test generation · execution/review"]
+  assist["<b>AI Assist</b><br/>naming, hints,<br/>triage"]
+  storage[("<b>Record &amp; Artifact Storage</b><br/>decisions, history,<br/>specs, goldens, reports")]
+
+  traffic -->|API traffic| sut
+  sut -->|structured logs| logstore
+  logstore -->|session/log data| platform
+  platform -->|API replay| sut
+  platform -->|records &amp; artifacts| storage
+  storage -->|approved specs / goldens| platform
+  assist -.->|support| platform

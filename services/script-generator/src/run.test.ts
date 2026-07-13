@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadAugmentedSpecs } from "../../golden/src/oas-source.js";
 import { manifestEntry } from "./artifacts.js";
+import { emitSpec } from "./emit.js";
 import { buildFlowPlan, type FlowPlan, type OasSpecs } from "./resolve.js";
 import { makeLocalStorage } from "../../../packages/storage/index.js";
 import {
@@ -467,6 +468,67 @@ await check("typical optionals use masked presence without consuming masked valu
   );
   assert.equal(body.source, "observed");
   assert.deepEqual(body.observed_optional_fields, ["$.status", "$.metadata", "$.email", "$.shipping_address"]);
+});
+
+await check("admin cancellation self-provisions a fresh cancellable order", () => {
+  const steps = [
+    { method: "POST", endpoint: "/auth/user/emailpass", expected_status: 200 },
+    { method: "GET", endpoint: "/admin/orders", expected_status: 200 },
+    { method: "GET", endpoint: "/admin/orders/{id}", expected_status: 200 },
+    { method: "POST", endpoint: "/admin/orders/{id}/cancel", expected_status: 200 },
+  ];
+  const plan = buildFlowPlan(steps, loadAugmentedSpecs() as OasSpecs, false);
+  const orderRead = plan.steps.find((step) => step.step.endpoint === "/admin/orders/{id}");
+  assert.ok(orderRead, "order detail step is present");
+  assert.equal(
+    orderRead.resolveCalls.some((call) => call.endpoint.includes("/admin/orders?status[]=pending")),
+    false,
+    "cancel flows must not draw from the shared pending-order pool"
+  );
+  assert.equal(
+    orderRead.resolveCalls.every((call) => call.auth === "customer-token"),
+    true,
+    "fresh-order checkout prerequisites run as the throwaway customer"
+  );
+  assert.deepEqual(
+    orderRead.resolveCalls.map((call) => call.endpoint),
+    [
+      "/store/regions",
+      "/store/regions",
+      "/store/carts",
+      "/store/products",
+      "/store/carts/{cartId}/line-items",
+      "/store/carts/{cartId}",
+      "/store/shipping-options",
+      "/store/carts/{cartId}/shipping-methods",
+      "/store/payment-collections",
+      "/store/payment-providers",
+      "/store/payment-collections/{paymentCollectionId}/payment-sessions",
+      "/store/carts/{cartId}/complete",
+    ]
+  );
+
+  const source = emitSpec({
+    candidate: {
+      flow_name: "Orders — Cancellation",
+      persona: "admin_operator",
+      persona_source: "test",
+      attributes: { requires_auth: false, is_admin: true, has_errors: false },
+      priority: "high",
+      support: 1,
+      score: 1,
+      signature: SIG_APPROVED,
+      assertion_hints: { fields: [], source: "test" },
+      anomaly_note: null,
+      source_sessions: [],
+      steps,
+    },
+    plan,
+    golden: true,
+  }).source;
+  assert.match(source, /\/auth\/customer\/emailpass\/register/);
+  assert.match(source, /\/store\/carts\/\$\{scope\.cartId\}\/complete/);
+  assert.doesNotMatch(source, /\/admin\/orders\?status\[\]=pending/);
 });
 
 console.log(`\nrun.test: ${passed} checks passed`);

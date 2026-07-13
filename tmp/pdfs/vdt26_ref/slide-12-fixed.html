@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Slide 12 fixed</title>
+<style>
+  :root {
+    --bg: #f4f3f0;
+    --ink: #25292f;
+    --muted: #6c737d;
+    --line: #dedbd5;
+    --red: #df2c2c;
+    --dark: #20242a;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    width: 1920px;
+    height: 1080px;
+    margin: 0;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: Inter, "Helvetica Neue", Arial, sans-serif;
+  }
+  .slide {
+    position: relative;
+    width: 1920px;
+    height: 1080px;
+    padding: 248px 104px 80px;
+  }
+  .mark {
+    position: absolute;
+    top: 223px;
+    left: 104px;
+    width: 54px;
+    height: 6px;
+    background: var(--red);
+  }
+  .eyebrow {
+    color: #69717d;
+    font-size: 22px;
+    letter-spacing: 8px;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+    font-weight: 500;
+  }
+  h1 {
+    margin: 0 0 42px;
+    font-size: 54px;
+    line-height: 1.08;
+    letter-spacing: 0;
+    font-weight: 800;
+  }
+  .grid-top {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 24px;
+  }
+  .grid-bottom {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 24px;
+  }
+  .card {
+    min-height: 188px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.55);
+    padding: 32px 28px 26px;
+  }
+  .wide-card {
+    min-height: 188px;
+  }
+  .dark {
+    background: var(--dark);
+    border-color: var(--dark);
+    color: white;
+  }
+  .metric {
+    display: flex;
+    align-items: baseline;
+    gap: 3px;
+    min-height: 72px;
+    margin-bottom: 14px;
+  }
+  .num {
+    font-size: 72px;
+    line-height: 0.95;
+    font-weight: 800;
+    letter-spacing: 0;
+  }
+  .pct {
+    font-size: 42px;
+    line-height: 1;
+    font-weight: 800;
+  }
+  .slash-muted { color: #9299a1; }
+  .rule {
+    width: 44px;
+    height: 4px;
+    background: var(--red);
+    margin-bottom: 13px;
+  }
+  .label {
+    color: var(--muted);
+    font-size: 25px;
+    line-height: 1.28;
+    font-weight: 400;
+  }
+  .dark .label { color: #b8bec5; }
+  .summary {
+    border-left: 5px solid var(--red);
+    padding: 8px 0 0 20px;
+    color: var(--muted);
+    font-size: 24px;
+    line-height: 1.38;
+  }
+  .summary b { color: var(--ink); font-weight: 800; }
+</style>
+</head>
+<body>
+  <main class="slide">
+    <div class="mark"></div>
+    <div class="eyebrow">12 · Kết quả chính · Snapshot 07/07/2026</div>
+    <h1>Pipeline chạy xanh và có tín hiệu đánh giá rõ</h1>
+
+    <section class="grid-top">
+      <div class="card">
+        <div class="metric"><span class="num">18</span></div>
+        <div class="rule"></div>
+        <div class="label">luồng hành vi ứng viên</div>
+      </div>
+      <div class="card">
+        <div class="metric"><span class="num">9</span></div>
+        <div class="rule"></div>
+        <div class="label">bộ test đã phê duyệt</div>
+      </div>
+      <div class="card dark wide-card">
+        <div class="metric"><span class="num">9</span><span class="num slash-muted">/9</span></div>
+        <div class="rule"></div>
+        <div class="label">run regression mới nhất đạt xanh</div>
+      </div>
+    </section>
+
+    <section class="grid-bottom">
+      <div class="card wide-card">
+        <div class="metric"><span class="num">0,96</span></div>
+        <div class="rule"></div>
+        <div class="label">macro-F1 phân loại nhóm (nội bộ)</div>
+      </div>
+      <div class="card wide-card">
+        <div class="metric"><span class="num">88,9</span><span class="pct">%</span></div>
+        <div class="rule"></div>
+        <div class="label">mutation score · 40/45 mutant đo được</div>
+      </div>
+    </section>
+
+    <aside class="summary">
+      <b>Thông điệp chính:</b> pipeline đã tái dựng flow, sinh test được phê duyệt, chạy regression xanh và có tín hiệu đánh giá độc lập qua mutation testing.
+    </aside>
+  </main>
+</body>
+</html>

@@ -1,0 +1,54 @@
+{"kind":"deck","id":"pr/7pbup0","name":"Deck"}
+{"kind":"layout","layoutId":"55aa0051-0905-429d-9831-0c6c0f40aa10","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"56d97159-f681-472c-8a41-6149e26760db","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/gq9rsh","slide":1,"title":"Slide 1","textShapes":0}
+{"kind":"image","id":"im/3mp4zqhs","slide":1,"name":"","alt":"VDT26 reference slide 1","bbox":[0,0,1920,1080]}
+{"kind":"notes","id":"nt/gq9rsh","slide":1,"text":""}
+{"kind":"slide","id":"sl/nenhti","slide":2,"title":"Slide 2","textShapes":0}
+{"kind":"image","id":"im/ridwnu5w","slide":2,"name":"","alt":"VDT26 reference slide 2","bbox":[0,0,1920,1080]}
+{"kind":"notes","id":"nt/nenhti","slide":2,"text":""}
+{"kind":"slide","id":"sl/f9kmap","slide":3,"title":"Slide 3","textShapes":0}
+{"kind":"image","id":"im/ni9cvylc","slide":3,"name":"","alt":"VDT26 reference slide 3","bbox":[0,0,1920,1080]}
+{"kind":"notes","id":"nt/f9kmap","slide":3,"text":""}
+{"kind":"slide","id":"sl/uasyfy","slide":4,"title":"Slide 4","textShapes":0}
+{"kind":"image","id":"im/qlcnu9s3","slide":4,"name":"","alt":"VDT26 reference slide 4","bbox":[0,0,1920,1080]}
+{"kind":"notes","id":"nt/uasyfy","slide":4,"text":""}
+{"kind":"slide","id":"sl/zu329g","slide":5,"title":"Slide 5","textShapes":0}
+{"kind":"image","id":"im/b2p83edc","slide":5,"name":"","alt":"VDT26 reference slide 5","bbox":[0,0,1920,1080]}
+{"kind":"notes","id":"nt/zu329g","slide":5,"text":""}
+{"kind":"slide","id":"sl/bhtv85","slide":6,"title":"Slide 6","textShapes":0}
+{"kind":"image","id":"im/ud4nel8z","slide":6,"name":"","alt":"VDT26 reference slide 6","bbox":[0,0,1920,1080]}
+{"kind":"notes","id":"nt/bhtv85","slide":6,"text":""}
+{"kind":"slide","id":"sl/9tcun2","slide":7,"title":"Slide 7","textShapes":0}
+{"kind":"image","id":"im/kv2ls3qh","slide":7,"name":"","alt":"VDT26 reference slide 7","bbox":[0,0,1920,1080]}
+{"kind":"notes","id":"nt/9tcun2","slide":7,"text":""}
+{"kind":"slide","id":"sl/lgtn8w","slide":8,"title":"Slide 8","textShapes":0}
+{"kind":"image","id":"im/1kf6p4f6","slide":8,"name":"","alt":"VDT26 reference slide 8","bbox":[0,0,1920,1080]}
+{"kind":"notes","id":"nt/lgtn8w","slide":8,"text":""}
+{"kind":"slide","id":"sl/hqe8vk","slide":9,"title":"Slide 9","textShapes":0}
+{"kind":"image","id":"im/gn6lgza5","slide":9,"name":"","alt":"VDT26 reference slide 9","bbox":[0,0,1920,1080]}
+{"kind":"notes","id":"nt/hqe8vk","slide":9,"text":""}
+{"kind":"slide","id":"sl/z3oa0d","slide":10,"title":"Slide 10","textShapes":0}
+{"kind":"image","id":"im/6tcf21kb","slide":10,"name":"","alt":"VDT26 reference slide 10","bbox":[0,0,1920,1080]}
+{"kind":"notes","id":"nt/z3oa0d","slide":10,"text":""}
+{"kind":"slide","id":"sl/ofdrc6","slide":11,"title":"Slide 11","textShapes":0}
+{"kind":"image","id":"im/hofi543m","slide":11,"name":"","alt":"VDT26 reference slide 11","bbox":[0,0,1920,1080]}
+{"kind":"notes","id":"nt/ofdrc6","slide":11,"text":""}
+{"kind":"slide","id":"sl/ps0jy3","slide":12,"title":"Slide 12","textShapes":0}
+{"kind":"image","id":"im/a10jihwn","slide":12,"name":"","alt":"VDT26 reference slide 12","bbox":[0,0,1920,1080]}
+{"kind":"notes","id":"nt/ps0jy3","slide":12,"text":""}
+{"kind":"slide","id":"sl/la55j4","slide":13,"title":"Slide 13","textShapes":0}
+{"kind":"image","id":"im/ud4judsz","slide":13,"name":"","alt":"VDT26 reference slide 13","bbox":[0,0,1920,1080]}
+{"kind":"notes","id":"nt/la55j4","slide":13,"text":""}
+{"kind":"slide","id":"sl/g6rf1l","slide":14,"title":"Slide 14","textShapes":0}
+{"kind":"image","id":"im/zytwji5c","slide":14,"name":"","alt":"VDT26 reference slide 14","bbox":[0,0,1920,1080]}
+{"kind":"notes","id":"nt/g6rf1l","slide":14,"text":""}
+{"kind":"slide","id":"sl/x10ezp","slide":15,"title":"Slide 15","textShapes":0}
+{"kind":"image","id":"im/54zyxwr2","slide":15,"name":"","alt":"VDT26 reference slide 15","bbox":[0,0,1920,1080]}
+{"kind":"notes","id":"nt/x10ezp","slide":15,"text":""}
+{"kind":"slide","id":"sl/pqcm1w","slide":16,"title":"Slide 16","textShapes":0}
+{"kind":"image","id":"im/etknixwz","slide":16,"name":"","alt":"VDT26 reference slide 16","bbox":[0,0,1920,1080]}
+{"kind":"notes","id":"nt/pqcm1w","slide":16,"text":""}
+{"kind":"slide","id":"sl/10n0yn","slide":17,"title":"Slide 17","textShapes":0}
+{"kind":"image","id":"im/bapsbmps","slide":17,"name":"","alt":"VDT26 reference slide 17","bbox":[0,0,1920,1080]}
+{"kind":"notes","id":"nt/10n0yn","slide":17,"text":""}

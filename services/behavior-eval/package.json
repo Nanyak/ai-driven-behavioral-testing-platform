@@ -1,0 +1,18 @@
+{
+  "name": "@platform/behavior-eval",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Mutation-based behavior evaluation: generate response mutants from goldens, run them through a fault-injection proxy, and report mutation score.",
+  "scripts": {
+    "eval": "tsx src/cli.ts",
+    "proxy": "tsx src/proxy/proxy.ts",
+    "test": "tsx --test src/mutants/generate.test.ts src/proxy/apply.test.ts src/harness/detect.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
